@@ -6,6 +6,16 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.15.3", features = [] }
 bevy_enhanced_input = "0.9"
+bevy_textbox = { path = "bevy_textbox" }
+bevy_pixel_gfx = { path = "bevy_pixel_gfx" }
+bevy_pretty_text = { path = "bevy_pretty_text" }
+bevy_sequence = { path = "bevy_sequence" }
+
+[patch."https://github.com/CorvusPrudens/bevy_sequence.git"]
+bevy_sequence = { path = "bevy_sequence" }
+
+[patch."https://github.com/void-scape/bevy_pretty_text.git"]
+bevy_pretty_text = { path = "bevy_pretty_text" }
 
 [features]
 default = ["bevy/dynamic_linking"]

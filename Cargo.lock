@@ -918,6 +918,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_pixel_gfx"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_tween",
+ "rand",
+]
+
+[[package]]
+name = "bevy_pretty_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "text",
+]
+
+[[package]]
+name = "bevy_pretty_text"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_pretty_macro",
+ "text",
+]
+
+[[package]]
 name = "bevy_ptr"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,6 +1066,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_sequence"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_hierarchy",
+ "bevy_log",
+ "bevy_reflect",
+ "bevy_time",
+ "bevy_utils",
+ "rand",
+ "serde",
+]
+
+[[package]]
 name = "bevy_sprite"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1138,6 +1181,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_textbox"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_pretty_text",
+ "bevy_sequence",
+]
+
+[[package]]
 name = "bevy_time"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1149,6 +1201,20 @@ dependencies = [
  "bevy_utils",
  "crossbeam-channel",
  "serde",
+]
+
+[[package]]
+name = "bevy_time_runner"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beaff0ef5e1c246f093ebbcaef81c8d386902e22ce374d1e51757f05cb3cb834"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_hierarchy",
+ "bevy_reflect",
+ "bevy_time",
+ "rustc_version",
 ]
 
 [[package]]
@@ -1164,6 +1230,17 @@ dependencies = [
  "bevy_reflect",
  "derive_more",
  "serde",
+]
+
+[[package]]
+name = "bevy_tween"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daddedc68f42ddc3fc18c21df736fa5f69188a29bf07d548f627876cdce736da"
+dependencies = [
+ "bevy",
+ "bevy_time_runner",
+ "rustc_version",
 ]
 
 [[package]]
@@ -1771,6 +1848,10 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_enhanced_input",
+ "bevy_pixel_gfx",
+ "bevy_pretty_text",
+ "bevy_sequence",
+ "bevy_textbox",
 ]
 
 [[package]]
@@ -3587,6 +3668,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "rustix"
 version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3657,6 +3747,12 @@ name = "self_cell"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f7d95a54511e0c7be3f51e8867aa8cf35148d7b9445d44de2f943e2b206e749"
+
+[[package]]
+name = "semver"
+version = "1.0.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
 
 [[package]]
 name = "send_wrapper"
@@ -3863,6 +3959,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "text"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "syn",
+ "winnow 0.6.26",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3930,7 +4038,7 @@ checksum = "17b4795ff5edd201c7cd6dca065ae59972ce77d1b80fa0a84d94950ece7d1474"
 dependencies = [
  "indexmap",
  "toml_datetime",
- "winnow",
+ "winnow 0.7.6",
 ]
 
 [[package]]
@@ -4874,6 +4982,15 @@ dependencies = [
  "x11-dl",
  "x11rb",
  "xkbcommon-dl",
+]
+
+[[package]]
+name = "winnow"
+version = "0.6.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

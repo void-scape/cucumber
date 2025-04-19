@@ -1,0 +1,69 @@
+use bevy::prelude::*;
+use bevy::sprite::Anchor;
+use bevy_enhanced_input::events::Started;
+use bevy_enhanced_input::prelude::{Actions, InputAction, InputContext, InputContextAppExt};
+use bevy_pretty_text::prelude::*;
+use bevy_pretty_text::type_writer::input;
+use bevy_sequence::prelude::*;
+use bevy_textbox::*;
+
+pub struct TextboxPlugin;
+
+impl Plugin for TextboxPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(bevy_textbox::TextboxPlugin)
+            .add_systems(Startup, init_textbox_input)
+            .add_observer(receive_textbox_input)
+            .add_input_context::<TextboxContext>()
+            .add_systems(Startup, test);
+    }
+}
+
+#[derive(Debug, InputAction)]
+#[input_action(output = bool)]
+struct TextboxInput;
+
+#[derive(InputContext)]
+struct TextboxContext;
+
+fn init_textbox_input(mut commands: Commands) {
+    let mut actions = Actions::<TextboxContext>::default();
+    actions
+        .bind::<TextboxInput>()
+        .to((KeyCode::Space, KeyCode::Enter, GamepadButton::South));
+    commands.spawn(actions);
+}
+
+fn receive_textbox_input(_: Trigger<Started<TextboxInput>>, mut writer: EventWriter<input::Input>) {
+    writer.send(input::Input::Interact);
+}
+
+fn test(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let entity = commands
+        .spawn((
+            TextBox,
+            Sprite {
+                image: asset_server.load("textbox.png"),
+                anchor: Anchor::TopLeft,
+                ..Default::default()
+            },
+            Transform::from_xyz(-600., 0., 0.),
+        ))
+        .with_child((
+            Sprite {
+                image: asset_server.load("continue.png"),
+                anchor: Anchor::TopLeft,
+                ..Default::default()
+            },
+            Transform::from_translation(Vec3::default().with_z(100.)),
+            Continue,
+            Visibility::Hidden,
+        ))
+        .id();
+
+    let frag = (s!("`Hello|green`[0.5], `World`[wave]!"), "My name is Nic.")
+        .always()
+        .once()
+        .on_end(move |mut commands: Commands| commands.entity(entity).despawn_recursive());
+    spawn_root_with(frag, &mut commands, TextBoxEntity::new(entity));
+}
