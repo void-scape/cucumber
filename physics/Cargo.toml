@@ -1,0 +1,15 @@
+[package]
+name = "physics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_tween = "0.7.0"
+rand = "0.8.5"
+smallvec = "1.13.2"
+bevy_pixel_gfx = { git = "https://github.com/void-scape/bevy_pixel_gfx" }
+
+[dependencies.bevy]
+version = "0.15"
+default-features = false
+features = ["serialize", "bevy_asset", "bevy_gilrs", "bevy_state"]
