@@ -3,11 +3,17 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Material2d, Material2dPlugin};
 
+mod movement;
+mod player;
+
 fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
             Material2dPlugin::<MandelbrotMaterial>::default(),
+            movement::MovementPlugin,
+            bevy_enhanced_input::EnhancedInputPlugin,
+            player::PlayerPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, close_on_escape)

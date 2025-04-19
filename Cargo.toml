@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bevy = { version = "0.15.3", features = [] }
+bevy_enhanced_input = "0.9"
 
 [features]
 default = ["bevy/dynamic_linking"]
