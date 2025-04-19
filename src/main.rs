@@ -2,10 +2,10 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
+use physics::prelude::Gravity;
 
 mod invaders;
 mod mandelbrot;
-mod movement;
 mod player;
 mod textbox;
 
@@ -21,16 +21,18 @@ fn main() {
                     }),
                     ..Default::default()
                 }),
-            movement::MovementPlugin,
             bevy_enhanced_input::EnhancedInputPlugin,
+            bevy_tween::DefaultTweenPlugins,
             player::PlayerPlugin,
             textbox::TextboxPlugin,
             invaders::InvadersSpritePlugin,
             mandelbrot::MandelbrotPlugin,
             bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(256, 256)),
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
+            physics::PhysicsPlugin,
         ))
         .add_systems(Update, close_on_escape)
+        .insert_resource(Gravity(Vec2::ZERO))
         .run();
 }
 

@@ -1,6 +1,6 @@
-use crate::movement::Velocity;
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
+use physics::prelude::*;
 
 pub struct PlayerPlugin;
 
