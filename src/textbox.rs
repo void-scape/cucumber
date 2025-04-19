@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_enhanced_input::events::Started;
 use bevy_enhanced_input::prelude::{Actions, InputAction, InputContext, InputContextAppExt};
+use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
 use bevy_pretty_text::prelude::*;
 use bevy_pretty_text::type_writer::input;
 use bevy_sequence::prelude::*;
@@ -41,13 +42,14 @@ fn receive_textbox_input(_: Trigger<Started<TextboxInput>>, mut writer: EventWri
 fn test(mut commands: Commands, asset_server: Res<AssetServer>) {
     let entity = commands
         .spawn((
+            HIGH_RES_LAYER,
             TextBox,
             Sprite {
                 image: asset_server.load("textbox.png"),
                 anchor: Anchor::TopLeft,
                 ..Default::default()
             },
-            Transform::from_xyz(-600., 0., 0.),
+            //Transform::from_xyz(-500., 0., 0.),
         ))
         .with_child((
             Sprite {

@@ -2,6 +2,7 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Material2d, Material2dPlugin};
+use bevy_pixel_gfx::pixel_perfect::HIGH_RES_BACKGROUND_LAYER;
 
 pub struct MandelbrotPlugin;
 
@@ -54,7 +55,11 @@ fn setup(
     });
 
     let quad = meshes.add(Rectangle::new(window.width(), window.height()));
-    commands.spawn((MeshMaterial2d(material), Mesh2d(quad)));
+    commands.spawn((
+        MeshMaterial2d(material),
+        Mesh2d(quad),
+        HIGH_RES_BACKGROUND_LAYER,
+    ));
 }
 
 fn update_shader_params(

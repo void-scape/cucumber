@@ -1,6 +1,7 @@
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
-//use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
+use bevy::window::WindowResolution;
+use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 
 mod invaders;
 mod mandelbrot;
@@ -11,17 +12,24 @@ mod textbox;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(ImagePlugin::default_nearest()),
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        resolution: WindowResolution::new(1080., 1080.),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
             movement::MovementPlugin,
             bevy_enhanced_input::EnhancedInputPlugin,
             player::PlayerPlugin,
             textbox::TextboxPlugin,
             invaders::InvadersSpritePlugin,
             mandelbrot::MandelbrotPlugin,
-            //bevy_pixel_gfx::PixelGfxPlugin(CanvasDimensions::new(256, 256)),
+            bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(256, 256)),
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
         ))
-        .add_systems(Startup, camera)
         .add_systems(Update, close_on_escape)
         .run();
 }
@@ -32,8 +40,4 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
             writer.send(AppExit::Success);
         }
     }
-}
-
-fn camera(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
 }

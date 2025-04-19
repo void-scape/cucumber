@@ -8,9 +8,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Startup,
-            |mut commands: Commands,
-             mut meshes: ResMut<Assets<Mesh>>,
-             mut materials: ResMut<Assets<ColorMaterial>>| {
+            |mut commands: Commands, server: Res<AssetServer>| {
                 let mut actions = Actions::<AliveContext>::default();
                 actions.bind::<MoveAction>().to((
                     Cardinal::wasd_keys(),
@@ -23,10 +21,12 @@ impl Plugin for PlayerPlugin {
 
                 commands.spawn((
                     Player,
-                    Transform::default().with_translation(Vec3::new(200.0, 200.0, 1.0)),
                     actions,
-                    Mesh2d(meshes.add(Circle::new(20.0))),
-                    MeshMaterial2d(materials.add(Color::WHITE)),
+                    Sprite {
+                        image: server.load("invaders_sprites.png"),
+                        rect: Some(Rect::from_corners(Vec2::ZERO, Vec2::ONE * 8.)),
+                        ..Default::default()
+                    },
                 ));
             },
         )
