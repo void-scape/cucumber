@@ -15,7 +15,10 @@ impl Plugin for PlayerPlugin {
                 actions.bind::<MoveAction>().to((
                     Cardinal::wasd_keys(),
                     Cardinal::arrow_keys(),
-                    GamepadStick::Left,
+                    Cardinal::dpad_buttons(),
+                    GamepadStick::Left.with_modifiers_each(
+                        DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
+                    ),
                 ));
 
                 commands.spawn((
@@ -42,7 +45,7 @@ fn apply_movement(
     player: Single<&mut Velocity, With<Player>>,
 ) {
     let mut velocity = player.into_inner();
-    velocity.0 = trigger.value * 200.;
+    velocity.0 = trigger.value.normalize_or_zero() * 200.;
 }
 
 fn stop_movement(_: Trigger<Completed<MoveAction>>, player: Single<&mut Velocity, With<Player>>) {
