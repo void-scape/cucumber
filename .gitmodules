@@ -10,3 +10,6 @@
 [submodule "bevy_sequence"]
 	path = bevy_sequence
 	url = https://github.com/CorvusPrudens/bevy_sequence.git
+[submodule "bevy_seedling"]
+	path = bevy_seedling
+	url = https://github.com/CorvusPrudens/bevy_seedling
