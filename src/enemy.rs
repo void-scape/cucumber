@@ -1,6 +1,6 @@
 use crate::{
     HEIGHT, assets,
-    auto_collider::AutoCollider,
+    auto_collider::ImageCollider,
     bullet::{BulletTimer, BulletType},
     health::{Damage, Dead, Health, HealthSet},
 };
@@ -92,7 +92,7 @@ fn spawn_formations(
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, Velocity, Visibility, layers::Enemy, AutoCollider)]
+#[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
 enum Enemy {
     Common,
 }

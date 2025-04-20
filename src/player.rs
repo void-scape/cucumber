@@ -1,6 +1,6 @@
 use crate::{
     assets,
-    auto_collider::AutoCollider,
+    auto_collider::ImageCollider,
     bullet::{BulletTimer, BulletType, Polarity},
     health::{Damage, Dead, Health, HealthSet},
 };
@@ -15,7 +15,7 @@ use physics::{
     layers::{self, TriggersWith},
     prelude::*,
 };
-use std::time::Duration;
+use std::{cmp::Ordering, time::Duration};
 
 pub struct PlayerPlugin;
 
@@ -33,7 +33,7 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), AutoCollider)]
+#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), ImageCollider)]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
@@ -73,20 +73,15 @@ fn apply_movement(
         return;
     };
 
-    velocity.0 = trigger.value.normalize_or_zero() * 125.;
-    if velocity.0.x > 0. {
-        let tl = Vec2::new(0., 4.) * 8.;
-        let br = Vec2::new(1., 5.) * 8.;
-        sprite.rect = Some(Rect::from_corners(tl, br));
-    } else if velocity.0.x < 0. {
-        let tl = Vec2::new(2., 4.) * 8.;
-        let br = Vec2::new(3., 5.) * 8.;
-        sprite.rect = Some(Rect::from_corners(tl, br));
-    } else {
-        let tl = Vec2::new(1., 4.) * 8.;
-        let br = Vec2::new(2., 5.) * 8.;
-        sprite.rect = Some(Rect::from_corners(tl, br));
-    }
+    velocity.0 = trigger.value.normalize_or_zero() * 60.;
+
+    let (tl, br) = match velocity.0.x.total_cmp(&0.) {
+        Ordering::Less => (Vec2::new(0., 4.), Vec2::new(1., 5.)),
+        Ordering::Greater => (Vec2::new(2., 4.), Vec2::new(3., 5.)),
+        Ordering::Equal => (Vec2::new(1., 4.), Vec2::new(2., 5.)),
+    };
+
+    sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
 }
 
 fn stop_movement(

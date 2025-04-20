@@ -1,5 +1,6 @@
 use crate::{
     assets,
+    auto_collider::ImageCollider,
     health::{Damage, Health, HealthSet},
 };
 use bevy::{
@@ -8,6 +9,8 @@ use bevy::{
 };
 use physics::{Physics, prelude::*};
 use std::time::Duration;
+
+pub mod emitter;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum BulletSystems {
@@ -21,21 +24,22 @@ pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Physics,
-            (handle_enemy_collision, handle_player_collision)
-                .before(HealthSet)
-                .in_set(BulletSystems::Collision),
-        )
-        .add_systems(Update, manage_lifetime.in_set(BulletSystems::Lifetime))
-        .add_systems(
-            PostUpdate,
-            (
-                init_bullet_velocity.in_set(BulletSystems::Velocity),
-                init_bullet_sprite.in_set(BulletSystems::Sprite),
+        app.add_plugins(emitter::EmitterPlugin)
+            .add_systems(
+                Physics,
+                (handle_enemy_collision, handle_player_collision)
+                    .before(HealthSet)
+                    .in_set(BulletSystems::Collision),
             )
-                .chain(),
-        );
+            .add_systems(Update, manage_lifetime.in_set(BulletSystems::Lifetime))
+            .add_systems(
+                PostUpdate,
+                (
+                    init_bullet_velocity.in_set(BulletSystems::Velocity),
+                    init_bullet_sprite.in_set(BulletSystems::Sprite),
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -82,13 +86,29 @@ impl Direction {
         }
     }
 }
+/// The rate at which bullets should fire.
+///
+/// This doesn't have any particular unit;
+/// emitters can interpret this however they like.
+#[derive(Component)]
+pub struct BulletRate(pub f32);
 
+impl Default for BulletRate {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+/// The speed at which bullets should travel.
+///
+/// This doesn't have any particular unit;
+/// emitters can interpret this however they like.
 #[derive(Component)]
 pub struct BulletSpeed(pub f32);
 
 impl Default for BulletSpeed {
     fn default() -> Self {
-        Self(200.)
+        Self(200.0)
     }
 }
 
@@ -169,6 +189,7 @@ impl BulletType {
 }
 
 #[derive(Component)]
+#[require(ImageCollider)]
 pub struct BulletSprite {
     path: &'static str,
     cell: UVec2,
@@ -189,11 +210,11 @@ fn small_collider() -> Collider {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Collider(small_collider), BulletSprite(|| BulletSprite::from_cell(0, 0)))]
+#[require(BulletSprite(|| BulletSprite::from_cell(0, 1)))]
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(Collider(small_collider), BulletSprite(|| BulletSprite::from_cell(4, 0)))]
+#[require(BulletSprite(|| BulletSprite::from_cell(2, 1)))]
 pub struct CommonBullet;
 
 fn handle_enemy_collision(
