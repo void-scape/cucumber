@@ -1,6 +1,6 @@
 use crate::{
     HEIGHT, WIDTH, assets,
-    auto_collider::AutoCollider,
+    auto_collider::{AutoCollider, ImageCollider},
     bullet::{BulletTimer, BulletType},
     health::{Damage, Dead, Health, HealthSet},
 };
@@ -51,7 +51,7 @@ fn spawn_enemy(commands: &mut Commands, server: &AssetServer, enemy: Enemy, bund
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, Velocity, Visibility, layers::Enemy, AutoCollider)]
+#[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
 enum Enemy {
     Common,
 }

@@ -1,6 +1,6 @@
 use crate::{
     assets,
-    auto_collider::AutoCollider,
+    auto_collider::ImageCollider,
     bullet::{BulletTimer, BulletType, Polarity},
     health::{Damage, Dead, Health, HealthSet},
 };
@@ -33,7 +33,7 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), AutoCollider)]
+#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), ImageCollider)]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
