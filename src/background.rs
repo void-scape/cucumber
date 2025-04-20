@@ -20,6 +20,9 @@ impl Plugin for BackgroundPlugin {
     }
 }
 
+#[derive(Component)]
+struct Wrap(f32, f32);
+
 fn scrolling_background(
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -42,20 +45,46 @@ fn scrolling_background(
                     ..default()
                 }
             }),
+            uv_offset: 1.,
+        })),
+        Wrap(1., 2.),
+        Transform::from_xyz(0., 180. / 2., -999.),
+    ));
+
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(320., 180.))),
+        MeshMaterial2d(custom_materials.add(ScrollingTexture {
+            texture: server.load_with_settings("background.png", |s: &mut _| {
+                *s = ImageLoaderSettings {
+                    sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                        address_mode_u: ImageAddressMode::MirrorRepeat,
+                        address_mode_v: ImageAddressMode::MirrorRepeat,
+                        mag_filter: ImageFilterMode::Nearest,
+                        min_filter: ImageFilterMode::Nearest,
+                        mipmap_filter: ImageFilterMode::Nearest,
+                        ..default()
+                    }),
+                    ..default()
+                }
+            }),
             uv_offset: 0.,
         })),
-        Transform::from_xyz(0., 0., -999.),
+        Wrap(0., 1.),
+        Transform::from_xyz(0., -180. / 2., -999.),
     ));
 }
 
 fn update_scrolling_background(
-    query: Query<&MeshMaterial2d<ScrollingTexture>>,
+    query: Query<(&MeshMaterial2d<ScrollingTexture>, &Wrap)>,
     mut materials: ResMut<Assets<ScrollingTexture>>,
     time: Res<Time>,
 ) {
-    for handle in query.iter() {
+    for (handle, wrap) in query.iter() {
         let material = materials.get_mut(&handle.0).unwrap();
         material.uv_offset -= SCROLL_SPEED * time.delta_secs();
+        if material.uv_offset >= wrap.1 {
+            material.uv_offset = wrap.0;
+        }
     }
 }
 
