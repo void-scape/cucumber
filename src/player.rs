@@ -1,14 +1,14 @@
-use std::time::Duration;
-
 use bevy::{
     ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
+use bevy_seedling::prelude::*;
 use physics::{
     layers::{self, CollidesWith},
     prelude::*,
 };
+use std::time::Duration;
 
 use crate::bullet::{BulletTimer, BulletType};
 
@@ -86,6 +86,7 @@ struct AliveContext;
 fn shoot_bullets(
     mut player: Query<(&mut BulletTimer, &Transform), With<Player>>,
     time: Res<Time>,
+    server: Res<AssetServer>,
     mut commands: Commands,
 ) {
     let Ok((mut timer, transform)) = player.get_single_mut() else {
@@ -104,5 +105,15 @@ fn shoot_bullets(
             new_transform,
             CollidesWith::<layers::Enemy>::default(),
         ));
+
+        commands
+            .spawn((
+                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-18.0),
+                    ..PlaybackSettings::ONCE
+                },
+            ))
+            .effect(BandPassNode::new(1000.0, 4.0));
     }
 }
