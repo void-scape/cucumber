@@ -4,6 +4,7 @@ use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use physics::prelude::Gravity;
 
+mod assets;
 mod background;
 mod bullet;
 mod enemy;
@@ -29,6 +30,7 @@ fn main() {
                     }),
                     ..Default::default()
                 }),
+            assets::AssetPlugin,
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
             bevy_seedling::SeedlingPlugin::default(),
