@@ -1,8 +1,52 @@
+use bevy::image::{
+    ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
+};
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Material2d, Material2dPlugin};
 use bevy_pixel_gfx::pixel_perfect::HIGH_RES_BACKGROUND_LAYER;
+
+pub struct BackgroundPlugin;
+
+impl Plugin for BackgroundPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(Material2dPlugin::<ScrollingTexture>::default())
+            .add_systems(Startup, scrolling_background);
+        //app.add_plugins(MandelbrotPlugin);
+    }
+}
+
+fn scrolling_background(mut commands: Commands, server: Res<AssetServer>) {
+    commands.spawn((
+        Sprite::from_image(server.load_with_settings("background.png", |s: &mut _| {
+            *s = ImageLoaderSettings {
+                sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                    address_mode_u: ImageAddressMode::Repeat,
+                    address_mode_v: ImageAddressMode::Repeat,
+                    mag_filter: ImageFilterMode::Nearest,
+                    min_filter: ImageFilterMode::Nearest,
+                    mipmap_filter: ImageFilterMode::Nearest,
+                    ..default()
+                }),
+                ..default()
+            }
+        })),
+        Transform::from_xyz(0., 0., -999.),
+    ));
+}
+
+#[derive(Clone, Copy, Asset, TypePath, ShaderType, AsBindGroup)]
+struct ScrollingTexture {
+    uvx: f32,
+    uvy: f32,
+}
+
+impl Material2d for ScrollingTexture {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/scrolling_texture.wgsl".into()
+    }
+}
 
 pub struct MandelbrotPlugin;
 

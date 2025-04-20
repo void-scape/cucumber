@@ -4,13 +4,14 @@ use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use physics::prelude::Gravity;
 
+mod background;
 mod enemy;
-mod mandelbrot;
 mod player;
 mod textbox;
 
 pub const WIDTH: f32 = 256.;
 pub const HEIGHT: f32 = 256.;
+pub const RESOLUTION_SCALE: f32 = 3.;
 
 fn main() {
     App::new()
@@ -19,7 +20,10 @@ fn main() {
                 .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        resolution: WindowResolution::new(1080., 1080.),
+                        resolution: WindowResolution::new(
+                            WIDTH * RESOLUTION_SCALE,
+                            HEIGHT * RESOLUTION_SCALE,
+                        ),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -29,7 +33,7 @@ fn main() {
             player::PlayerPlugin,
             enemy::EnemyPlugin,
             textbox::TextboxPlugin,
-            mandelbrot::MandelbrotPlugin,
+            background::BackgroundPlugin,
             bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
                 WIDTH as u32,
                 HEIGHT as u32,
