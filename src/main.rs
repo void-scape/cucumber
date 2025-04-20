@@ -1,7 +1,7 @@
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
-use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
+use bevy_pixel_gfx::pixel_perfect::{CanvasDimensions, Scaling};
 use physics::layers::RegisterPhysicsLayer;
 use physics::prelude::Gravity;
 
@@ -50,6 +50,7 @@ fn main() {
         .add_systems(Update, close_on_escape)
         .insert_resource(Gravity(Vec2::ZERO))
         .register_trigger_layer::<physics::layers::Enemy>()
+        .insert_resource(Scaling::Projection)
         .run();
 }
 
