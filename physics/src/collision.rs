@@ -779,7 +779,6 @@ impl Default for TilesetSize {
 pub fn build_tile_set_colliders(
     mut commands: Commands,
     tiles: Query<(&Transform, &Parent), Added<TilesetCollider>>,
-    levels: Query<Entity>,
     size: Res<TilesetSize>,
     // manual_collision: Query<&Transform, Added<annual::Collision>>,
 ) {

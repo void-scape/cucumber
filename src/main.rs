@@ -4,10 +4,13 @@ use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use physics::prelude::Gravity;
 
-mod invaders;
+mod enemy;
 mod mandelbrot;
 mod player;
 mod textbox;
+
+pub const WIDTH: f32 = 256.;
+pub const HEIGHT: f32 = 256.;
 
 fn main() {
     App::new()
@@ -24,10 +27,13 @@ fn main() {
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
             player::PlayerPlugin,
+            enemy::EnemyPlugin,
             textbox::TextboxPlugin,
-            invaders::InvadersSpritePlugin,
             mandelbrot::MandelbrotPlugin,
-            bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(256, 256)),
+            bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
+                WIDTH as u32,
+                HEIGHT as u32,
+            )),
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
             physics::PhysicsPlugin,
         ))
