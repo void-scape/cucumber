@@ -8,6 +8,7 @@ use physics::prelude::Gravity;
 mod assets;
 mod background;
 mod bullet;
+mod characters;
 mod enemy;
 mod player;
 mod textbox;
@@ -32,6 +33,7 @@ fn main() {
                     ..Default::default()
                 }),
             assets::AssetPlugin,
+            characters::CharacterPlugin,
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
             bevy_seedling::SeedlingPlugin::default(),
