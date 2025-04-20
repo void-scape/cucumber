@@ -68,7 +68,7 @@ fn apply_movement(
     player: Single<&mut Velocity, With<Player>>,
 ) {
     let mut velocity = player.into_inner();
-    velocity.0 = trigger.value.normalize_or_zero() * 200.;
+    velocity.0 = trigger.value.normalize_or_zero() * 125.;
 }
 
 fn stop_movement(_: Trigger<Completed<MoveAction>>, player: Single<&mut Velocity, With<Player>>) {
@@ -101,7 +101,7 @@ fn shoot_bullets(
 
         commands.spawn((
             BulletType::Basic,
-            Velocity(Vec2::new(0.0, 300.0)),
+            Velocity(Vec2::new(0.0, 200.)),
             new_transform,
             TriggersWith::<layers::Enemy>::default(),
         ));
