@@ -5,6 +5,7 @@ use bevy_enhanced_input::prelude::{Actions, InputAction, InputContext, InputCont
 use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
 use bevy_pretty_text::prelude::*;
 use bevy_pretty_text::type_writer::input;
+use bevy_seedling::prelude::*;
 use bevy_sequence::prelude::*;
 use bevy_textbox::*;
 
@@ -49,7 +50,10 @@ fn test(mut commands: Commands, asset_server: Res<AssetServer>) {
                 anchor: Anchor::TopLeft,
                 ..Default::default()
             },
-            //Transform::from_xyz(-500., 0., 0.),
+            SfxRate::new(
+                0.1,
+                SamplePlayer::new(asset_server.load("audio/sfx/snd_txtral.wav")),
+            ),
         ))
         .with_child((
             Sprite {

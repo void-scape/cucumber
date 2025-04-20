@@ -4,6 +4,7 @@ use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use physics::prelude::Gravity;
 
+mod bullet;
 mod invaders;
 mod mandelbrot;
 mod player;
@@ -23,6 +24,7 @@ fn main() {
                 }),
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
+            bevy_seedling::SeedlingPlugin::default(),
             player::PlayerPlugin,
             textbox::TextboxPlugin,
             invaders::InvadersSpritePlugin,
@@ -30,6 +32,7 @@ fn main() {
             bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(256, 256)),
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
             physics::PhysicsPlugin,
+            bullet::BulletPlugin,
         ))
         .add_systems(Update, close_on_escape)
         .insert_resource(Gravity(Vec2::ZERO))
