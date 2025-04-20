@@ -5,7 +5,10 @@ use bevy::{
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
-use physics::prelude::*;
+use physics::{
+    layers::{self, CollidesWith},
+    prelude::*,
+};
 
 use crate::bullet::{BulletTimer, BulletType};
 
@@ -99,6 +102,7 @@ fn shoot_bullets(
             BulletType::Basic,
             Velocity(Vec2::new(0.0, 300.0)),
             new_transform,
+            CollidesWith::<layers::Enemy>::default(),
         ));
     }
 }
