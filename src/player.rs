@@ -27,7 +27,7 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Velocity)]
+#[require(Transform, Velocity, layers::Player)]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
