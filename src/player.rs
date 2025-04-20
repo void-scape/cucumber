@@ -68,24 +68,36 @@ impl Player {
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    mut player: Query<&mut Velocity, With<Player>>,
+    mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
 ) {
-    let Ok(mut velocity) = player.get_single_mut() else {
+    let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
         return;
     };
 
     velocity.0 = trigger.value.normalize_or_zero() * 125.;
+    if velocity.0.x > 0. {
+        let tl = Vec2::new(0., 4.) * 8.;
+        let br = Vec2::new(1., 5.) * 8.;
+        sprite.rect = Some(Rect::from_corners(tl, br));
+    } else if velocity.0.x < 0. {
+        let tl = Vec2::new(2., 4.) * 8.;
+        let br = Vec2::new(3., 5.) * 8.;
+        sprite.rect = Some(Rect::from_corners(tl, br));
+    }
 }
 
 fn stop_movement(
     _: Trigger<Completed<MoveAction>>,
-    mut player: Query<&mut Velocity, With<Player>>,
+    mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
 ) {
-    let Ok(mut velocity) = player.get_single_mut() else {
+    let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
         return;
     };
 
     velocity.0 = Vec2::default();
+    let tl = Vec2::new(1., 4.) * 8.;
+    let br = Vec2::new(2., 5.) * 8.;
+    sprite.rect = Some(Rect::from_corners(tl, br));
 }
 
 #[derive(Debug, InputAction)]
