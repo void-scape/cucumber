@@ -108,7 +108,7 @@ fn init_bullet_sprite(
     server: Res<AssetServer>,
 ) {
     for (entity, sprite, velocity) in bullets.iter() {
-        let mut sprite = assets::sprite_rect(&server, sprite.path, sprite.cell);
+        let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
         sprite.flip_y = velocity.0.y < 0.;
         sprite.flip_x = velocity.0.x < 0.;
         commands.entity(entity).insert(sprite);
@@ -171,14 +171,14 @@ impl BulletType {
 #[derive(Component)]
 pub struct BulletSprite {
     path: &'static str,
-    cell: Vec2,
+    cell: UVec2,
 }
 
 impl BulletSprite {
-    pub fn from_cell(x: usize, y: usize) -> Self {
+    pub fn from_cell(x: u32, y: u32) -> Self {
         Self {
             path: assets::PROJECTILES_PATH,
-            cell: Vec2::new(x as f32, y as f32),
+            cell: UVec2::new(x, y),
         }
     }
 }

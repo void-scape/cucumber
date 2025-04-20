@@ -21,10 +21,24 @@ const ASSETS: &[&str] = &[
     SHIPS_PATH,
 ];
 
-pub fn sprite_rect(server: &AssetServer, path: &'static str, cell: Vec2) -> Sprite {
+pub fn sprite_rect8(server: &AssetServer, path: &'static str, cell: UVec2) -> Sprite {
     Sprite {
         image: server.load(path),
-        rect: Some(Rect::from_corners(cell * 8., (cell + 1.) * 8.)),
+        rect: Some(Rect::from_corners(
+            cell.as_vec2() * 8.,
+            (cell.as_vec2() + 1.) * 8.,
+        )),
+        ..Default::default()
+    }
+}
+
+pub fn sprite_rect16(server: &AssetServer, path: &'static str, cell: UVec2) -> Sprite {
+    Sprite {
+        image: server.load(path),
+        rect: Some(Rect::from_corners(
+            cell.as_vec2() * 16.,
+            (cell.as_vec2() + 1.) * 16.,
+        )),
         ..Default::default()
     }
 }

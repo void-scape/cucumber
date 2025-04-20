@@ -65,7 +65,7 @@ impl Enemy {
 
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Common => assets::sprite_rect(server, assets::SHIPS_PATH, Vec2::new(6., 0.)),
+            Self::Common => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 3)),
         }
     }
 }

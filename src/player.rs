@@ -54,7 +54,7 @@ impl Player {
 
                     commands.entity(entity).insert((
                         actions,
-                        assets::sprite_rect(&server, assets::SHIPS_PATH, Vec2::new(1., 4.)),
+                        assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
                         BulletTimer {
                             timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
                         },
@@ -81,6 +81,10 @@ fn apply_movement(
     } else if velocity.0.x < 0. {
         let tl = Vec2::new(2., 4.) * 8.;
         let br = Vec2::new(3., 5.) * 8.;
+        sprite.rect = Some(Rect::from_corners(tl, br));
+    } else {
+        let tl = Vec2::new(1., 4.) * 8.;
+        let br = Vec2::new(2., 5.) * 8.;
         sprite.rect = Some(Rect::from_corners(tl, br));
     }
 }
@@ -125,7 +129,22 @@ fn shoot_bullets(
         commands.spawn((
             BulletType::Basic,
             Polarity::North,
-            new_transform,
+            {
+                let mut t = new_transform.clone();
+                t.translation.x -= 3.;
+                t
+            },
+            TriggersWith::<layers::Enemy>::default(),
+            Damage::new(1),
+        ));
+
+        commands.spawn((
+            BulletType::Basic,
+            Polarity::North,
+            {
+                new_transform.translation.x += 3.;
+                new_transform
+            },
             TriggersWith::<layers::Enemy>::default(),
             Damage::new(1),
         ));
