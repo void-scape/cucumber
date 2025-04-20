@@ -6,10 +6,12 @@ use physics::layers::RegisterPhysicsLayer;
 use physics::prelude::Gravity;
 
 mod assets;
+mod auto_collider;
 mod background;
 mod bullet;
 mod characters;
 mod enemy;
+mod health;
 mod player;
 mod textbox;
 
@@ -48,11 +50,14 @@ fn main() {
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
             physics::PhysicsPlugin,
             bullet::BulletPlugin,
+            health::HealthPlugin,
         ))
+        .add_plugins(auto_collider::AutoColliderPlugin)
         .add_systems(Update, close_on_escape)
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Gravity(Vec2::ZERO))
         .register_trigger_layer::<physics::layers::Enemy>()
+        .register_trigger_layer::<physics::layers::Player>()
         .insert_resource(Scaling::Projection)
         .run();
 }

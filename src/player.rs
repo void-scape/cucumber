@@ -5,6 +5,7 @@ use bevy::{
 use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
 use physics::{
+    Physics,
     layers::{self, TriggersWith},
     prelude::*,
 };
@@ -12,7 +13,9 @@ use std::time::Duration;
 
 use crate::{
     assets,
+    auto_collider::AutoCollider,
     bullet::{BulletTimer, BulletType},
+    health::{Damage, Dead, Health, HealthSet},
 };
 
 pub struct PlayerPlugin;
@@ -23,6 +26,7 @@ impl Plugin for PlayerPlugin {
             commands.spawn(Player);
         })
         .add_systems(Update, shoot_bullets)
+        .add_systems(Physics, handle_death.after(HealthSet))
         .add_input_context::<AliveContext>()
         .add_observer(apply_movement)
         .add_observer(stop_movement);
@@ -30,7 +34,7 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Velocity, layers::Player)]
+#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), AutoCollider)]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
@@ -64,14 +68,23 @@ impl Player {
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    player: Single<&mut Velocity, With<Player>>,
+    mut player: Query<&mut Velocity, With<Player>>,
 ) {
-    let mut velocity = player.into_inner();
+    let Ok(mut velocity) = player.get_single_mut() else {
+        return;
+    };
+
     velocity.0 = trigger.value.normalize_or_zero() * 125.;
 }
 
-fn stop_movement(_: Trigger<Completed<MoveAction>>, player: Single<&mut Velocity, With<Player>>) {
-    let mut velocity = player.into_inner();
+fn stop_movement(
+    _: Trigger<Completed<MoveAction>>,
+    mut player: Query<&mut Velocity, With<Player>>,
+) {
+    let Ok(mut velocity) = player.get_single_mut() else {
+        return;
+    };
+
     velocity.0 = Vec2::default();
 }
 
@@ -103,6 +116,7 @@ fn shoot_bullets(
             Velocity(Vec2::new(0.0, 200.)),
             new_transform,
             TriggersWith::<layers::Enemy>::default(),
+            Damage::new(1),
         ));
 
         commands
@@ -115,4 +129,14 @@ fn shoot_bullets(
             ))
             .effect(BandPassNode::new(1000.0, 4.0));
     }
+}
+
+fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Commands) {
+    let Ok(player) = q.get_single() else {
+        return;
+    };
+
+    info!("player died");
+
+    commands.entity(player).despawn_recursive();
 }

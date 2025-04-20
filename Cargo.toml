@@ -58,8 +58,8 @@ default = ["bevy/dynamic_linking"]
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
 opt-level = 0
-# debug = "none"
-# strip = "debuginfo"
+debug = "none"
+strip = "debuginfo"
 
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]
