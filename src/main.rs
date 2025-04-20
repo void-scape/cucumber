@@ -5,6 +5,7 @@ use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use physics::prelude::Gravity;
 
 mod background;
+mod bullet;
 mod enemy;
 mod player;
 mod textbox;
@@ -30,6 +31,7 @@ fn main() {
                 }),
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
+            bevy_seedling::SeedlingPlugin::default(),
             player::PlayerPlugin,
             enemy::EnemyPlugin,
             textbox::TextboxPlugin,
@@ -40,6 +42,7 @@ fn main() {
             )),
             bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
             physics::PhysicsPlugin,
+            bullet::BulletPlugin,
         ))
         .add_systems(Update, close_on_escape)
         .insert_resource(Gravity(Vec2::ZERO))

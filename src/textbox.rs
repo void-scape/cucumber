@@ -2,6 +2,8 @@ use bevy::prelude::*;
 use bevy_enhanced_input::events::Started;
 use bevy_enhanced_input::prelude::{Actions, InputAction, InputContext, InputContextAppExt};
 use bevy_pretty_text::type_writer::input;
+use bevy_seedling::prelude::*;
+use bevy_sequence::prelude::*;
 
 //use bevy::sprite::Anchor;
 //use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
@@ -49,7 +51,10 @@ fn receive_textbox_input(_: Trigger<Started<TextboxInput>>, mut writer: EventWri
 //                anchor: Anchor::TopLeft,
 //                ..Default::default()
 //            },
-//            //Transform::from_xyz(-500., 0., 0.),
+//            SfxRate::new(
+//                0.1,
+//                SamplePlayer::new(asset_server.load("audio/sfx/snd_txtral.wav")),
+//            ),
 //        ))
 //        .with_child((
 //            Sprite {
