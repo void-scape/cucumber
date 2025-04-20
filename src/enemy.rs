@@ -1,4 +1,3 @@
-use std::time::Duration;
 use crate::{
     HEIGHT, WIDTH, assets,
     auto_collider::AutoCollider,
@@ -9,6 +8,7 @@ use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 use physics::{Physics, layers::TriggersWith, prelude::*};
 use rand::Rng;
+use std::time::Duration;
 
 pub const GLOBAL_ENEMY_SPEED: f32 = 4.;
 

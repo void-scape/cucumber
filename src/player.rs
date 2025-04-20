@@ -1,7 +1,7 @@
 use crate::{
     assets,
     auto_collider::AutoCollider,
-    bullet::{BulletTimer, BulletType, Direction},
+    bullet::{BulletTimer, BulletType, Polarity},
     health::{Damage, Dead, Health, HealthSet},
 };
 use bevy::{
@@ -124,7 +124,7 @@ fn shoot_bullets(
 
         commands.spawn((
             BulletType::Basic,
-            Direction::North,
+            Polarity::North,
             new_transform,
             TriggersWith::<layers::Enemy>::default(),
             Damage::new(1),

@@ -9,16 +9,49 @@ use bevy::{
 use physics::{Physics, prelude::*};
 use std::time::Duration;
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+pub enum BulletSystems {
+    Collision,
+    Lifetime,
+    Velocity,
+    Sprite,
+}
+
 pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Physics,
-            (handle_enemy_collision, handle_player_collision).before(HealthSet),
+            (handle_enemy_collision, handle_player_collision)
+                .before(HealthSet)
+                .in_set(BulletSystems::Collision),
         )
-        .add_systems(Update, manage_lifetime)
-        .add_systems(PostUpdate, init_spawned_bullets);
+        .add_systems(Update, manage_lifetime.in_set(BulletSystems::Lifetime))
+        .add_systems(
+            PostUpdate,
+            (
+                init_bullet_velocity.in_set(BulletSystems::Velocity),
+                init_bullet_sprite.in_set(BulletSystems::Sprite),
+            )
+                .chain(),
+        );
+    }
+}
+
+#[derive(Default, Component)]
+pub enum Polarity {
+    North,
+    #[default]
+    South,
+}
+
+impl Polarity {
+    pub fn to_vec2(&self) -> Vec2 {
+        match self {
+            Self::North => Vec2::Y,
+            Self::South => Vec2::NEG_Y,
+        }
     }
 }
 
@@ -36,16 +69,16 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn velocity(&self) -> Velocity {
+    pub fn to_vec2(self) -> Vec2 {
         match self {
-            Self::NorthWest => Velocity(Vec2::new(-1., 1.)),
-            Self::North => Velocity(Vec2::new(0., 1.)),
-            Self::NorthEast => Velocity(Vec2::new(1., 1.)),
-            Self::East => Velocity(Vec2::new(1., 0.)),
-            Self::SouthEast => Velocity(Vec2::new(1., -1.)),
-            Self::South => Velocity(Vec2::new(0., -1.)),
-            Self::SouthWest => Velocity(Vec2::new(-1., -1.)),
-            Self::West => Velocity(Vec2::new(-1., 0.)),
+            Self::NorthWest => Vec2::new(-1., 1.).normalize(),
+            Self::North => Vec2::Y,
+            Self::NorthEast => Vec2::ONE.normalize(),
+            Self::East => Vec2::X,
+            Self::SouthEast => Vec2::new(1., -1.).normalize(),
+            Self::South => Vec2::NEG_Y,
+            Self::SouthWest => Vec2::NEG_ONE.normalize(),
+            Self::West => Vec2::NEG_X,
         }
     }
 }
@@ -59,18 +92,26 @@ impl Default for BulletSpeed {
     }
 }
 
-fn init_spawned_bullets(
+fn init_bullet_velocity(
     mut commands: Commands,
-    bullets: Query<(Entity, &BulletSpeed, &Direction, &BulletSprite), Without<Velocity>>,
+    bullets: Query<(Entity, &BulletSpeed, &Polarity), Without<Velocity>>,
+) {
+    for (entity, speed, polarity) in bullets.iter() {
+        let velocity = Velocity(polarity.to_vec2() * speed.0);
+        commands.entity(entity).insert(velocity);
+    }
+}
+
+fn init_bullet_sprite(
+    mut commands: Commands,
+    bullets: Query<(Entity, &BulletSprite, &Velocity), Without<Sprite>>,
     server: Res<AssetServer>,
 ) {
-    for (entity, speed, direction, sprite) in bullets.iter() {
-        let mut velocity = direction.velocity();
-        velocity.0 *= speed.0;
+    for (entity, sprite, velocity) in bullets.iter() {
         let mut sprite = assets::sprite_rect(&server, sprite.path, sprite.cell);
         sprite.flip_y = velocity.0.y < 0.;
         sprite.flip_x = velocity.0.x < 0.;
-        commands.entity(entity).insert((velocity, sprite));
+        commands.entity(entity).insert(sprite);
     }
 }
 
@@ -101,11 +142,11 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Direction, BulletSpeed, DynamicBody, Lifetime)]
+#[require(BulletSpeed, DynamicBody, Lifetime)]
 pub struct Bullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet)]
+#[require(Bullet, Polarity)]
 #[component(on_add = Self::on_add)]
 pub enum BulletType {
     Basic,
