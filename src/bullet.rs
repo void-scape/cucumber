@@ -2,12 +2,17 @@ use bevy::{
     ecs::{component::ComponentId, world::DeferredWorld},
     prelude::*,
 };
-use physics::prelude::*;
+use physics::{Physics, PhysicsSystems, prelude::*};
 
 pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
-    fn build(&self, app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Physics,
+            handle_enemy_collision.after(PhysicsSystems::Collision),
+        );
+    }
 }
 
 #[derive(Component)]
@@ -44,7 +49,8 @@ impl BulletType {
 pub struct BasicBullet;
 
 fn basic_collider() -> Collider {
-    Collider::from_rect(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0))
+    let size = Vec2::new(1.0, 1.0) * crate::RESOLUTION_SCALE;
+    Collider::from_rect(Vec2::new(-size.x / 2.0, size.y / 2.0), size)
 }
 
 fn on_add_basic(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
@@ -56,4 +62,17 @@ fn on_add_basic(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
         .commands()
         .entity(entity)
         .insert(Sprite::from_image(bullet));
+}
+
+fn handle_enemy_collision(
+    bullets: Query<&Triggers<layers::Enemy>, With<Bullet>>,
+    mut commands: Commands,
+) {
+    for collision in bullets.iter() {
+        let Some(first) = collision.entities().first() else {
+            continue;
+        };
+
+        commands.entity(*first).despawn_recursive();
+    }
 }
