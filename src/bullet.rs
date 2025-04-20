@@ -1,12 +1,13 @@
-use std::time::Duration;
-
+use crate::{
+    assets,
+    health::{Damage, Health, HealthSet},
+};
 use bevy::{
     ecs::{component::ComponentId, world::DeferredWorld},
     prelude::*,
 };
 use physics::{Physics, prelude::*};
-
-use crate::health::{Damage, Health, HealthSet};
+use std::time::Duration;
 
 pub struct BulletPlugin;
 
@@ -16,7 +17,60 @@ impl Plugin for BulletPlugin {
             Physics,
             (handle_enemy_collision, handle_player_collision).before(HealthSet),
         )
-        .add_systems(Update, manage_lifetime);
+        .add_systems(Update, manage_lifetime)
+        .add_systems(PostUpdate, init_spawned_bullets);
+    }
+}
+
+#[derive(Default, Component)]
+pub enum Direction {
+    NorthWest,
+    North,
+    NorthEast,
+    East,
+    SouthEast,
+    #[default]
+    South,
+    SouthWest,
+    West,
+}
+
+impl Direction {
+    pub fn velocity(&self) -> Velocity {
+        match self {
+            Self::NorthWest => Velocity(Vec2::new(-1., 1.)),
+            Self::North => Velocity(Vec2::new(0., 1.)),
+            Self::NorthEast => Velocity(Vec2::new(1., 1.)),
+            Self::East => Velocity(Vec2::new(1., 0.)),
+            Self::SouthEast => Velocity(Vec2::new(1., -1.)),
+            Self::South => Velocity(Vec2::new(0., -1.)),
+            Self::SouthWest => Velocity(Vec2::new(-1., -1.)),
+            Self::West => Velocity(Vec2::new(-1., 0.)),
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct BulletSpeed(pub f32);
+
+impl Default for BulletSpeed {
+    fn default() -> Self {
+        Self(200.)
+    }
+}
+
+fn init_spawned_bullets(
+    mut commands: Commands,
+    bullets: Query<(Entity, &BulletSpeed, &Direction, &BulletSprite), Without<Velocity>>,
+    server: Res<AssetServer>,
+) {
+    for (entity, speed, direction, sprite) in bullets.iter() {
+        let mut velocity = direction.velocity();
+        velocity.0 *= speed.0;
+        let mut sprite = assets::sprite_rect(&server, sprite.path, sprite.cell);
+        sprite.flip_y = velocity.0.y < 0.;
+        sprite.flip_x = velocity.0.x < 0.;
+        commands.entity(entity).insert((velocity, sprite));
     }
 }
 
@@ -47,7 +101,7 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Velocity, DynamicBody, Lifetime)]
+#[require(Direction, BulletSpeed, DynamicBody, Lifetime)]
 pub struct Bullet;
 
 #[derive(Clone, Copy, Component)]
@@ -55,6 +109,7 @@ pub struct Bullet;
 #[component(on_add = Self::on_add)]
 pub enum BulletType {
     Basic,
+    Common,
 }
 
 impl BulletType {
@@ -65,30 +120,40 @@ impl BulletType {
             BulletType::Basic => {
                 world.commands().entity(entity).insert(BasicBullet);
             }
+            BulletType::Common => {
+                world.commands().entity(entity).insert(CommonBullet);
+            }
         }
     }
 }
 
-#[derive(Clone, Copy, Component)]
-#[require(Collider(basic_collider))]
-#[component(on_add = on_add_basic)]
-pub struct BasicBullet;
+#[derive(Component)]
+pub struct BulletSprite {
+    path: &'static str,
+    cell: Vec2,
+}
 
-fn basic_collider() -> Collider {
+impl BulletSprite {
+    pub fn from_cell(x: usize, y: usize) -> Self {
+        Self {
+            path: assets::PROJECTILES_PATH,
+            cell: Vec2::new(x as f32, y as f32),
+        }
+    }
+}
+
+fn small_collider() -> Collider {
     let size = Vec2::new(1.0, 1.0) * crate::RESOLUTION_SCALE;
     Collider::from_rect(Vec2::new(-size.x / 2.0, size.y / 2.0), size)
 }
 
-fn on_add_basic(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
-    let server = world.get_resource::<AssetServer>().unwrap();
+#[derive(Clone, Copy, Component)]
+#[require(Collider(small_collider), BulletSprite(|| BulletSprite::from_cell(0, 0)))]
+pub struct BasicBullet;
 
-    let bullet = server.load("sprites/bullet.png");
-
-    world
-        .commands()
-        .entity(entity)
-        .insert(Sprite::from_image(bullet));
-}
+#[derive(Clone, Copy, Component)]
+#[require(Collider(small_collider), BulletSprite(|| BulletSprite::from_cell(4, 0)))]
+pub struct CommonBullet;
 
 fn handle_enemy_collision(
     bullets: Query<(Entity, &Damage, &Triggers<layers::Enemy>), With<Bullet>>,

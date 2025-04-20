@@ -1,3 +1,9 @@
+use crate::{
+    assets,
+    auto_collider::AutoCollider,
+    bullet::{BulletTimer, BulletType, Direction},
+    health::{Damage, Dead, Health, HealthSet},
+};
 use bevy::{
     ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
     prelude::*,
@@ -10,13 +16,6 @@ use physics::{
     prelude::*,
 };
 use std::time::Duration;
-
-use crate::{
-    assets,
-    auto_collider::AutoCollider,
-    bullet::{BulletTimer, BulletType},
-    health::{Damage, Dead, Health, HealthSet},
-};
 
 pub struct PlayerPlugin;
 
@@ -125,7 +124,7 @@ fn shoot_bullets(
 
         commands.spawn((
             BulletType::Basic,
-            Velocity(Vec2::new(0.0, 200.)),
+            Direction::North,
             new_transform,
             TriggersWith::<layers::Enemy>::default(),
             Damage::new(1),

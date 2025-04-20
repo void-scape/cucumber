@@ -1,5 +1,4 @@
 use std::time::Duration;
-
 use crate::{
     HEIGHT, WIDTH, assets,
     auto_collider::AutoCollider,
@@ -32,19 +31,17 @@ fn startup(mut commands: Commands, server: Res<AssetServer>) {
         spawn_enemy(
             &mut commands,
             &server,
-            Enemy::Basic,
+            Enemy::Common,
             Transform::from_xyz(x, HEIGHT / 2. + 4., 0.),
         );
     }
 }
 
 fn spawn_enemy(commands: &mut Commands, server: &AssetServer, enemy: Enemy, bundle: impl Bundle) {
-    let mut sprite = enemy.sprite(server);
-    sprite.flip_y = true;
     commands.spawn((
         enemy,
         Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * enemy.speed_mul()),
-        sprite,
+        enemy.sprite(server),
         bundle,
         Health::full(1),
         BulletTimer {
@@ -56,19 +53,19 @@ fn spawn_enemy(commands: &mut Commands, server: &AssetServer, enemy: Enemy, bund
 #[derive(Clone, Copy, Component)]
 #[require(Transform, Velocity, Visibility, layers::Enemy, AutoCollider)]
 enum Enemy {
-    Basic,
+    Common,
 }
 
 impl Enemy {
     pub fn speed_mul(&self) -> f32 {
         match self {
-            Self::Basic => 1.,
+            Self::Common => 1.,
         }
     }
 
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Basic => assets::sprite_rect(server, assets::SHIPS_PATH, Vec2::new(1., 1.)),
+            Self::Common => assets::sprite_rect(server, assets::SHIPS_PATH, Vec2::new(6., 0.)),
         }
     }
 }
@@ -93,8 +90,7 @@ fn shoot_bullets(
             new_transform.translation.y -= 8.0;
 
             commands.spawn((
-                BulletType::Basic,
-                Velocity(Vec2::new(0.0, -200.)),
+                BulletType::Common,
                 new_transform,
                 TriggersWith::<layers::Player>::default(),
                 Damage::new(1),
