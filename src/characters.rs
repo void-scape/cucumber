@@ -1,4 +1,5 @@
 use crate::assets::CHARACTERS_PATH;
+use crate::{HEIGHT, WIDTH};
 use bevy::prelude::*;
 
 pub struct CharacterPlugin;
@@ -30,6 +31,7 @@ fn startup(
             indices: AnimationIndices { first: 0, last: 4 },
             timer: Timer::from_seconds(0.5, TimerMode::Repeating),
         },
+        Transform::from_xyz(-WIDTH / 2. + 20., -HEIGHT / 2. + 20., 0.),
     ));
 }
 
