@@ -2,9 +2,8 @@ use bevy::prelude::*;
 use bevy_enhanced_input::events::Started;
 use bevy_enhanced_input::prelude::{Actions, InputAction, InputContext, InputContextAppExt};
 use bevy_pretty_text::type_writer::input;
-use bevy_seedling::prelude::*;
-use bevy_sequence::prelude::*;
 
+//use bevy_seedling::prelude::*;
 //use bevy::sprite::Anchor;
 //use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
 //use bevy_pretty_text::prelude::*;

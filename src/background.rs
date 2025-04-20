@@ -7,39 +7,65 @@ use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Material2d, Material2dPlugin};
 use bevy_pixel_gfx::pixel_perfect::HIGH_RES_BACKGROUND_LAYER;
 
+const SCROLL_SPEED: f32 = 0.3;
+
 pub struct BackgroundPlugin;
 
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<ScrollingTexture>::default())
-            .add_systems(Startup, scrolling_background);
+            .add_systems(Startup, scrolling_background)
+            .add_systems(Update, update_scrolling_background);
         //app.add_plugins(MandelbrotPlugin);
     }
 }
 
-fn scrolling_background(mut commands: Commands, server: Res<AssetServer>) {
+fn scrolling_background(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut custom_materials: ResMut<Assets<ScrollingTexture>>,
+) {
     commands.spawn((
-        Sprite::from_image(server.load_with_settings("background.png", |s: &mut _| {
-            *s = ImageLoaderSettings {
-                sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    mag_filter: ImageFilterMode::Nearest,
-                    min_filter: ImageFilterMode::Nearest,
-                    mipmap_filter: ImageFilterMode::Nearest,
+        Mesh2d(meshes.add(Rectangle::new(320., 180.))),
+        MeshMaterial2d(custom_materials.add(ScrollingTexture {
+            texture: server.load_with_settings("background.png", |s: &mut _| {
+                *s = ImageLoaderSettings {
+                    sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                        address_mode_u: ImageAddressMode::MirrorRepeat,
+                        address_mode_v: ImageAddressMode::MirrorRepeat,
+                        mag_filter: ImageFilterMode::Nearest,
+                        min_filter: ImageFilterMode::Nearest,
+                        mipmap_filter: ImageFilterMode::Nearest,
+                        ..default()
+                    }),
                     ..default()
-                }),
-                ..default()
-            }
+                }
+            }),
+            uv_offset: 0.,
         })),
         Transform::from_xyz(0., 0., -999.),
     ));
 }
 
-#[derive(Clone, Copy, Asset, TypePath, ShaderType, AsBindGroup)]
+fn update_scrolling_background(
+    query: Query<&MeshMaterial2d<ScrollingTexture>>,
+    mut materials: ResMut<Assets<ScrollingTexture>>,
+    time: Res<Time>,
+) {
+    for handle in query.iter() {
+        let material = materials.get_mut(&handle.0).unwrap();
+        material.uv_offset -= SCROLL_SPEED * time.delta_secs();
+    }
+}
+
+#[derive(Clone, Asset, TypePath, AsBindGroup)]
 struct ScrollingTexture {
-    uvx: f32,
-    uvy: f32,
+    #[texture(0)]
+    #[sampler(1)]
+    texture: Handle<Image>,
+    #[uniform(2)]
+    uv_offset: f32,
 }
 
 impl Material2d for ScrollingTexture {

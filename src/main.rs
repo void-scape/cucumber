@@ -10,8 +10,8 @@ mod enemy;
 mod player;
 mod textbox;
 
-pub const WIDTH: f32 = 256.;
-pub const HEIGHT: f32 = 256.;
+pub const WIDTH: f32 = 180.;
+pub const HEIGHT: f32 = 240.;
 pub const RESOLUTION_SCALE: f32 = 3.;
 
 fn main() {

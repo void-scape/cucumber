@@ -1,9 +1,7 @@
+use crate::{HEIGHT, WIDTH};
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
 use physics::prelude::*;
 use rand::Rng;
-
-use crate::{HEIGHT, WIDTH};
 
 pub const GLOBAL_ENEMY_SPEED: f32 = 4.;
 
@@ -31,33 +29,16 @@ fn startup(mut commands: Commands, server: Res<AssetServer>) {
 }
 
 fn spawn_enemy(commands: &mut Commands, server: &AssetServer, enemy: Enemy, bundle: impl Bundle) {
-    commands
-        .spawn((
-            enemy,
-            Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * enemy.speed_mul()),
-            bundle,
-        ))
-        .with_children(|root| {
-            root.spawn(Sprite {
-                image: server.load("invaders_sprites.png"),
-                rect: Some(Rect::from_corners(
-                    Vec2::X * 2. * 8.,
-                    Vec2::X * 2.5 * 8. + Vec2::Y * 8.,
-                )),
-                anchor: Anchor::CenterRight,
-                ..Default::default()
-            });
-            root.spawn(Sprite {
-                image: server.load("invaders_sprites.png"),
-                rect: Some(Rect::from_corners(
-                    Vec2::X * 2. * 8.,
-                    Vec2::X * 2.5 * 8. + Vec2::Y * 8.,
-                )),
-                flip_x: true,
-                anchor: Anchor::CenterLeft,
-                ..Default::default()
-            });
-        });
+    commands.spawn((
+        enemy,
+        Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * enemy.speed_mul()),
+        bundle,
+        Sprite {
+            image: server.load("invaders_sprites.png"),
+            rect: Some(enemy.sprite_rect()),
+            ..Default::default()
+        },
+    ));
 }
 
 #[derive(Clone, Copy, Component)]
@@ -70,6 +51,12 @@ impl Enemy {
     pub fn speed_mul(&self) -> f32 {
         match self {
             Self::Basic => 1.,
+        }
+    }
+
+    pub fn sprite_rect(&self) -> Rect {
+        match self {
+            Self::Basic => Rect::from_corners(Vec2::X * 3. * 8., Vec2::X * 4. * 8. + Vec2::Y * 8.),
         }
     }
 }
