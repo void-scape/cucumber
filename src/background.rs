@@ -4,10 +4,8 @@ use bevy::image::{
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
-use bevy::sprite::{Material2d, Material2dPlugin};
+use bevy::sprite::{AlphaMode2d, Material2d, Material2dPlugin};
 use bevy_pixel_gfx::pixel_perfect::HIGH_RES_BACKGROUND_LAYER;
-
-const SCROLL_SPEED: f32 = 0.3;
 
 pub struct BackgroundPlugin;
 
@@ -20,8 +18,15 @@ impl Plugin for BackgroundPlugin {
     }
 }
 
+const BACKGROUND_WIDTH: f32 = 128.;
+const BACKGROUND_HEIGHT: f32 = 256.;
+const BACKGROUND_PATH1: &'static str = "shooters/background1.png";
+const BACKGROUND_PATH2: &'static str = "shooters/background2.png";
+const SCROLL_SPEED1: f32 = 0.1;
+const SCROLL_SPEED2: f32 = 0.3;
+
 #[derive(Component)]
-struct Wrap(f32, f32);
+struct Speed(f32);
 
 fn scrolling_background(
     mut commands: Commands,
@@ -30,31 +35,9 @@ fn scrolling_background(
     mut custom_materials: ResMut<Assets<ScrollingTexture>>,
 ) {
     commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(320., 180.))),
+        Mesh2d(meshes.add(Rectangle::new(BACKGROUND_WIDTH, BACKGROUND_HEIGHT))),
         MeshMaterial2d(custom_materials.add(ScrollingTexture {
-            texture: server.load_with_settings("background.png", |s: &mut _| {
-                *s = ImageLoaderSettings {
-                    sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                        address_mode_u: ImageAddressMode::MirrorRepeat,
-                        address_mode_v: ImageAddressMode::MirrorRepeat,
-                        mag_filter: ImageFilterMode::Nearest,
-                        min_filter: ImageFilterMode::Nearest,
-                        mipmap_filter: ImageFilterMode::Nearest,
-                        ..default()
-                    }),
-                    ..default()
-                }
-            }),
-            uv_offset: 1.,
-        })),
-        Wrap(1., 2.),
-        Transform::from_xyz(0., 180. / 2., -999.),
-    ));
-
-    commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(320., 180.))),
-        MeshMaterial2d(custom_materials.add(ScrollingTexture {
-            texture: server.load_with_settings("background.png", |s: &mut _| {
+            texture: server.load_with_settings(BACKGROUND_PATH1, |s: &mut _| {
                 *s = ImageLoaderSettings {
                     sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
                         address_mode_u: ImageAddressMode::MirrorRepeat,
@@ -69,21 +52,43 @@ fn scrolling_background(
             }),
             uv_offset: 0.,
         })),
-        Wrap(0., 1.),
-        Transform::from_xyz(0., -180. / 2., -999.),
+        Speed(SCROLL_SPEED1),
+        Transform::from_xyz(0., 0., -999.),
+    ));
+
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(BACKGROUND_WIDTH, BACKGROUND_HEIGHT))),
+        MeshMaterial2d(custom_materials.add(ScrollingTexture {
+            texture: server.load_with_settings(BACKGROUND_PATH2, |s: &mut _| {
+                *s = ImageLoaderSettings {
+                    sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                        address_mode_u: ImageAddressMode::MirrorRepeat,
+                        address_mode_v: ImageAddressMode::MirrorRepeat,
+                        mag_filter: ImageFilterMode::Nearest,
+                        min_filter: ImageFilterMode::Nearest,
+                        mipmap_filter: ImageFilterMode::Nearest,
+                        ..default()
+                    }),
+                    ..default()
+                }
+            }),
+            uv_offset: 0.,
+        })),
+        Speed(SCROLL_SPEED2),
+        Transform::from_xyz(0., 0., -998.),
     ));
 }
 
 fn update_scrolling_background(
-    query: Query<(&MeshMaterial2d<ScrollingTexture>, &Wrap)>,
+    query: Query<(&MeshMaterial2d<ScrollingTexture>, &Speed)>,
     mut materials: ResMut<Assets<ScrollingTexture>>,
     time: Res<Time>,
 ) {
-    for (handle, wrap) in query.iter() {
+    for (handle, speed) in query.iter() {
         let material = materials.get_mut(&handle.0).unwrap();
-        material.uv_offset -= SCROLL_SPEED * time.delta_secs();
-        if material.uv_offset >= wrap.1 {
-            material.uv_offset = wrap.0;
+        material.uv_offset -= speed.0 * time.delta_secs();
+        if material.uv_offset >= 1. {
+            material.uv_offset = 0.;
         }
     }
 }
@@ -100,6 +105,10 @@ struct ScrollingTexture {
 impl Material2d for ScrollingTexture {
     fn fragment_shader() -> ShaderRef {
         "shaders/scrolling_texture.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
     }
 }
 

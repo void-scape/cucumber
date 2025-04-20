@@ -1,4 +1,4 @@
-use crate::{HEIGHT, WIDTH};
+use crate::{HEIGHT, WIDTH, assets};
 use bevy::prelude::*;
 use physics::prelude::*;
 use rand::Rng;
@@ -30,15 +30,13 @@ fn startup(mut commands: Commands, server: Res<AssetServer>) {
 }
 
 fn spawn_enemy(commands: &mut Commands, server: &AssetServer, enemy: Enemy, bundle: impl Bundle) {
+    let mut sprite = enemy.sprite(server);
+    sprite.flip_y = true;
     commands.spawn((
         enemy,
         Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * enemy.speed_mul()),
+        sprite,
         bundle,
-        Sprite {
-            image: server.load("invaders_sprites.png"),
-            rect: Some(enemy.sprite_rect()),
-            ..Default::default()
-        },
     ));
 }
 
@@ -55,9 +53,9 @@ impl Enemy {
         }
     }
 
-    pub fn sprite_rect(&self) -> Rect {
+    pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Basic => Rect::from_corners(Vec2::X * 3. * 8., Vec2::X * 4. * 8. + Vec2::Y * 8.),
+            Self::Basic => assets::sprite_rect(server, assets::SHIPS_PATH, Vec2::new(1., 1.)),
         }
     }
 }

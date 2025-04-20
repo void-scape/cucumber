@@ -12,8 +12,8 @@ mod enemy;
 mod player;
 mod textbox;
 
-pub const WIDTH: f32 = 180.;
-pub const HEIGHT: f32 = 240.;
+pub const WIDTH: f32 = 128.;
+pub const HEIGHT: f32 = 256.;
 pub const RESOLUTION_SCALE: f32 = 3.;
 
 fn main() {
@@ -48,6 +48,7 @@ fn main() {
             bullet::BulletPlugin,
         ))
         .add_systems(Update, close_on_escape)
+        .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Gravity(Vec2::ZERO))
         .register_trigger_layer::<physics::layers::Enemy>()
         .insert_resource(Scaling::Projection)

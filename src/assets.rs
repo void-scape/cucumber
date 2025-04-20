@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::HEIGHT;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -18,6 +20,14 @@ const ASSETS: &[&str] = &[
     //PROJECTILES_PATH,
     SHIPS_PATH,
 ];
+
+pub fn sprite_rect(server: &AssetServer, path: &'static str, cell: Vec2) -> Sprite {
+    Sprite {
+        image: server.load(path),
+        rect: Some(Rect::from_corners(cell * 8., (cell + 1.) * 8.)),
+        ..Default::default()
+    }
+}
 
 pub struct AssetPlugin;
 

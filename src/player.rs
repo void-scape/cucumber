@@ -5,12 +5,15 @@ use bevy::{
 use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
 use physics::{
-    layers::{self, CollidesWith, TriggersWith},
+    layers::{self, TriggersWith},
     prelude::*,
 };
 use std::time::Duration;
 
-use crate::bullet::{BulletTimer, BulletType};
+use crate::{
+    assets,
+    bullet::{BulletTimer, BulletType},
+};
 
 pub struct PlayerPlugin;
 
@@ -48,11 +51,7 @@ impl Player {
 
                     commands.entity(entity).insert((
                         actions,
-                        Sprite {
-                            image: server.load("invaders_sprites.png"),
-                            rect: Some(Rect::from_corners(Vec2::ZERO, Vec2::ONE * 8.)),
-                            ..Default::default()
-                        },
+                        assets::sprite_rect(&server, assets::SHIPS_PATH, Vec2::new(1., 4.)),
                         BulletTimer {
                             timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
                         },
