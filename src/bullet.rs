@@ -1,8 +1,12 @@
+use std::time::Duration;
+
 use bevy::{
     ecs::{component::ComponentId, world::DeferredWorld},
     prelude::*,
 };
-use physics::{Physics, PhysicsSystems, prelude::*};
+use physics::{Physics, prelude::*};
+
+use crate::health::{Damage, Health, HealthSet};
 
 pub struct BulletPlugin;
 
@@ -10,8 +14,9 @@ impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Physics,
-            handle_enemy_collision.after(PhysicsSystems::Collision),
-        );
+            (handle_enemy_collision, handle_player_collision).before(HealthSet),
+        )
+        .add_systems(Update, manage_lifetime);
     }
 }
 
@@ -20,8 +25,29 @@ pub struct BulletTimer {
     pub timer: Timer,
 }
 
+#[derive(Debug, Component)]
+pub struct Lifetime(pub Timer);
+
+impl Default for Lifetime {
+    fn default() -> Self {
+        Self(Timer::new(Duration::from_secs(2), TimerMode::Once))
+    }
+}
+
+fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut commands: Commands) {
+    let delta = time.delta();
+
+    for (entity, mut lifetime) in q.iter_mut() {
+        lifetime.0.tick(delta);
+
+        if lifetime.0.finished() {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
 #[derive(Clone, Copy, Component, Default)]
-#[require(Velocity, DynamicBody)]
+#[require(Velocity, DynamicBody, Lifetime)]
 pub struct Bullet;
 
 #[derive(Clone, Copy, Component)]
@@ -65,14 +91,35 @@ fn on_add_basic(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
 }
 
 fn handle_enemy_collision(
-    bullets: Query<&Triggers<layers::Enemy>, With<Bullet>>,
+    bullets: Query<(Entity, &Damage, &Triggers<layers::Enemy>), With<Bullet>>,
+    mut enemies: Query<&mut Health>,
     mut commands: Commands,
 ) {
-    for collision in bullets.iter() {
+    for (bullet, damage, collision) in bullets.iter() {
         let Some(first) = collision.entities().first() else {
             continue;
         };
 
-        commands.entity(*first).despawn_recursive();
+        if let Ok(mut enemy) = enemies.get_mut(*first) {
+            enemy.damage(**damage);
+            commands.entity(bullet).despawn();
+        }
+    }
+}
+
+fn handle_player_collision(
+    bullets: Query<(Entity, &Damage, &Triggers<layers::Player>), With<Bullet>>,
+    mut player: Query<&mut Health>,
+    mut commands: Commands,
+) {
+    for (bullet, damage, collision) in bullets.iter() {
+        let Some(first) = collision.entities().first() else {
+            continue;
+        };
+
+        if let Ok(mut player) = player.get_mut(*first) {
+            player.damage(**damage);
+            commands.entity(bullet).despawn();
+        }
     }
 }
