@@ -1,12 +1,15 @@
-use super::{BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity};
-use crate::health::Damage;
+use super::{
+    Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
+    homing::{Heading, Homing},
+};
+use crate::{auto_collider::ImageCollider, health::Damage};
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 use physics::{
     layers::{self, TriggersWith},
     prelude::Velocity,
 };
-use std::{marker::PhantomData, time::Duration};
+use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
 pub struct EmitterPlugin;
 
@@ -19,6 +22,8 @@ impl Plugin for EmitterPlugin {
                 SoloEmitter::<layers::Player>::shoot_bullets,
                 DualEmitter::<layers::Enemy>::shoot_bullets,
                 DualEmitter::<layers::Player>::shoot_bullets,
+                HomingEmitter::<layers::Enemy>::shoot_bullets,
+                HomingEmitter::<layers::Player>::shoot_bullets,
             ),
         );
     }
@@ -175,6 +180,81 @@ impl<T: Component> DualEmitter<T> {
                     new_transform.translation.x += 3.;
                     new_transform
                 },
+                TriggersWith::<T>::default(),
+                Damage::new(1),
+            ));
+
+            commands
+                .spawn((
+                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Decibels(-18.0),
+                        ..PlaybackSettings::ONCE
+                    },
+                ))
+                .effect(BandPassNode::new(1000.0, 4.0));
+        }
+    }
+}
+
+#[derive(Component, Default)]
+#[require(BulletRate, BulletSpeed, Polarity)]
+pub struct HomingEmitter<T>(PhantomData<fn() -> T>);
+
+impl<T: Component> HomingEmitter<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: Component> HomingEmitter<T> {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
+            With<HomingEmitter<T>>,
+        >,
+        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (entity, timer, polarity, parent) in emitters.iter_mut() {
+            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
+                continue;
+            };
+            let rate = rate.copied().unwrap_or_default();
+            let speed = speed.copied().unwrap_or_default();
+
+            let duration = Duration::from_secs_f32(0.5 / rate.0);
+
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(duration, TimerMode::Repeating),
+                });
+                continue;
+            };
+
+            let mut new_transform = parent.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+            timer.timer.set_duration(duration);
+
+            commands.spawn((
+                BulletSprite::from_cell(5, 2),
+                Bullet,
+                ImageCollider,
+                Velocity::default(),
+                Homing::<T>::new(),
+                Heading {
+                    speed: 100.0,
+                    direction: PI / 2.0,
+                },
+                new_transform,
                 TriggersWith::<T>::default(),
                 Damage::new(1),
             ));

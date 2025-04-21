@@ -1,7 +1,10 @@
 use crate::{
     assets,
     auto_collider::ImageCollider,
-    bullet::{BulletRate, BulletSpeed, BulletTimer, Polarity, emitter::DualEmitter},
+    bullet::{
+        BulletRate, BulletSpeed, BulletTimer, Polarity,
+        emitter::{DualEmitter, HomingEmitter},
+    },
     health::{Dead, Health, HealthSet},
     pickups::{self, PickupEvent, Upgrade},
 };
@@ -24,7 +27,7 @@ impl Plugin for PlayerPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands
                 .spawn(Player)
-                .with_child((DualEmitter::<layers::Enemy>::new(), Polarity::North));
+                .with_child((HomingEmitter::<layers::Enemy>::new(), Polarity::North));
         })
         .add_systems(Update, handle_pickups)
         .add_systems(Physics, handle_death.after(HealthSet))

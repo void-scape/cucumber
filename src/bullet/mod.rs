@@ -16,6 +16,7 @@ use rand::seq::IndexedRandom;
 use std::time::Duration;
 
 pub mod emitter;
+mod homing;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum BulletSystems {
@@ -29,7 +30,7 @@ pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(emitter::EmitterPlugin)
+        app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
             .add_systems(
                 Physics,
                 (handle_enemy_collision, handle_player_collision)

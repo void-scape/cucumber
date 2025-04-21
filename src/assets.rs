@@ -18,8 +18,8 @@ const ASSETS: &[&str] = &[
     //CHARACTERS_PATH,
     //UI_PATH,
     //MISC_PATH,
-    //PROJECTILES_PATH,
-    SHIPS_PATH,
+    PROJECTILES_PATH,
+    // SHIPS_PATH,
 ];
 
 pub fn sprite_rect8(server: &AssetServer, path: &'static str, cell: UVec2) -> Sprite {
