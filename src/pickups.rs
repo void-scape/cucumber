@@ -13,12 +13,12 @@ impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
             .register_trigger_layer::<PickupLayer>()
-            .add_systems(Startup, startup)
+            //.add_systems(Startup, debug)
             .add_systems(Update, pickup_triggered);
     }
 }
 
-fn startup(mut commands: Commands) {
+fn debug(mut commands: Commands) {
     commands.spawn((Upgrade::Speed(0.5), Transform::from_xyz(0., 30., 0.)));
     commands.spawn((Upgrade::Juice(0.5), Transform::from_xyz(0., -30., 0.)));
 

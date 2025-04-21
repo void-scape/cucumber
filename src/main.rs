@@ -16,6 +16,7 @@ mod bullet;
 mod characters;
 mod enemy;
 mod health;
+mod music;
 mod pickups;
 mod player;
 mod textbox;
@@ -51,6 +52,7 @@ fn main() {
         ))
         .add_plugins((
             animation::AnimationPlugin,
+            music::MusicPlugin,
             assets::AssetPlugin,
             pickups::PickupPlugin,
             characters::CharacterPlugin,

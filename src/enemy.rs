@@ -19,22 +19,27 @@ pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, startup)
-            .add_systems(
-                Update,
-                (spawn_formations, (update_circle, update_figure8)).chain(),
+        app.add_systems(
+            Update,
+            (
+                update_waves,
+                spawn_formations,
+                despawn_formations,
+                (update_circle, update_figure8),
             )
-            .add_systems(Physics, handle_death.after(HealthSet));
+                .chain(),
+        )
+        .add_systems(Physics, handle_death.after(HealthSet))
+        .insert_resource(WaveController::new_delayed(
+            3.,
+            &[(Formation::Triangle, 8.), (Formation::Triangle, 0.)],
+        ));
     }
 }
 
-fn startup(mut commands: Commands) {
-    commands.spawn(Formation::Triangle);
-}
-
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 #[require(Transform, Visibility)]
-enum Formation {
+pub enum Formation {
     Triangle,
 }
 
@@ -57,6 +62,10 @@ impl Formation {
         }
     }
 
+    pub fn height(&self) -> f32 {
+        self.topy() - self.bottomy()
+    }
+
     pub fn bottomy(&self) -> f32 {
         debug_assert!(!self.enemies().is_empty());
         self.enemies()
@@ -76,14 +85,71 @@ impl Formation {
     }
 }
 
+#[derive(Resource)]
+struct WaveController {
+    seq: &'static [(Formation, f32)],
+    timer: Timer,
+    index: usize,
+}
+
+impl WaveController {
+    pub fn new(seq: &'static [(Formation, f32)]) -> Self {
+        Self::new_delayed(0., seq)
+    }
+
+    pub fn new_delayed(delay: f32, seq: &'static [(Formation, f32)]) -> Self {
+        assert!(
+            !seq.is_empty(),
+            "tried to create `WaveController` with empty sequence"
+        );
+        Self {
+            seq,
+            timer: Timer::from_seconds(delay, TimerMode::Repeating),
+            index: 0,
+        }
+    }
+
+    pub fn tick(&mut self, time: &Time) {
+        self.timer.tick(time.delta());
+    }
+
+    pub fn next(&mut self) -> Option<Formation> {
+        if self.timer.just_finished() {
+            match self.seq.get(self.index) {
+                Some((formation, duration)) => {
+                    info!("set timer: {}", duration);
+                    self.timer.set_duration(Duration::from_secs_f32(*duration));
+                    self.index += 1;
+                    Some(*formation)
+                }
+                None => None,
+            }
+        } else {
+            None
+        }
+    }
+}
+
+fn update_waves(mut commands: Commands, mut controller: ResMut<WaveController>, time: Res<Time>) {
+    controller.tick(&time);
+    if let Some(formation) = controller.next() {
+        commands.spawn(formation);
+    }
+}
+
 const LARGEST_SPRITE_SIZE: f32 = 16.;
+const FORMATION_EASE_DUR: f32 = 2.;
 
 fn spawn_formations(
     mut commands: Commands,
     server: Res<AssetServer>,
-    formations: Query<(Entity, &Formation), Without<Children>>,
+    new_formations: Query<(Entity, &Formation), Without<Children>>,
+    formations: Query<(Entity, &Transform), (With<Formation>, With<Children>)>,
 ) {
-    for (root, formation) in formations.iter() {
+    let mut additional_height = 0.;
+    for (root, formation) in new_formations.iter() {
+        additional_height += formation.height();
+
         let start_y = HEIGHT / 2. - formation.bottomy() + LARGEST_SPRITE_SIZE / 2.;
         let end_y = HEIGHT / 2. + formation.topy() - LARGEST_SPRITE_SIZE / 2.;
 
@@ -91,7 +157,7 @@ fn spawn_formations(
         let end = Vec3::new(0., end_y - 20., 0.);
 
         commands.animation().insert(tween(
-            Duration::from_secs(1),
+            Duration::from_secs_f32(FORMATION_EASE_DUR),
             EaseKind::SineOut,
             root.into_target().with(translation(start, end)),
         ));
@@ -107,6 +173,31 @@ fn spawn_formations(
                 *movement,
                 (Transform::from_translation(position.extend(0.)),),
             );
+        }
+    }
+
+    if additional_height > 0. {
+        for (entity, transform) in formations.iter() {
+            commands.animation().insert(tween(
+                Duration::from_secs_f32(FORMATION_EASE_DUR),
+                EaseKind::SineOut,
+                entity.into_target().with(translation(
+                    transform.translation,
+                    Vec3::new(0., additional_height, 0.),
+                )),
+            ));
+        }
+    }
+}
+
+fn despawn_formations(
+    mut commands: Commands,
+    formations: Query<(Entity, &Children), With<Formation>>,
+    enemies: Query<&Enemy>,
+) {
+    for (entity, children) in formations.iter() {
+        if children.iter().all(|entity| enemies.get(*entity).is_err()) {
+            commands.entity(entity).despawn_recursive();
         }
     }
 }
@@ -158,7 +249,7 @@ impl Enemy {
 
     pub fn health(&self) -> Health {
         match self {
-            Self::Common => Health::full(20),
+            Self::Common => Health::full(10),
         }
     }
 
@@ -204,7 +295,7 @@ impl Enemy {
 }
 
 #[derive(Clone, Copy)]
-enum MovementPattern {
+pub enum MovementPattern {
     Circle,
     Figure8,
 }

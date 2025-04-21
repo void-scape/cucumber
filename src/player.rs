@@ -26,10 +26,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, |mut commands: Commands| {
             let starting_weapon = commands
-                .spawn((
-                    HomingEmitter::<layers::Enemy, Enemy>::new(),
-                    Polarity::North,
-                ))
+                .spawn((DualEmitter::<layers::Enemy>::new(), Polarity::North))
                 .id();
 
             commands
