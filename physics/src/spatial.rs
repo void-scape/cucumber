@@ -24,6 +24,7 @@ impl<D> SpatialData<D> {
 }
 
 #[derive(Debug, Component)]
+#[require(Transform)]
 pub struct SpatialHash<D = ()> {
     cell_size: f32,
     objects: HashMap<(i32, i32), Vec<SpatialData<D>>>,
@@ -149,19 +150,23 @@ impl<D: Clone> SpatialHash<D> {
     }
 }
 
-pub fn store_static_body_in_spatial_map(
-    mut hash: Query<(&mut SpatialHash, &Children)>,
-    static_body: Query<(Entity, &GlobalTransform, &Collider), Added<StaticBody>>,
+pub fn store_static_body_in_spatial_map<T: Component>(
+    mut hash: Query<(Entity, &mut SpatialHash), With<T>>,
+    static_body: Query<(Entity, &GlobalTransform, &Collider), (Added<StaticBody>, With<T>)>,
+    mut commands: Commands,
 ) {
-    for (mut map, children) in hash.iter_mut() {
-        for child in children.iter() {
-            if let Ok((entity, global_transform, collider)) = static_body.get(*child) {
-                map.insert(SpatialData {
-                    collider: collider.global_absolute(global_transform),
-                    data: (),
-                    entity,
-                })
-            }
-        }
+    let Ok((hash_entity, mut hash)) = hash.get_single_mut() else {
+        return;
+    };
+
+    for (entity, global_transform, collider) in static_body.iter() {
+        info!("{:?}", collider);
+        hash.insert(SpatialData {
+            collider: collider.global_absolute(global_transform),
+            data: (),
+            entity,
+        });
+
+        commands.entity(hash_entity).add_child(entity);
     }
 }

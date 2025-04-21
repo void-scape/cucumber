@@ -32,7 +32,7 @@ fn insert_collider(
 pub struct ImageCollider;
 
 fn insert_image_collider(
-    q: Query<(Entity, &Sprite), (With<ImageCollider>, Without<Collider>)>,
+    q: Query<(Entity, &Sprite), With<ImageCollider>>,
     mut commands: Commands,
     images: Res<Assets<Image>>,
 ) {
@@ -112,6 +112,7 @@ fn insert_image_collider(
         );
         commands
             .entity(entity)
-            .insert((CollisionTrigger(collider), collider));
+            .insert((CollisionTrigger(collider), collider))
+            .remove::<ImageCollider>();
     }
 }

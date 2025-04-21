@@ -7,7 +7,12 @@ use bevy::{
     ecs::{component::ComponentId, world::DeferredWorld},
     prelude::*,
 };
-use physics::{Physics, prelude::*};
+use physics::{
+    Physics,
+    layers::{self, TriggersWith},
+    prelude::*,
+};
+use rand::seq::IndexedRandom;
 use std::time::Duration;
 
 pub mod emitter;
@@ -31,7 +36,10 @@ impl Plugin for BulletPlugin {
                     .before(HealthSet)
                     .in_set(BulletSystems::Collision),
             )
-            .add_systems(Update, manage_lifetime.in_set(BulletSystems::Lifetime))
+            .add_systems(
+                Update,
+                (manage_lifetime, kill_on_wall).in_set(BulletSystems::Lifetime),
+            )
             .add_systems(
                 PostUpdate,
                 (
@@ -162,8 +170,16 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(BulletSpeed, DynamicBody, Lifetime)]
+#[require(BulletSpeed, TriggersWith<layers::Wall>)]
 pub struct Bullet;
+
+fn kill_on_wall(q: Query<(Entity, &Triggers<layers::Wall>)>, mut commands: Commands) {
+    for (entity, triggers) in q.iter() {
+        if !triggers.entities().is_empty() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
 
 #[derive(Clone, Copy, Component)]
 #[require(Bullet, Polarity)]
