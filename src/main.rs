@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;

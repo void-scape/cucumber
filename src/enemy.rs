@@ -1,12 +1,11 @@
 use crate::{
     HEIGHT, assets,
     auto_collider::ImageCollider,
-    bullet::{BulletTimer, BulletType},
-    health::{Damage, Dead, Health, HealthSet},
+    bullet::{BulletRate, BulletSpeed, BulletTimer, emitter::SoloEmitter},
+    health::{Dead, Health, HealthSet},
 };
 use bevy::prelude::*;
-use bevy_seedling::prelude::*;
-use physics::{Physics, layers::TriggersWith, prelude::*};
+use physics::{Physics, prelude::*};
 use std::time::Duration;
 
 pub const GLOBAL_ENEMY_SPEED: f32 = 4.;
@@ -16,7 +15,7 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, startup)
-            .add_systems(Update, (spawn_formations, shoot_bullets))
+            .add_systems(Update, (spawn_formations,))
             .add_systems(Physics, handle_death.after(HealthSet));
     }
 }
@@ -101,6 +100,7 @@ impl Enemy {
     pub fn spawn_with(&self, commands: &mut Commands, server: &AssetServer, bundle: impl Bundle) {
         let mut entity_commands = commands.spawn_empty();
         self.insert(&mut entity_commands, server, bundle);
+        self.insert_emitter(&mut entity_commands);
     }
 
     pub fn spawn_child_with(
@@ -112,8 +112,13 @@ impl Enemy {
     ) {
         let mut entity_commands = commands.spawn_empty();
         self.insert(&mut entity_commands, server, bundle);
+        self.insert_emitter(&mut entity_commands);
         let id = entity_commands.id();
         commands.entity(entity).add_child(id);
+    }
+
+    fn insert_emitter(&self, commands: &mut EntityCommands) {
+        commands.with_child((SoloEmitter::<layers::Player>::new(),));
     }
 
     fn insert(&self, commands: &mut EntityCommands, server: &AssetServer, bundle: impl Bundle) {
@@ -122,6 +127,8 @@ impl Enemy {
             self.health(),
             self.sprite(server),
             self.bullets(),
+            BulletRate(0.20),
+            BulletSpeed(0.5),
             Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * self.speed_mul()),
             bundle,
         ));
@@ -157,38 +164,5 @@ impl Enemy {
 fn handle_death(q: Query<(Entity, &Enemy), With<Dead>>, mut commands: Commands) {
     for (entity, _enemy) in q.iter() {
         commands.entity(entity).despawn_recursive();
-    }
-}
-
-fn shoot_bullets(
-    mut enemies: Query<(&mut BulletTimer, &Transform), With<Enemy>>,
-    time: Res<Time>,
-    server: Res<AssetServer>,
-    mut commands: Commands,
-) {
-    for (mut timer, transform) in enemies.iter_mut() {
-        timer.timer.tick(time.delta());
-
-        if timer.timer.just_finished() {
-            let mut new_transform = transform.clone();
-            new_transform.translation.y -= 8.0;
-
-            commands.spawn((
-                BulletType::Common,
-                new_transform,
-                TriggersWith::<layers::Player>::default(),
-                Damage::new(1),
-            ));
-
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                    PlaybackSettings {
-                        volume: Volume::Decibels(-24.0),
-                        ..PlaybackSettings::ONCE
-                    },
-                ))
-                .effect(BandPassNode::new(1000.0, 4.0));
-        }
     }
 }

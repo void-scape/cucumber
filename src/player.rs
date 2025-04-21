@@ -1,7 +1,7 @@
 use crate::{
     assets,
     auto_collider::ImageCollider,
-    bullet::{BulletTimer, BulletType, Polarity},
+    bullet::{BulletRate, BulletSpeed, BulletTimer, BulletType, Polarity, emitter::DualEmitter},
     health::{Damage, Dead, Health, HealthSet},
 };
 use bevy::{
@@ -9,10 +9,9 @@ use bevy::{
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
-use bevy_seedling::prelude::*;
 use physics::{
     Physics,
-    layers::{self, TriggersWith},
+    layers::{self},
     prelude::*,
 };
 use std::{cmp::Ordering, time::Duration};
@@ -22,9 +21,10 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, |mut commands: Commands| {
-            commands.spawn(Player);
+            commands
+                .spawn(Player)
+                .with_child((DualEmitter::<layers::Enemy>::new(), Polarity::North));
         })
-        .add_systems(Update, shoot_bullets)
         .add_systems(Physics, handle_death.after(HealthSet))
         .add_input_context::<AliveContext>()
         .add_observer(apply_movement)
@@ -33,7 +33,10 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Velocity, layers::Player, Health(|| Health::PLAYER), ImageCollider)]
+#[require(
+    Transform, Velocity, layers::Player, Health(|| Health::PLAYER),
+    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0))
+)]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
@@ -104,57 +107,6 @@ struct MoveAction;
 
 #[derive(InputContext)]
 struct AliveContext;
-
-fn shoot_bullets(
-    mut player: Query<(&mut BulletTimer, &Transform), With<Player>>,
-    time: Res<Time>,
-    server: Res<AssetServer>,
-    mut commands: Commands,
-) {
-    let Ok((mut timer, transform)) = player.get_single_mut() else {
-        return;
-    };
-
-    timer.timer.tick(time.delta());
-
-    if timer.timer.just_finished() {
-        let mut new_transform = transform.clone();
-        new_transform.translation.y += 5.0;
-
-        commands.spawn((
-            BulletType::Basic,
-            Polarity::North,
-            {
-                let mut t = new_transform.clone();
-                t.translation.x -= 3.;
-                t
-            },
-            TriggersWith::<layers::Enemy>::default(),
-            Damage::new(1),
-        ));
-
-        commands.spawn((
-            BulletType::Basic,
-            Polarity::North,
-            {
-                new_transform.translation.x += 3.;
-                new_transform
-            },
-            TriggersWith::<layers::Enemy>::default(),
-            Damage::new(1),
-        ));
-
-        commands
-            .spawn((
-                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                PlaybackSettings {
-                    volume: Volume::Decibels(-18.0),
-                    ..PlaybackSettings::ONCE
-                },
-            ))
-            .effect(BandPassNode::new(1000.0, 4.0));
-    }
-}
 
 fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Commands) {
     let Ok(player) = q.get_single() else {

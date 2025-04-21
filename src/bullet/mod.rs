@@ -35,7 +35,7 @@ impl Plugin for BulletPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    init_bullet_velocity.in_set(BulletSystems::Velocity),
+                    // init_bullet_velocity.in_set(BulletSystems::Velocity),
                     init_bullet_sprite.in_set(BulletSystems::Sprite),
                 )
                     .chain(),
@@ -43,7 +43,7 @@ impl Plugin for BulletPlugin {
     }
 }
 
-#[derive(Default, Component)]
+#[derive(Default, Component, Clone, Copy)]
 pub enum Polarity {
     North,
     #[default]
@@ -90,7 +90,7 @@ impl Direction {
 ///
 /// This doesn't have any particular unit;
 /// emitters can interpret this however they like.
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct BulletRate(pub f32);
 
 impl Default for BulletRate {
@@ -103,25 +103,25 @@ impl Default for BulletRate {
 ///
 /// This doesn't have any particular unit;
 /// emitters can interpret this however they like.
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct BulletSpeed(pub f32);
 
 impl Default for BulletSpeed {
     fn default() -> Self {
-        Self(200.0)
+        Self(1.0)
     }
 }
 
-fn init_bullet_velocity(
-    mut commands: Commands,
-    bullets: Query<(Entity, &BulletSpeed, &Polarity), Without<Velocity>>,
-) {
-    for (entity, speed, polarity) in bullets.iter() {
-        let velocity = Velocity(polarity.to_vec2() * speed.0);
-        commands.entity(entity).insert(velocity);
-    }
-}
-
+// fn init_bullet_velocity(
+//     mut commands: Commands,
+//     bullets: Query<(Entity, &BulletSpeed, &Polarity), Without<Velocity>>,
+// ) {
+//     for (entity, speed, polarity) in bullets.iter() {
+//         let velocity = Velocity(polarity.to_vec2() * speed.0);
+//         commands.entity(entity).insert(velocity);
+//     }
+// }
+//
 fn init_bullet_sprite(
     mut commands: Commands,
     bullets: Query<(Entity, &BulletSprite, &Velocity), Without<Sprite>>,
@@ -145,7 +145,7 @@ pub struct Lifetime(pub Timer);
 
 impl Default for Lifetime {
     fn default() -> Self {
-        Self(Timer::new(Duration::from_secs(2), TimerMode::Once))
+        Self(Timer::new(Duration::from_secs(10), TimerMode::Once))
     }
 }
 
@@ -189,7 +189,6 @@ impl BulletType {
 }
 
 #[derive(Component)]
-#[require(ImageCollider)]
 pub struct BulletSprite {
     path: &'static str,
     cell: UVec2,
@@ -210,11 +209,11 @@ fn small_collider() -> Collider {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite(|| BulletSprite::from_cell(0, 1)))]
+#[require(BulletSprite(|| BulletSprite::from_cell(0, 1)), ImageCollider)]
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite(|| BulletSprite::from_cell(2, 1)))]
+#[require(BulletSprite(|| BulletSprite::from_cell(2, 1)), ImageCollider)]
 pub struct CommonBullet;
 
 fn handle_enemy_collision(
