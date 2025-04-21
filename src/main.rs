@@ -12,6 +12,7 @@ mod bullet;
 mod characters;
 mod enemy;
 mod health;
+mod pickups;
 mod player;
 mod textbox;
 
@@ -34,25 +35,28 @@ fn main() {
                     }),
                     ..Default::default()
                 }),
-            assets::AssetPlugin,
-            characters::CharacterPlugin,
             bevy_enhanced_input::EnhancedInputPlugin,
             bevy_tween::DefaultTweenPlugins,
             bevy_seedling::SeedlingPlugin::default(),
-            player::PlayerPlugin,
-            enemy::EnemyPlugin,
-            textbox::TextboxPlugin,
-            background::BackgroundPlugin,
+            bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
+            physics::PhysicsPlugin,
             bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
                 WIDTH as u32,
                 HEIGHT as u32,
             )),
-            bevy_pixel_gfx::screen_shake::ScreenShakePlugin,
-            physics::PhysicsPlugin,
+        ))
+        .add_plugins((
+            assets::AssetPlugin,
+            pickups::PickupPlugin,
+            characters::CharacterPlugin,
+            player::PlayerPlugin,
+            enemy::EnemyPlugin,
+            textbox::TextboxPlugin,
+            background::BackgroundPlugin,
             bullet::BulletPlugin,
             health::HealthPlugin,
+            auto_collider::AutoColliderPlugin,
         ))
-        .add_plugins(auto_collider::AutoColliderPlugin)
         .add_systems(Update, close_on_escape)
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Gravity(Vec2::ZERO))
