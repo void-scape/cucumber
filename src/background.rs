@@ -23,7 +23,7 @@ const BACKGROUND_HEIGHT: f32 = 256.;
 const BACKGROUND_PATH1: &'static str = "shooters/background1.png";
 const BACKGROUND_PATH2: &'static str = "shooters/background2.png";
 const SCROLL_SPEED1: f32 = 0.1;
-const SCROLL_SPEED2: f32 = 0.3;
+const SCROLL_SPEED2: f32 = 0.15;
 
 #[derive(Component)]
 struct Speed(f32);

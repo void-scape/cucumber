@@ -5,35 +5,31 @@ use crate::{
     health::{Dead, Health, HealthSet},
 };
 use bevy::prelude::*;
+use bevy_tween::{
+    combinator::tween,
+    interpolate::translation,
+    prelude::{AnimationBuilderExt, EaseKind},
+    tween::IntoTarget,
+};
 use physics::{Physics, prelude::*};
+use rand::Rng;
 use std::time::Duration;
-
-pub const GLOBAL_ENEMY_SPEED: f32 = 4.;
 
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, startup)
-            .add_systems(Update, (spawn_formations,))
+            .add_systems(
+                Update,
+                (spawn_formations, (update_circle, update_figure8)).chain(),
+            )
             .add_systems(Physics, handle_death.after(HealthSet));
     }
 }
 
 fn startup(mut commands: Commands) {
     commands.spawn(Formation::Triangle);
-
-    //let mut rng = rand::rng();
-    //let padding = 20.;
-    //
-    //for _ in 0..5 {
-    //    let x = rng.random_range((-WIDTH / 2. + padding)..WIDTH / 2. - padding);
-    //    Enemy::Common.spawn_with(
-    //        &mut commands,
-    //        &server,
-    //        Transform::from_xyz(x, HEIGHT / 2. + 4., 0.),
-    //    );
-    //}
 }
 
 #[derive(Component)]
@@ -43,26 +39,39 @@ enum Formation {
 }
 
 impl Formation {
-    pub fn enemies(&self) -> &'static [(Enemy, Vec2)] {
+    pub fn enemies(&self) -> &'static [(Enemy, Vec2, MovementPattern)] {
         match self {
             Self::Triangle => {
                 const {
                     &[
-                        (Enemy::Common, Vec2::new(-40., -40.)),
-                        (Enemy::Common, Vec2::ZERO),
-                        (Enemy::Common, Vec2::new(40., -40.)),
+                        (
+                            Enemy::Common,
+                            Vec2::new(-40., -40.),
+                            MovementPattern::Circle,
+                        ),
+                        (Enemy::Common, Vec2::ZERO, MovementPattern::Figure8),
+                        (Enemy::Common, Vec2::new(40., -40.), MovementPattern::Circle),
                     ]
                 }
             }
         }
     }
 
-    pub fn lowest_y(&self) -> f32 {
+    pub fn bottomy(&self) -> f32 {
         debug_assert!(!self.enemies().is_empty());
         self.enemies()
             .iter()
-            .map(|(_, pos)| pos.y)
+            .map(|(_, pos, _)| pos.y)
             .min_by(|a, b| a.total_cmp(b))
+            .unwrap()
+    }
+
+    pub fn topy(&self) -> f32 {
+        debug_assert!(!self.enemies().is_empty());
+        self.enemies()
+            .iter()
+            .map(|(_, pos, _)| pos.y)
+            .max_by(|a, b| a.total_cmp(b))
             .unwrap()
     }
 }
@@ -75,16 +84,28 @@ fn spawn_formations(
     formations: Query<(Entity, &Formation), Without<Children>>,
 ) {
     for (root, formation) in formations.iter() {
-        // bottom of formation spawns immediately above the top of the screen
-        let y = HEIGHT / 2. - formation.lowest_y() + LARGEST_SPRITE_SIZE / 2.;
-        commands.entity(root).insert(Transform::from_xyz(0., y, 0.));
+        let start_y = HEIGHT / 2. - formation.bottomy() + LARGEST_SPRITE_SIZE / 2.;
+        let end_y = HEIGHT / 2. + formation.topy() - LARGEST_SPRITE_SIZE / 2.;
 
-        for (enemy, position) in formation.enemies().iter() {
+        let start = Vec3::new(0., start_y, 0.);
+        let end = Vec3::new(0., end_y - 20., 0.);
+
+        commands.animation().insert(tween(
+            Duration::from_secs(1),
+            EaseKind::SineOut,
+            root.into_target().with(translation(start, end)),
+        ));
+
+        commands
+            .entity(root)
+            .insert(Transform::from_translation(start));
+        for (enemy, position, movement) in formation.enemies().iter() {
             enemy.spawn_child_with(
                 root,
                 &mut commands,
                 &server,
-                Transform::from_translation(position.extend(0.)),
+                *movement,
+                (Transform::from_translation(position.extend(0.)),),
             );
         }
     }
@@ -97,21 +118,16 @@ enum Enemy {
 }
 
 impl Enemy {
-    pub fn spawn_with(&self, commands: &mut Commands, server: &AssetServer, bundle: impl Bundle) {
-        let mut entity_commands = commands.spawn_empty();
-        self.insert(&mut entity_commands, server, bundle);
-        self.insert_emitter(&mut entity_commands);
-    }
-
     pub fn spawn_child_with(
         &self,
         entity: Entity,
         commands: &mut Commands,
         server: &AssetServer,
+        movement: MovementPattern,
         bundle: impl Bundle,
     ) {
         let mut entity_commands = commands.spawn_empty();
-        self.insert(&mut entity_commands, server, bundle);
+        self.insert(&mut entity_commands, server, movement, bundle);
         self.insert_emitter(&mut entity_commands);
         let id = entity_commands.id();
         commands.entity(entity).add_child(id);
@@ -121,7 +137,14 @@ impl Enemy {
         commands.with_child((SoloEmitter::<layers::Player>::new(),));
     }
 
-    fn insert(&self, commands: &mut EntityCommands, server: &AssetServer, bundle: impl Bundle) {
+    fn insert(
+        &self,
+        commands: &mut EntityCommands,
+        server: &AssetServer,
+        movement: MovementPattern,
+        bundle: impl Bundle,
+    ) {
+        self.configure_movement(commands, movement);
         commands.insert((
             *self,
             self.health(),
@@ -129,20 +152,13 @@ impl Enemy {
             self.bullets(),
             BulletRate(0.20),
             BulletSpeed(0.5),
-            Velocity(Vec2::NEG_Y * GLOBAL_ENEMY_SPEED * self.speed_mul()),
             bundle,
         ));
     }
 
     pub fn health(&self) -> Health {
         match self {
-            Self::Common => Health::full(1),
-        }
-    }
-
-    pub fn speed_mul(&self) -> f32 {
-        match self {
-            Self::Common => 1.,
+            Self::Common => Health::full(20),
         }
     }
 
@@ -157,6 +173,102 @@ impl Enemy {
             Self::Common => BulletTimer {
                 timer: Timer::new(Duration::from_millis(1500), TimerMode::Repeating),
             },
+        }
+    }
+
+    pub fn configure_movement(&self, commands: &mut EntityCommands, movement: MovementPattern) {
+        let mut rng = rand::rng();
+        match self {
+            Self::Common => match movement {
+                MovementPattern::Circle => {
+                    commands.insert((
+                        Circle {
+                            radius: rng.random_range(9.0..11.0),
+                            speed: rng.random_range(0.04..0.06),
+                        },
+                        Angle(rng.random_range(0.0..2.0)),
+                    ));
+                }
+                MovementPattern::Figure8 => {
+                    commands.insert((
+                        Figure8 {
+                            radius: rng.random_range(18.0..22.0),
+                            speed: rng.random_range(0.04..0.06),
+                        },
+                        Angle(rng.random_range(0.0..2.0)),
+                    ));
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum MovementPattern {
+    Circle,
+    Figure8,
+}
+
+#[derive(Component)]
+#[require(Angle)]
+struct Circle {
+    radius: f32,
+    speed: f32,
+}
+
+#[derive(Default, Component)]
+struct Angle(f32);
+
+#[derive(Component)]
+struct Center(Vec2);
+
+fn update_circle(
+    mut commands: Commands,
+    init_query: Query<(Entity, &Transform), (With<Circle>, Without<Center>)>,
+    mut query: Query<(&Circle, &Center, &mut Angle, &mut Transform)>,
+) {
+    for (entity, transform) in init_query.iter() {
+        commands
+            .entity(entity)
+            .insert(Center(transform.translation.xy()));
+    }
+
+    for (circle, center, mut angle, mut transform) in query.iter_mut() {
+        transform.translation.x = center.0.x + circle.radius * angle.0.cos();
+        transform.translation.y = center.0.y + circle.radius * angle.0.sin();
+        angle.0 += circle.speed;
+        if angle.0 >= std::f32::consts::PI * 2. {
+            angle.0 = 0.;
+        }
+    }
+}
+
+#[derive(Component)]
+#[require(Angle)]
+struct Figure8 {
+    radius: f32,
+    speed: f32,
+}
+
+fn update_figure8(
+    mut commands: Commands,
+    init_query: Query<(Entity, &Transform), (With<Figure8>, Without<Center>)>,
+    mut query: Query<(&mut Figure8, &Center, &mut Angle, &mut Transform)>,
+) {
+    for (entity, transform) in init_query.iter() {
+        commands
+            .entity(entity)
+            .insert(Center(transform.translation.xy()));
+    }
+
+    for (figure8, center, mut angle, mut transform) in query.iter_mut() {
+        let t = angle.0;
+        transform.translation.x = center.0.x + figure8.radius * t.sin();
+        transform.translation.y = center.0.y + figure8.radius * t.sin() * t.cos();
+
+        angle.0 += figure8.speed;
+        if angle.0 >= std::f32::consts::TAU {
+            angle.0 = 0.;
         }
     }
 }
