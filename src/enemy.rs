@@ -1,7 +1,10 @@
 use crate::{
     HEIGHT, assets,
     auto_collider::ImageCollider,
-    bullet::{BulletRate, BulletSpeed, BulletTimer, emitter::SoloEmitter},
+    bullet::{
+        BulletRate, BulletSpeed, BulletTimer,
+        emitter::{DualEmitter, SoloEmitter},
+    },
     health::{Dead, Health, HealthSet},
     pickups::{self},
 };
@@ -28,14 +31,19 @@ impl Plugin for EnemyPlugin {
                     spawn_formations,
                     update_formations,
                     despawn_formations,
-                    (update_circle, update_figure8),
+                    (update_back_and_forth, update_circle, update_figure8),
                 )
                     .chain(),
             )
             .add_systems(Physics, handle_death.after(HealthSet))
             .insert_resource(WaveController::new_delayed(
                 3.,
-                &[(Formation::Triangle, 8.), (Formation::Triangle, 0.)],
+                &[
+                    (Formation::Triangle, 8.),
+                    (Formation::Row, 8.),
+                    (Formation::Triangle, 8.),
+                    (Formation::Row, 0.),
+                ],
             ));
     }
 }
@@ -44,7 +52,31 @@ impl Plugin for EnemyPlugin {
 #[require(Transform, Visibility)]
 pub enum Formation {
     Triangle,
+    Row,
 }
+
+const TRIANGLE: &[(Enemy, Vec2, MovementPattern)] = &[
+    (
+        Enemy::Common,
+        Vec2::new(-40., -40.),
+        MovementPattern::Circle,
+    ),
+    (Enemy::Common, Vec2::ZERO, MovementPattern::Figure8),
+    (Enemy::Common, Vec2::new(40., -40.), MovementPattern::Circle),
+];
+
+const ROW: &[(Enemy, Vec2, MovementPattern)] = &[
+    (
+        Enemy::Uncommon,
+        Vec2::new(30., 0.),
+        MovementPattern::BackAndForth,
+    ),
+    (
+        Enemy::Uncommon,
+        Vec2::new(-30., 0.),
+        MovementPattern::BackAndForth,
+    ),
+];
 
 impl Formation {
     pub fn len(&self) -> usize {
@@ -53,19 +85,8 @@ impl Formation {
 
     pub fn enemies(&self) -> &'static [(Enemy, Vec2, MovementPattern)] {
         match self {
-            Self::Triangle => {
-                const {
-                    &[
-                        (
-                            Enemy::Common,
-                            Vec2::new(-40., -40.),
-                            MovementPattern::Circle,
-                        ),
-                        (Enemy::Common, Vec2::ZERO, MovementPattern::Figure8),
-                        (Enemy::Common, Vec2::new(40., -40.), MovementPattern::Circle),
-                    ]
-                }
-            }
+            Self::Triangle => TRIANGLE,
+            Self::Row => ROW,
         }
     }
 
@@ -92,7 +113,7 @@ impl Formation {
     }
 
     pub fn drop_pickup_heuristic(&self) -> bool {
-        const ENEMY_WEIGHT: f64 = 0.30;
+        const ENEMY_WEIGHT: f64 = 0.40;
 
         let heuristic = self
             .enemies()
@@ -101,6 +122,7 @@ impl Formation {
                 ENEMY_WEIGHT
                     * match enemy {
                         Enemy::Common => 0.75,
+                        Enemy::Uncommon => 0.85,
                     }
             })
             .sum();
@@ -204,6 +226,7 @@ fn update_waves(mut commands: Commands, mut controller: ResMut<WaveController>, 
 }
 
 const LARGEST_SPRITE_SIZE: f32 = 16.;
+const PADDING: f32 = LARGEST_SPRITE_SIZE;
 const FORMATION_EASE_DUR: f32 = 2.;
 
 fn spawn_formations(
@@ -214,7 +237,7 @@ fn spawn_formations(
 ) {
     let mut additional_height = 0.;
     for (root, formation) in new_formations.iter() {
-        additional_height += formation.height();
+        additional_height += formation.height() - PADDING;
 
         let start_y = HEIGHT / 2. - formation.bottomy() + LARGEST_SPRITE_SIZE / 2.;
         let end_y = HEIGHT / 2. + formation.topy() - LARGEST_SPRITE_SIZE / 2.;
@@ -296,6 +319,7 @@ fn despawn_formations(
 #[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
 pub enum Enemy {
     Common,
+    Uncommon,
 }
 
 impl Enemy {
@@ -316,7 +340,10 @@ impl Enemy {
     }
 
     fn insert_emitter(&self, commands: &mut EntityCommands) {
-        commands.with_child((SoloEmitter::<layers::Player>::new(),));
+        match self {
+            Self::Common => commands.with_child(SoloEmitter::<layers::Player>::new()),
+            Self::Uncommon => commands.with_child(DualEmitter::<layers::Player>::new(5.)),
+        };
     }
 
     fn insert(
@@ -341,12 +368,14 @@ impl Enemy {
     pub fn health(&self) -> Health {
         match self {
             Self::Common => Health::full(10),
+            Self::Uncommon => Health::full(15),
         }
     }
 
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
             Self::Common => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 3)),
+            Self::Uncommon => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 3)),
         }
     }
 
@@ -355,13 +384,25 @@ impl Enemy {
             Self::Common => BulletTimer {
                 timer: Timer::new(Duration::from_millis(1500), TimerMode::Repeating),
             },
+            Self::Uncommon => BulletTimer {
+                timer: Timer::new(Duration::from_millis(1250), TimerMode::Repeating),
+            },
         }
     }
 
     pub fn configure_movement(&self, commands: &mut EntityCommands, movement: MovementPattern) {
         let mut rng = rand::rng();
         match self {
-            Self::Common => match movement {
+            Self::Common | Self::Uncommon => match movement {
+                MovementPattern::BackAndForth => {
+                    commands.insert((
+                        BackAndForth {
+                            radius: rng.random_range(9.0..11.0),
+                            speed: rng.random_range(0.04..0.06),
+                        },
+                        Angle(rng.random_range(0.0..2.0)),
+                    ));
+                }
                 MovementPattern::Circle => {
                     commands.insert((
                         Circle {
@@ -387,8 +428,36 @@ impl Enemy {
 
 #[derive(Clone, Copy)]
 pub enum MovementPattern {
+    BackAndForth,
     Circle,
     Figure8,
+}
+
+#[derive(Component)]
+#[require(Angle)]
+struct BackAndForth {
+    radius: f32,
+    speed: f32,
+}
+
+fn update_back_and_forth(
+    mut commands: Commands,
+    init_query: Query<(Entity, &Transform), (With<BackAndForth>, Without<Center>)>,
+    mut query: Query<(&BackAndForth, &Center, &mut Angle, &mut Transform)>,
+) {
+    for (entity, transform) in init_query.iter() {
+        commands
+            .entity(entity)
+            .insert(Center(transform.translation.xy()));
+    }
+
+    for (circle, center, mut angle, mut transform) in query.iter_mut() {
+        transform.translation.x = center.0.x + circle.radius * angle.0.cos();
+        angle.0 += circle.speed;
+        if angle.0 >= std::f32::consts::PI * 2. {
+            angle.0 = 0.;
+        }
+    }
 }
 
 #[derive(Component)]

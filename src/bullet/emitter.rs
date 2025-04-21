@@ -104,20 +104,23 @@ impl<T: Component> SoloEmitter<T> {
     BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)),
     Polarity, Visibility(|| Visibility::Hidden)
 )]
-pub struct DualEmitter<T>(PhantomData<fn() -> T>);
+pub struct DualEmitter<T>(f32, PhantomData<fn() -> T>);
 
 impl<T: Component> DualEmitter<T> {
-    pub fn new() -> Self {
-        Self(PhantomData)
+    pub fn new(width: f32) -> Self {
+        Self(width, PhantomData)
     }
 }
 
 impl<T: Component> DualEmitter<T> {
     fn shoot_bullets(
-        mut emitters: Query<
-            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
-            With<DualEmitter<T>>,
-        >,
+        mut emitters: Query<(
+            Entity,
+            &DualEmitter<T>,
+            Option<&mut BulletTimer>,
+            &Polarity,
+            &Parent,
+        )>,
         parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -125,7 +128,7 @@ impl<T: Component> DualEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, parent) in emitters.iter_mut() {
+        for (entity, emitter, timer, polarity, parent) in emitters.iter_mut() {
             let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
@@ -154,7 +157,7 @@ impl<T: Component> DualEmitter<T> {
                 Velocity(polarity.to_vec2() * 150.0 * speed.0),
                 {
                     let mut t = new_transform;
-                    t.translation.x -= 3.;
+                    t.translation.x -= emitter.0;
                     t
                 },
                 TriggersWith::<T>::default(),
@@ -165,7 +168,7 @@ impl<T: Component> DualEmitter<T> {
                 BulletType::Basic,
                 Velocity(polarity.to_vec2() * 150.0 * speed.0),
                 {
-                    new_transform.translation.x += 3.;
+                    new_transform.translation.x += emitter.0;
                     new_transform
                 },
                 TriggersWith::<T>::default(),

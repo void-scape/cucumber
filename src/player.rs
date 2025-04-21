@@ -26,7 +26,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, |mut commands: Commands| {
             let starting_weapon = commands
-                .spawn((DualEmitter::<layers::Enemy>::new(), Polarity::North))
+                .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
                 .id();
 
             commands
@@ -185,7 +185,7 @@ fn handle_pickups(
                 commands.entity(weapon_entity.0).despawn_recursive();
 
                 let emitter = commands
-                    .spawn((DualEmitter::<layers::Enemy>::new(), Polarity::North))
+                    .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
