@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use super::{
     collision::Collider,
     layers::TriggersWith,
@@ -7,6 +5,7 @@ use super::{
     spatial::{SpatialData, SpatialHash},
 };
 use bevy::{prelude::*, utils::hashbrown::HashMap};
+use std::marker::PhantomData;
 
 /// Marks an entity as a [`TriggerEvent`] source.
 ///
@@ -127,13 +126,14 @@ pub fn handle_triggers<T: Component>(
         } in dynamic_body_map.nearby_objects(&collider.position())
         {
             if *e != entity && collider.collides_with(c) {
-                writer.send(TriggerEvent {
-                    trigger: entity,
-                    target: *e,
-                });
-
                 if let Ok(mut triggers) = body_triggers.get_mut(*e) {
-                    triggers.0.push(entity);
+                    if !triggers.entities().contains(&entity) {
+                        triggers.0.push(entity);
+                        writer.send(TriggerEvent {
+                            trigger: entity,
+                            target: *e,
+                        });
+                    }
                 }
             }
         }

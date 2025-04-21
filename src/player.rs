@@ -1,8 +1,9 @@
 use crate::{
     assets,
     auto_collider::ImageCollider,
-    bullet::{BulletRate, BulletSpeed, BulletTimer, BulletType, Polarity, emitter::DualEmitter},
-    health::{Damage, Dead, Health, HealthSet},
+    bullet::{BulletRate, BulletSpeed, BulletTimer, Polarity, emitter::DualEmitter},
+    health::{Dead, Health, HealthSet},
+    pickups,
 };
 use bevy::{
     ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
@@ -11,7 +12,7 @@ use bevy::{
 use bevy_enhanced_input::prelude::*;
 use physics::{
     Physics,
-    layers::{self},
+    layers::{self, TriggersWith},
     prelude::*,
 };
 use std::{cmp::Ordering, time::Duration};
@@ -35,7 +36,8 @@ impl Plugin for PlayerPlugin {
 #[derive(Component)]
 #[require(
     Transform, Velocity, layers::Player, Health(|| Health::PLAYER),
-    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0))
+    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0)),
+    TriggersWith::<pickups::PickupLayer>
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
@@ -77,6 +79,9 @@ fn apply_movement(
     };
 
     velocity.0 = trigger.value.normalize_or_zero() * 60.;
+    if velocity.0.x.abs() < f32::EPSILON {
+        velocity.0.x = 0.;
+    }
 
     let (tl, br) = match velocity.0.x.total_cmp(&0.) {
         Ordering::Less => (Vec2::new(0., 4.), Vec2::new(1., 5.)),

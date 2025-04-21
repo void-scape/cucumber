@@ -48,9 +48,9 @@ impl Formation {
             Self::Triangle => {
                 const {
                     &[
-                        (Enemy::Common, Vec2::new(-20., -40.)),
+                        (Enemy::Common, Vec2::new(-40., -40.)),
                         (Enemy::Common, Vec2::ZERO),
-                        (Enemy::Common, Vec2::new(20., -40.)),
+                        (Enemy::Common, Vec2::new(40., -40.)),
                     ]
                 }
             }
