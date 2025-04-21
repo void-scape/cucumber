@@ -77,10 +77,10 @@ impl Plugin for PhysicsPlugin {
 
         app.world_mut().spawn(TimeScale(1.));
 
-        app.register_collision_layer::<layers::Player>()
-            .register_collision_layer::<layers::Enemy>()
-            .register_collision_layer::<layers::Wall>()
-            .register_grounded_layer::<layers::Wall>()
+        // app.register_collision_layer::<layers::Player>()
+        //     .register_collision_layer::<layers::Enemy>()
+        //     .register_collision_layer::<layers::Wall>()
+        app.register_grounded_layer::<layers::Wall>()
             .register_brushing_layer::<layers::Wall>();
 
         app.add_tween_systems(component_tween_system::<TimeScaleRate>())
@@ -103,7 +103,7 @@ impl Plugin for PhysicsPlugin {
                     (
                         bevy::transform::systems::sync_simple_transforms,
                         bevy::transform::systems::propagate_transforms,
-                        spatial::store_static_body_in_spatial_map,
+                        // spatial::store_static_body_in_spatial_map,
                     )
                         .chain()
                         .before(PhysicsSystems::Collision)

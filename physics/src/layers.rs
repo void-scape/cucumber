@@ -1,3 +1,5 @@
+use crate::{spatial::SpatialHash, PhysicsSystems};
+
 use super::prelude::{Collision, Triggers};
 use bevy::prelude::*;
 use core::marker::PhantomData;
@@ -39,7 +41,7 @@ pub struct Player;
 
 pub trait RegisterPhysicsLayer {
     fn register_trigger_layer<T: Component>(&mut self) -> &mut Self;
-    fn register_collision_layer<T: Component>(&mut self) -> &mut Self;
+    fn register_collision_layer<T: Component + Default>(&mut self, cell_size: f32) -> &mut Self;
     fn register_grounded_layer<T: Component>(&mut self) -> &mut Self;
     fn register_brushing_layer<T: Component>(&mut self) -> &mut Self;
 }
@@ -52,16 +54,25 @@ impl RegisterPhysicsLayer for App {
         )
     }
 
-    fn register_collision_layer<T: Component>(&mut self) -> &mut Self {
+    fn register_collision_layer<T: Component + Default>(&mut self, cell_size: f32) -> &mut Self {
         self.add_systems(
             super::Physics,
             (
-                super::collision::handle_collisions::<T>,
-                super::collision::handle_dynamic_body_collsions::<T>,
-            )
-                .chain()
-                .in_set(super::CollisionSystems::Resolution),
+                crate::spatial::store_static_body_in_spatial_map::<T>
+                    .before(PhysicsSystems::Collision)
+                    .after(PhysicsSystems::Velocity)
+                    .after(bevy::transform::systems::propagate_transforms),
+                (
+                    super::collision::handle_collisions::<T>,
+                    super::collision::handle_dynamic_body_collsions::<T>,
+                )
+                    .chain()
+                    .in_set(super::CollisionSystems::Resolution),
+            ),
         )
+        .add_systems(PreStartup, move |mut commands: Commands| {
+            commands.spawn((SpatialHash::<()>::new(cell_size), T::default()));
+        })
     }
 
     fn register_grounded_layer<T: Component>(&mut self) -> &mut Self {

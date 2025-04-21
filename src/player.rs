@@ -11,7 +11,7 @@ use bevy::{
 use bevy_enhanced_input::prelude::*;
 use physics::{
     Physics,
-    layers::{self},
+    layers::{self, CollidesWith},
     prelude::*,
 };
 use std::{cmp::Ordering, time::Duration};
@@ -35,7 +35,8 @@ impl Plugin for PlayerPlugin {
 #[derive(Component)]
 #[require(
     Transform, Velocity, layers::Player, Health(|| Health::PLAYER),
-    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0))
+    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0)),
+    CollidesWith::<layers::Wall>, DynamicBody
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;

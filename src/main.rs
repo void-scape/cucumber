@@ -4,12 +4,13 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_pixel_gfx::pixel_perfect::{CanvasDimensions, Scaling};
-use physics::layers::RegisterPhysicsLayer;
+use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
 
 mod assets;
 mod auto_collider;
 mod background;
+mod bounds;
 mod bullet;
 mod characters;
 mod enemy;
@@ -58,12 +59,17 @@ fn main() {
             bullet::BulletPlugin,
             health::HealthPlugin,
             auto_collider::AutoColliderPlugin,
+            bounds::ScreenBoundsPlugin,
         ))
         .add_systems(Update, close_on_escape)
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(Gravity(Vec2::ZERO))
+        .register_collision_layer::<layers::Player>(32.0)
+        .register_collision_layer::<layers::Enemy>(32.0)
+        .register_collision_layer::<layers::Wall>(32.0)
         .register_trigger_layer::<physics::layers::Enemy>()
         .register_trigger_layer::<physics::layers::Player>()
+        .register_trigger_layer::<physics::layers::Wall>()
+        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(Gravity(Vec2::ZERO))
         .insert_resource(Scaling::Projection)
         .run();
 }

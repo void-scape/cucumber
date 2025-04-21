@@ -224,7 +224,7 @@ impl CollidesWith<Self> for AbsoluteCollider {
     }
 }
 
-pub trait CollidesWith<T> {
+pub(crate) trait CollidesWith<T> {
     fn collides_with(&self, other: &T) -> bool;
     fn resolution(&self, other: &T) -> Vec2;
 }
