@@ -1,10 +1,8 @@
-use std::{f32::consts::PI, marker::PhantomData};
-
-use bevy::prelude::*;
-use physics::{Physics, PhysicsSystems, layers, prelude::Velocity};
-use rand::distr::{Distribution, weighted::WeightedIndex};
-
 use crate::{enemy::Enemy, player::Player};
+use bevy::prelude::*;
+use physics::{Physics, PhysicsSystems, prelude::Velocity};
+use rand::distr::{Distribution, weighted::WeightedIndex};
+use std::{f32::consts::PI, marker::PhantomData};
 
 pub struct HomingPlugin;
 

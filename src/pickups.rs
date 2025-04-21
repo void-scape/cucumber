@@ -4,8 +4,11 @@ use bevy::ecs::component::ComponentId;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use physics::layers::RegisterPhysicsLayer;
-use physics::prelude::Collider;
+use physics::prelude::{Collider, Velocity};
 use physics::trigger::{CollisionTrigger, Triggers};
+use rand::seq::IteratorRandom;
+
+const PICKUP_SPEED: f32 = 16.;
 
 pub struct PickupPlugin;
 
@@ -25,6 +28,10 @@ fn debug(mut commands: Commands) {
     commands.spawn((Weapon::Bullet, Transform::from_xyz(30., 0., 0.)));
     commands.spawn((Weapon::Laser, Transform::from_xyz(-30., 0., 0.)));
     commands.spawn((Weapon::Missile, Transform::from_xyz(0., 50., 0.)));
+}
+
+pub fn velocity() -> Velocity {
+    Velocity(Vec2::NEG_Y * PICKUP_SPEED)
 }
 
 #[derive(Event)]
@@ -130,5 +137,35 @@ where
         let t = world.entity(entity).get::<Self>().unwrap();
         let sprite = t.sprite(world.get_resource::<AssetServer>().unwrap());
         world.commands().entity(entity).insert(sprite);
+    }
+}
+
+pub fn spawn_random_pickup(commands: &mut EntityCommands, bundle: impl Bundle) {
+    match Pickup::random() {
+        Pickup::Upgrade(upgrade) => commands.insert((upgrade, bundle)),
+        Pickup::Weapon(weapon) => commands.insert((weapon, bundle)),
+    };
+}
+
+enum Pickup {
+    Upgrade(Upgrade),
+    Weapon(Weapon),
+}
+
+impl Pickup {
+    pub fn random() -> Self {
+        let mut rng = rand::rng();
+        [
+            Self::Upgrade(Upgrade::Speed(0.5)),
+            Self::Upgrade(Upgrade::Juice(0.5)),
+            Self::Upgrade(Upgrade::Speed(0.5)),
+            Self::Upgrade(Upgrade::Juice(0.5)),
+            Self::Weapon(Weapon::Bullet),
+            Self::Weapon(Weapon::Missile),
+            Self::Weapon(Weapon::Laser),
+        ]
+        .into_iter()
+        .choose(&mut rng)
+        .unwrap()
     }
 }

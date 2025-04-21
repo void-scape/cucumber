@@ -3,6 +3,7 @@ use crate::{
     auto_collider::ImageCollider,
     bullet::{BulletRate, BulletSpeed, BulletTimer, emitter::SoloEmitter},
     health::{Dead, Health, HealthSet},
+    pickups::{self},
 };
 use bevy::prelude::*;
 use bevy_tween::{
@@ -19,31 +20,37 @@ pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                update_waves,
-                spawn_formations,
-                despawn_formations,
-                (update_circle, update_figure8),
+        app.add_event::<EnemyDeathEvent>()
+            .add_systems(
+                Update,
+                (
+                    update_waves,
+                    spawn_formations,
+                    update_formations,
+                    despawn_formations,
+                    (update_circle, update_figure8),
+                )
+                    .chain(),
             )
-                .chain(),
-        )
-        .add_systems(Physics, handle_death.after(HealthSet))
-        .insert_resource(WaveController::new_delayed(
-            3.,
-            &[(Formation::Triangle, 8.), (Formation::Triangle, 0.)],
-        ));
+            .add_systems(Physics, handle_death.after(HealthSet))
+            .insert_resource(WaveController::new_delayed(
+                3.,
+                &[(Formation::Triangle, 8.), (Formation::Triangle, 0.)],
+            ));
     }
 }
 
-#[derive(Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component)]
 #[require(Transform, Visibility)]
 pub enum Formation {
     Triangle,
 }
 
 impl Formation {
+    pub fn len(&self) -> usize {
+        self.enemies().len()
+    }
+
     pub fn enemies(&self) -> &'static [(Enemy, Vec2, MovementPattern)] {
         match self {
             Self::Triangle => {
@@ -83,6 +90,66 @@ impl Formation {
             .max_by(|a, b| a.total_cmp(b))
             .unwrap()
     }
+
+    pub fn drop_pickup_heuristic(&self) -> bool {
+        const ENEMY_WEIGHT: f64 = 0.30;
+
+        let heuristic = self
+            .enemies()
+            .iter()
+            .map(|(enemy, _, _)| {
+                ENEMY_WEIGHT
+                    * match enemy {
+                        Enemy::Common => 0.75,
+                    }
+            })
+            .sum();
+        info!("`{self:?}` drop heuristic: {heuristic:.2}");
+        rand::rng().random_range(0.0..1.0) > heuristic
+    }
+}
+
+#[derive(Component)]
+struct FormationChildren {
+    /// Child enemy entities on spawn
+    children: Vec<Entity>,
+    death_positions: Vec<(Entity, Vec2)>,
+    last_death: Option<Entity>,
+}
+
+impl FormationChildren {
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            children: Vec::with_capacity(cap),
+            death_positions: Vec::with_capacity(cap),
+            last_death: None,
+        }
+    }
+
+    pub fn entities(&self) -> &[Entity] {
+        &self.children
+    }
+
+    pub fn add_child(&mut self, entity: Entity) {
+        self.children.push(entity);
+    }
+
+    pub fn death_position(&mut self, entity: Entity, position: Vec2) {
+        debug_assert!(self.entities().contains(&entity));
+
+        self.death_positions.push((entity, position));
+        if self.death_positions.capacity() == self.death_positions.len() {
+            self.last_death = Some(entity);
+        }
+    }
+
+    pub fn last_death_position(&self) -> Option<Vec2> {
+        self.last_death.map(|entity| {
+            self.death_positions
+                .iter()
+                .find_map(|(e, p)| (*e == entity).then_some(*p))
+        })?
+    }
 }
 
 #[derive(Resource)]
@@ -117,7 +184,6 @@ impl WaveController {
         if self.timer.just_finished() {
             match self.seq.get(self.index) {
                 Some((formation, duration)) => {
-                    info!("set timer: {}", duration);
                     self.timer.set_duration(Duration::from_secs_f32(*duration));
                     self.index += 1;
                     Some(*formation)
@@ -162,18 +228,19 @@ fn spawn_formations(
             root.into_target().with(translation(start, end)),
         ));
 
-        commands
-            .entity(root)
-            .insert(Transform::from_translation(start));
+        let mut children = FormationChildren::with_capacity(formation.len());
         for (enemy, position, movement) in formation.enemies().iter() {
-            enemy.spawn_child_with(
+            children.add_child(enemy.spawn_child_with(
                 root,
                 &mut commands,
                 &server,
                 *movement,
                 (Transform::from_translation(position.extend(0.)),),
-            );
+            ));
         }
+        commands
+            .entity(root)
+            .insert((children, Transform::from_translation(start)));
     }
 
     if additional_height > 0. {
@@ -190,19 +257,42 @@ fn spawn_formations(
     }
 }
 
-fn despawn_formations(
-    mut commands: Commands,
-    formations: Query<(Entity, &Children), With<Formation>>,
-    enemies: Query<&Enemy>,
+fn update_formations(
+    mut reader: EventReader<EnemyDeathEvent>,
+    mut formations: Query<&mut FormationChildren>,
 ) {
-    for (entity, children) in formations.iter() {
-        if children.iter().all(|entity| enemies.get(*entity).is_err()) {
-            commands.entity(entity).despawn_recursive();
+    for event in reader.read() {
+        for mut children in formations.iter_mut() {
+            if children.entities().contains(&event.entity) {
+                children.death_position(event.entity, event.position);
+            }
         }
     }
 }
 
-#[derive(Clone, Copy, Component)]
+fn despawn_formations(
+    mut commands: Commands,
+    formations: Query<(Entity, &Formation, &FormationChildren)>,
+) {
+    for (entity, formation, children) in formations.iter() {
+        if let Some(position) = children.last_death_position() {
+            commands.entity(entity).despawn_recursive();
+            let mut commands = commands.spawn_empty();
+
+            if formation.drop_pickup_heuristic() {
+                pickups::spawn_random_pickup(
+                    &mut commands,
+                    (
+                        Transform::from_translation(position.extend(0.)),
+                        pickups::velocity(),
+                    ),
+                );
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Component, PartialEq, Eq, Hash)]
 #[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
 pub enum Enemy {
     Common,
@@ -216,12 +306,13 @@ impl Enemy {
         server: &AssetServer,
         movement: MovementPattern,
         bundle: impl Bundle,
-    ) {
+    ) -> Entity {
         let mut entity_commands = commands.spawn_empty();
         self.insert(&mut entity_commands, server, movement, bundle);
         self.insert_emitter(&mut entity_commands);
         let id = entity_commands.id();
         commands.entity(entity).add_child(id);
+        id
     }
 
     fn insert_emitter(&self, commands: &mut EntityCommands) {
@@ -364,8 +455,22 @@ fn update_figure8(
     }
 }
 
-fn handle_death(q: Query<(Entity, &Enemy), With<Dead>>, mut commands: Commands) {
-    for (entity, _enemy) in q.iter() {
+#[derive(Event)]
+struct EnemyDeathEvent {
+    entity: Entity,
+    position: Vec2,
+}
+
+fn handle_death(
+    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<Enemy>)>,
+    mut commands: Commands,
+    mut writer: EventWriter<EnemyDeathEvent>,
+) {
+    for (entity, transform) in q.iter() {
+        writer.send(EnemyDeathEvent {
+            entity,
+            position: transform.compute_transform().translation.xy(),
+        });
         commands.entity(entity).despawn_recursive();
     }
 }

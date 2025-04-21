@@ -171,11 +171,11 @@ fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Comm
 }
 
 fn handle_pickups(
-    mut q: Query<(Entity, &mut WeaponEntity, &mut BulletSpeed, &mut BulletRate), With<Player>>,
+    mut q: Query<(Entity, &mut WeaponEntity, &mut BulletRate), With<Player>>,
     mut events: EventReader<PickupEvent>,
     mut commands: Commands,
 ) {
-    let Ok((player, mut weapon_entity, mut speed, mut rate)) = q.get_single_mut() else {
+    let Ok((player, mut weapon_entity, mut rate)) = q.get_single_mut() else {
         return;
     };
 

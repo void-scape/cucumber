@@ -227,11 +227,6 @@ impl BulletSprite {
     }
 }
 
-fn small_collider() -> Collider {
-    let size = Vec2::new(1.0, 1.0) * crate::RESOLUTION_SCALE;
-    Collider::from_rect(Vec2::new(-size.x / 2.0, size.y / 2.0), size)
-}
-
 #[derive(Clone, Copy, Component)]
 #[require(BulletSprite(|| BulletSprite::from_cell(0, 1)), ImageCollider)]
 pub struct BasicBullet;

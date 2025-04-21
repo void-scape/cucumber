@@ -45,13 +45,7 @@ impl<T: Component> SoloEmitter<T> {
 impl<T: Component> SoloEmitter<T> {
     fn shoot_bullets(
         mut emitters: Query<
-            (
-                Entity,
-                Option<&mut BulletTimer>,
-                &BulletSprite,
-                &Polarity,
-                &Parent,
-            ),
+            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
             With<SoloEmitter<T>>,
         >,
         parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
@@ -61,7 +55,7 @@ impl<T: Component> SoloEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, sprite, polarity, parent) in emitters.iter_mut() {
+        for (entity, timer, polarity, parent) in emitters.iter_mut() {
             let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
@@ -121,13 +115,7 @@ impl<T: Component> DualEmitter<T> {
 impl<T: Component> DualEmitter<T> {
     fn shoot_bullets(
         mut emitters: Query<
-            (
-                Entity,
-                Option<&mut BulletTimer>,
-                &BulletSprite,
-                &Polarity,
-                &Parent,
-            ),
+            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
             With<DualEmitter<T>>,
         >,
         parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
@@ -137,7 +125,7 @@ impl<T: Component> DualEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, sprite, polarity, parent) in emitters.iter_mut() {
+        for (entity, timer, polarity, parent) in emitters.iter_mut() {
             let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
@@ -213,7 +201,7 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
             (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
             With<HomingEmitter<T, U>>,
         >,
-        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<(&GlobalTransform, Option<&BulletRate>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
@@ -221,12 +209,10 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
         let delta = time.delta();
 
         for (entity, timer, polarity, parent) in emitters.iter_mut() {
-            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
+            let Ok((parent, rate)) = parents.get(parent.get()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
-            let speed = speed.copied().unwrap_or_default();
-
             let duration = Duration::from_secs_f32(0.33 / rate.0);
 
             let Some(mut timer) = timer else {
