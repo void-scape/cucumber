@@ -51,14 +51,14 @@ fn select_target<T: Component>(
             ));
         }
 
-        // let max = distances
-        //     .iter()
-        //     .map(|d| d.1)
-        //     .max_by(|a, b| a.total_cmp(b))
-        //     .unwrap_or_default();
-        // for (_, distance) in distances.iter_mut() {
-        //     *distance = max - *distance;
-        // }
+        let max = distances
+            .iter()
+            .map(|d| d.1)
+            .max_by(|a, b| a.total_cmp(b))
+            .unwrap_or_default();
+        for (_, distance) in distances.iter_mut() {
+            *distance = max - *distance;
+        }
 
         let Ok(index) = WeightedIndex::new(distances.iter().map(|d| d.1)) else {
             continue;

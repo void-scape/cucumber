@@ -6,7 +6,7 @@ use crate::{
         emitter::{DualEmitter, HomingEmitter},
     },
     health::{Dead, Health, HealthSet},
-    pickups::{self, PickupEvent, Upgrade},
+    pickups::{self, PickupEvent, Upgrade, Weapon},
 };
 use bevy::{
     ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
@@ -25,9 +25,13 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, |mut commands: Commands| {
+            let starting_weapon = commands
+                .spawn((HomingEmitter::<layers::Enemy>::new(), Polarity::North))
+                .id();
+
             commands
-                .spawn(Player)
-                .with_child((HomingEmitter::<layers::Enemy>::new(), Polarity::North));
+                .spawn((Player, WeaponEntity(starting_weapon)))
+                .add_child(starting_weapon);
         })
         .add_systems(Update, handle_pickups)
         .add_systems(Physics, handle_death.after(HealthSet))
@@ -45,6 +49,9 @@ impl Plugin for PlayerPlugin {
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
+
+#[derive(Component)]
+struct WeaponEntity(Entity);
 
 impl Player {
     fn on_add(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
@@ -128,16 +135,34 @@ fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Comm
 }
 
 fn handle_pickups(
-    mut q: Query<(&mut BulletSpeed, &mut BulletRate), With<Player>>,
+    mut q: Query<(Entity, &mut WeaponEntity, &mut BulletSpeed, &mut BulletRate), With<Player>>,
     mut events: EventReader<PickupEvent>,
+    mut commands: Commands,
 ) {
-    let Ok((mut speed, mut rate)) = q.get_single_mut() else {
+    let Ok((player, mut weapon_entity, mut speed, mut rate)) = q.get_single_mut() else {
         return;
     };
 
     for event in events.read() {
         match event {
-            PickupEvent::Weapon(_) => {}
+            PickupEvent::Weapon(Weapon::Bullet) => {
+                commands.entity(weapon_entity.0).despawn_recursive();
+
+                let emitter = commands
+                    .spawn((DualEmitter::<layers::Enemy>::new(), Polarity::North))
+                    .id();
+                weapon_entity.0 = emitter;
+                commands.entity(player).add_child(emitter);
+            }
+            PickupEvent::Weapon(Weapon::Missile) => {
+                commands.entity(weapon_entity.0).despawn_recursive();
+
+                let emitter = commands
+                    .spawn((HomingEmitter::<layers::Enemy>::new(), Polarity::North))
+                    .id();
+                weapon_entity.0 = emitter;
+                commands.entity(player).add_child(emitter);
+            }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
             _ => {}
         }
