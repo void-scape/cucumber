@@ -160,7 +160,6 @@ pub fn store_static_body_in_spatial_map<T: Component>(
     };
 
     for (entity, global_transform, collider) in static_body.iter() {
-        info!("{:?}", collider);
         hash.insert(SpatialData {
             collider: collider.global_absolute(global_transform),
             data: (),

@@ -7,6 +7,7 @@ use bevy_pixel_gfx::pixel_perfect::{CanvasDimensions, Scaling};
 use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
 
+mod animation;
 mod assets;
 mod auto_collider;
 mod background;
@@ -49,6 +50,7 @@ fn main() {
             )),
         ))
         .add_plugins((
+            animation::AnimationPlugin,
             assets::AssetPlugin,
             pickups::PickupPlugin,
             characters::CharacterPlugin,

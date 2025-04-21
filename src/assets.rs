@@ -48,8 +48,23 @@ pub struct AssetPlugin;
 
 impl Plugin for AssetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, debug_assets);
+        app.add_systems(PreStartup, init_layouts)
+            .add_systems(Update, debug_assets);
     }
+}
+
+#[derive(Resource)]
+pub struct MiscLayout(pub Handle<TextureAtlasLayout>);
+
+fn init_layouts(mut commands: Commands, mut layouts: ResMut<Assets<TextureAtlasLayout>>) {
+    let layout = layouts.add(TextureAtlasLayout::from_grid(
+        UVec2::splat(8),
+        13,
+        8,
+        None,
+        None,
+    ));
+    commands.insert_resource(MiscLayout(layout));
 }
 
 #[derive(Component)]

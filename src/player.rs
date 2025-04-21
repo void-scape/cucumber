@@ -1,10 +1,9 @@
 use crate::{
-    assets,
+    animation::{AnimationController, AnimationIndices, AnimationMode},
+    assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
-    bullet::{
-        BulletRate, BulletSpeed, BulletTimer, Polarity,
-        emitter::{DualEmitter, HomingEmitter},
-    },
+    bullet::emitter::DualEmitter,
+    bullet::{BulletRate, BulletSpeed, BulletTimer, Polarity, emitter::HomingEmitter},
     enemy::Enemy,
     health::{Dead, Health, HealthSet},
     pickups::{self, PickupEvent, Upgrade, Weapon},
@@ -19,7 +18,7 @@ use physics::{
     layers::{self, CollidesWith, TriggersWith},
     prelude::*,
 };
-use std::{cmp::Ordering, time::Duration};
+use std::{cmp::Ordering, f32, time::Duration};
 
 pub struct PlayerPlugin;
 
@@ -61,33 +60,56 @@ impl Player {
     fn on_add(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
         world.commands().queue(move |world: &mut World| {
             world
-                .run_system_once(move |mut commands: Commands, server: Res<AssetServer>| {
-                    let mut actions = Actions::<AliveContext>::default();
-                    actions.bind::<MoveAction>().to((
-                        Cardinal::wasd_keys(),
-                        Cardinal::arrow_keys(),
-                        Cardinal::dpad_buttons(),
-                        GamepadStick::Left.with_modifiers_each(
-                            DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
-                        ),
-                    ));
+                .run_system_once(
+                    move |mut commands: Commands,
+                          server: Res<AssetServer>,
+                          misc_layout: Res<MiscLayout>| {
+                        let mut actions = Actions::<AliveContext>::default();
+                        actions.bind::<MoveAction>().to((
+                            Cardinal::wasd_keys(),
+                            Cardinal::arrow_keys(),
+                            Cardinal::dpad_buttons(),
+                            GamepadStick::Left.with_modifiers_each(
+                                DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
+                            ),
+                        ));
 
-                    commands.entity(entity).insert((
-                        actions,
-                        assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
-                        BulletTimer {
-                            timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
-                        },
-                    ));
-                })
+                        commands.entity(entity).insert((
+                            actions,
+                            assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
+                            BulletTimer {
+                                timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
+                            },
+                        ));
+
+                        commands.entity(entity).with_child((
+                            PlayerBlasters,
+                            Visibility::Hidden,
+                            Transform::from_xyz(0., -7., -1.),
+                            Sprite::from_atlas_image(
+                                server.load(MISC_PATH),
+                                TextureAtlas::from(misc_layout.0.clone()),
+                            ),
+                            AnimationController::from_seconds(
+                                AnimationIndices::new(AnimationMode::Repeat, 18..=21),
+                                0.1,
+                            ),
+                        ));
+                    },
+                )
                 .unwrap();
         });
     }
 }
 
+// TODO: make this for enemies too?
+#[derive(Component)]
+struct PlayerBlasters;
+
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
     mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
+    mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
         return;
@@ -105,11 +127,20 @@ fn apply_movement(
     };
 
     sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
+
+    if let Ok(mut vis) = blasters.get_single_mut() {
+        if velocity.0.y > f32::EPSILON {
+            *vis = Visibility::Visible;
+        } else {
+            *vis = Visibility::Hidden;
+        }
+    }
 }
 
 fn stop_movement(
     _: Trigger<Completed<MoveAction>>,
     mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
+    mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
         return;
@@ -119,6 +150,10 @@ fn stop_movement(
     let tl = Vec2::new(1., 4.) * 8.;
     let br = Vec2::new(2., 5.) * 8.;
     sprite.rect = Some(Rect::from_corners(tl, br));
+
+    if let Ok(mut vis) = blasters.get_single_mut() {
+        *vis = Visibility::Hidden;
+    }
 }
 
 #[derive(Debug, InputAction)]

@@ -1,5 +1,6 @@
 use crate::{
-    assets,
+    animation::{AnimationController, AnimationIndices, AnimationMode},
+    assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     health::{Damage, Health, HealthSet},
 };
@@ -7,12 +8,15 @@ use bevy::{
     ecs::{component::ComponentId, world::DeferredWorld},
     prelude::*,
 };
+use bevy_seedling::{
+    prelude::Volume,
+    sample::{PlaybackSettings, SamplePlayer},
+};
 use physics::{
     Physics,
     layers::{self, TriggersWith},
     prelude::*,
 };
-use rand::seq::IndexedRandom;
 use std::time::Duration;
 
 pub mod emitter;
@@ -22,7 +26,6 @@ mod homing;
 pub enum BulletSystems {
     Collision,
     Lifetime,
-    Velocity,
     Sprite,
 }
 
@@ -31,6 +34,7 @@ pub struct BulletPlugin;
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
+            .add_event::<BulletCollisionEvent>()
             .add_systems(
                 Physics,
                 (handle_enemy_collision, handle_player_collision)
@@ -39,7 +43,10 @@ impl Plugin for BulletPlugin {
             )
             .add_systems(
                 Update,
-                (manage_lifetime, kill_on_wall).in_set(BulletSystems::Lifetime),
+                (
+                    (manage_lifetime, kill_on_wall).in_set(BulletSystems::Lifetime),
+                    bullet_collision_effects,
+                ),
             )
             .add_systems(
                 PostUpdate,
@@ -234,35 +241,107 @@ pub struct BasicBullet;
 pub struct CommonBullet;
 
 fn handle_enemy_collision(
-    bullets: Query<(Entity, &Damage, &Triggers<layers::Enemy>), With<Bullet>>,
+    bullets: Query<
+        (
+            Entity,
+            &Damage,
+            &Triggers<layers::Enemy>,
+            &BulletSprite,
+            &GlobalTransform,
+        ),
+        With<Bullet>,
+    >,
     mut enemies: Query<&mut Health>,
     mut commands: Commands,
+    mut writer: EventWriter<BulletCollisionEvent>,
 ) {
-    for (bullet, damage, collision) in bullets.iter() {
+    for (bullet, damage, collision, sprite, transform) in bullets.iter() {
         let Some(first) = collision.entities().first() else {
             continue;
         };
 
         if let Ok(mut enemy) = enemies.get_mut(*first) {
             enemy.damage(**damage);
+            writer.send(BulletCollisionEvent::new(
+                sprite.cell,
+                transform.compute_transform(),
+            ));
             commands.entity(bullet).despawn();
         }
     }
 }
 
 fn handle_player_collision(
-    bullets: Query<(Entity, &Damage, &Triggers<layers::Player>), With<Bullet>>,
+    bullets: Query<
+        (
+            Entity,
+            &Damage,
+            &Triggers<layers::Player>,
+            &BulletSprite,
+            &GlobalTransform,
+        ),
+        With<Bullet>,
+    >,
     mut player: Query<&mut Health>,
     mut commands: Commands,
+    mut writer: EventWriter<BulletCollisionEvent>,
 ) {
-    for (bullet, damage, collision) in bullets.iter() {
+    for (bullet, damage, collision, sprite, transform) in bullets.iter() {
         let Some(first) = collision.entities().first() else {
             continue;
         };
 
         if let Ok(mut player) = player.get_mut(*first) {
             player.damage(**damage);
+            writer.send(BulletCollisionEvent::new(
+                sprite.cell,
+                transform.compute_transform(),
+            ));
             commands.entity(bullet).despawn();
         }
+    }
+}
+
+#[derive(Event)]
+struct BulletCollisionEvent {
+    /// The cell in the projectile spritesheet.
+    cell: UVec2,
+    transform: Transform,
+}
+
+impl BulletCollisionEvent {
+    pub fn new(cell: UVec2, mut transform: Transform) -> Self {
+        transform.translation = transform.translation.round();
+        transform.translation.z = 1.;
+        Self { cell, transform }
+    }
+}
+
+fn bullet_collision_effects(
+    mut commands: Commands,
+    mut reader: EventReader<BulletCollisionEvent>,
+    server: Res<AssetServer>,
+    misc_layout: Res<MiscLayout>,
+) {
+    for event in reader.read() {
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+            PlaybackSettings {
+                volume: Volume::Decibels(-32.0),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+
+        commands.spawn((
+            event.transform,
+            Sprite::from_atlas_image(
+                server.load(MISC_PATH),
+                TextureAtlas::from(misc_layout.0.clone()),
+            ),
+            AnimationController::from_seconds(
+                AnimationIndices::new(AnimationMode::Despawn, 83..=86),
+                0.1,
+            ),
+        ));
     }
 }
