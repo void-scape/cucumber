@@ -31,7 +31,7 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: WindowResolution::new(
-                            WIDTH * RESOLUTION_SCALE,
+                            WIDTH * RESOLUTION_SCALE * 1.25,
                             HEIGHT * RESOLUTION_SCALE,
                         ),
                         ..Default::default()

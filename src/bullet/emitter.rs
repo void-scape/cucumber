@@ -63,9 +63,10 @@ impl<T: Component> SoloEmitter<T> {
             let rate = rate.copied().unwrap_or_default();
             let speed = speed.copied().unwrap_or_default();
 
+            let duration = Duration::from_secs_f32(0.25 / rate.0);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(Duration::from_secs_f32(0.25 / rate.0), TimerMode::Repeating),
+                    timer: Timer::new(duration, TimerMode::Repeating),
                 });
                 continue;
             };
@@ -76,6 +77,7 @@ impl<T: Component> SoloEmitter<T> {
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
+            timer.timer.set_duration(duration);
 
             commands.spawn((
                 BulletType::Basic,
@@ -117,30 +119,32 @@ impl<T: Component> DualEmitter<T> {
             (
                 Entity,
                 Option<&mut BulletTimer>,
-                &BulletRate,
-                &BulletSpeed,
                 &BulletSprite,
                 &Polarity,
                 &Parent,
             ),
             With<DualEmitter<T>>,
         >,
-        parents: Query<&GlobalTransform>,
+        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, timer, rate, speed, sprite, polarity, parent) in emitters.iter_mut() {
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(Duration::from_secs_f32(0.25 * rate.0), TimerMode::Repeating),
-                });
+        for (entity, timer, sprite, polarity, parent) in emitters.iter_mut() {
+            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
+            let rate = rate.copied().unwrap_or_default();
+            let speed = speed.copied().unwrap_or_default();
 
-            let Ok(parent) = parents.get(parent.get()) else {
+            let duration = Duration::from_secs_f32(0.25 / rate.0);
+
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(duration, TimerMode::Repeating),
+                });
                 continue;
             };
 
@@ -150,6 +154,7 @@ impl<T: Component> DualEmitter<T> {
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
+            timer.timer.set_duration(duration);
 
             commands.spawn((
                 BulletType::Basic,

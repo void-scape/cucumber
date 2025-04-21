@@ -3,7 +3,7 @@ use crate::{
     auto_collider::ImageCollider,
     bullet::{BulletRate, BulletSpeed, BulletTimer, Polarity, emitter::DualEmitter},
     health::{Dead, Health, HealthSet},
-    pickups,
+    pickups::{self, PickupEvent, Upgrade},
 };
 use bevy::{
     ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
@@ -26,6 +26,7 @@ impl Plugin for PlayerPlugin {
                 .spawn(Player)
                 .with_child((DualEmitter::<layers::Enemy>::new(), Polarity::North));
         })
+        .add_systems(Update, handle_pickups)
         .add_systems(Physics, handle_death.after(HealthSet))
         .add_input_context::<AliveContext>()
         .add_observer(apply_movement)
@@ -121,4 +122,21 @@ fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Comm
     info!("player died");
 
     commands.entity(player).despawn_recursive();
+}
+
+fn handle_pickups(
+    mut q: Query<(&mut BulletSpeed, &mut BulletRate), With<Player>>,
+    mut events: EventReader<PickupEvent>,
+) {
+    let Ok((mut speed, mut rate)) = q.get_single_mut() else {
+        return;
+    };
+
+    for event in events.read() {
+        match event {
+            PickupEvent::Weapon(_) => {}
+            PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
+            _ => {}
+        }
+    }
 }
