@@ -2,7 +2,7 @@ use super::{
     Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
     homing::{Heading, Homing},
 };
-use crate::{auto_collider::ImageCollider, health::Damage};
+use crate::{auto_collider::ImageCollider, enemy::Enemy, health::Damage};
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 use physics::{
@@ -22,8 +22,8 @@ impl Plugin for EmitterPlugin {
                 SoloEmitter::<layers::Player>::shoot_bullets,
                 DualEmitter::<layers::Enemy>::shoot_bullets,
                 DualEmitter::<layers::Player>::shoot_bullets,
-                HomingEmitter::<layers::Enemy>::shoot_bullets,
-                HomingEmitter::<layers::Player>::shoot_bullets,
+                HomingEmitter::<layers::Enemy, Enemy>::shoot_bullets,
+                HomingEmitter::<layers::Player, crate::player::Player>::shoot_bullets,
             ),
         );
     }
@@ -199,19 +199,19 @@ impl<T: Component> DualEmitter<T> {
 
 #[derive(Component, Default)]
 #[require(BulletRate, BulletSpeed, Polarity)]
-pub struct HomingEmitter<T>(PhantomData<fn() -> T>);
+pub struct HomingEmitter<T, U>(PhantomData<fn() -> (T, U)>);
 
-impl<T: Component> HomingEmitter<T> {
+impl<T: Component, U: Component> HomingEmitter<T, U> {
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: Component> HomingEmitter<T> {
+impl<T: Component, U: Component> HomingEmitter<T, U> {
     fn shoot_bullets(
         mut emitters: Query<
             (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
-            With<HomingEmitter<T>>,
+            With<HomingEmitter<T, U>>,
         >,
         parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
@@ -227,7 +227,7 @@ impl<T: Component> HomingEmitter<T> {
             let rate = rate.copied().unwrap_or_default();
             let speed = speed.copied().unwrap_or_default();
 
-            let duration = Duration::from_secs_f32(0.5 / rate.0);
+            let duration = Duration::from_secs_f32(0.33 / rate.0);
 
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
@@ -249,9 +249,9 @@ impl<T: Component> HomingEmitter<T> {
                 Bullet,
                 ImageCollider,
                 Velocity::default(),
-                Homing::<T>::new(),
+                Homing::<U>::new(),
                 Heading {
-                    speed: 100.0,
+                    speed: 125.0,
                     direction: PI / 2.0,
                 },
                 new_transform,

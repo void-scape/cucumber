@@ -4,18 +4,22 @@ use bevy::prelude::*;
 use physics::{Physics, PhysicsSystems, layers, prelude::Velocity};
 use rand::distr::{Distribution, weighted::WeightedIndex};
 
+use crate::{enemy::Enemy, player::Player};
+
 pub struct HomingPlugin;
 
 impl Plugin for HomingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (
-                select_target::<layers::Player>,
-                select_target::<layers::Enemy>,
-            ),
+            (select_target::<Player>, select_target::<Enemy>),
         )
-        .add_systems(Physics, steer_homing.before(PhysicsSystems::Velocity));
+        .add_systems(
+            Physics,
+            (steer_homing, apply_heading_velocity)
+                .chain()
+                .before(PhysicsSystems::Velocity),
+        );
     }
 }
 
@@ -51,24 +55,27 @@ fn select_target<T: Component>(
             ));
         }
 
-        let max = distances
-            .iter()
-            .map(|d| d.1)
-            .max_by(|a, b| a.total_cmp(b))
-            .unwrap_or_default();
-        for (_, distance) in distances.iter_mut() {
-            *distance = max - *distance;
-        }
+        let next_target = if distances.len() == 1 {
+            distances[0].0
+        } else {
+            let max = distances
+                .iter()
+                .map(|d| d.1)
+                .max_by(|a, b| a.total_cmp(b))
+                .unwrap_or_default();
+            for (_, distance) in distances.iter_mut() {
+                *distance = max - *distance;
+            }
 
-        let Ok(index) = WeightedIndex::new(distances.iter().map(|d| d.1)) else {
-            continue;
+            let Ok(index) = WeightedIndex::new(distances.iter().map(|d| d.1)) else {
+                continue;
+            };
+
+            let next_target = index.sample(&mut rng);
+            distances[next_target].0
         };
 
-        let next_target = index.sample(&mut rng);
-
-        commands
-            .entity(homing)
-            .insert(HomingTarget(distances[next_target].0));
+        commands.entity(homing).insert(HomingTarget(next_target));
     }
 }
 
@@ -119,23 +126,14 @@ impl Heading {
 }
 
 fn steer_homing(
-    mut homing: Query<(
-        Entity,
-        &GlobalTransform,
-        &mut Transform,
-        &HomingTarget,
-        &mut Heading,
-        &mut Velocity,
-    )>,
+    mut homing: Query<(Entity, &GlobalTransform, &HomingTarget, &mut Heading)>,
     targets: Query<&GlobalTransform>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
     let delta = time.delta_secs();
 
-    for (entity, transform, mut local_transform, target, mut heading, mut velocity) in
-        homing.iter_mut()
-    {
+    for (entity, transform, target, mut heading) in homing.iter_mut() {
         let Ok(target) = targets.get(target.0) else {
             commands.entity(entity).remove::<HomingTarget>();
             continue;
@@ -144,13 +142,16 @@ fn steer_homing(
         let transform = transform.compute_transform();
         let target = target.compute_transform();
 
-        heading.steer_towards(2.0 * delta, &transform.translation, &target.translation);
+        heading.steer_towards(5.0 * delta, &transform.translation, &target.translation);
+    }
+}
 
+fn apply_heading_velocity(mut homing: Query<(&mut Transform, &Heading, &mut Velocity)>) {
+    for (mut transform, heading, mut velocity) in homing.iter_mut() {
         velocity.0.x = heading.speed * heading.direction.cos();
         velocity.0.y = heading.speed * heading.direction.sin();
-        // local_transform.rotation.rot = heading.direction;
 
         let new_rotation = Quat::from_rotation_z(heading.direction - PI / 2.0);
-        local_transform.rotation = new_rotation;
+        transform.rotation = new_rotation;
     }
 }

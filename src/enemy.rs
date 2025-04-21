@@ -113,7 +113,7 @@ fn spawn_formations(
 
 #[derive(Clone, Copy, Component)]
 #[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
-enum Enemy {
+pub enum Enemy {
     Common,
 }
 

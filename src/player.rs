@@ -5,6 +5,7 @@ use crate::{
         BulletRate, BulletSpeed, BulletTimer, Polarity,
         emitter::{DualEmitter, HomingEmitter},
     },
+    enemy::Enemy,
     health::{Dead, Health, HealthSet},
     pickups::{self, PickupEvent, Upgrade, Weapon},
 };
@@ -26,7 +27,10 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, |mut commands: Commands| {
             let starting_weapon = commands
-                .spawn((HomingEmitter::<layers::Enemy>::new(), Polarity::North))
+                .spawn((
+                    HomingEmitter::<layers::Enemy, Enemy>::new(),
+                    Polarity::North,
+                ))
                 .id();
 
             commands
@@ -158,7 +162,10 @@ fn handle_pickups(
                 commands.entity(weapon_entity.0).despawn_recursive();
 
                 let emitter = commands
-                    .spawn((HomingEmitter::<layers::Enemy>::new(), Polarity::North))
+                    .spawn((
+                        HomingEmitter::<layers::Enemy, Enemy>::new(),
+                        Polarity::North,
+                    ))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
