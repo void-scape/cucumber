@@ -2,7 +2,10 @@ use super::{BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Pola
 use crate::health::Damage;
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
-use physics::layers::{self, TriggersWith};
+use physics::{
+    layers::{self, TriggersWith},
+    prelude::Velocity,
+};
 use std::{marker::PhantomData, time::Duration};
 
 pub struct EmitterPlugin;
@@ -12,6 +15,8 @@ impl Plugin for EmitterPlugin {
         app.add_systems(
             Update,
             (
+                SoloEmitter::<layers::Enemy>::shoot_bullets,
+                SoloEmitter::<layers::Player>::shoot_bullets,
                 DualEmitter::<layers::Enemy>::shoot_bullets,
                 DualEmitter::<layers::Player>::shoot_bullets,
             ),
@@ -20,11 +25,84 @@ impl Plugin for EmitterPlugin {
 }
 
 #[derive(Component, Default)]
-#[require(BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity)]
-pub struct SoloEmitter;
+#[require(
+    BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity,
+    Visibility(|| Visibility::Hidden)
+)]
+pub struct SoloEmitter<T>(PhantomData<fn() -> T>);
+
+impl<T: Component> SoloEmitter<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: Component> SoloEmitter<T> {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (
+                Entity,
+                Option<&mut BulletTimer>,
+                &BulletSprite,
+                &Polarity,
+                &Parent,
+            ),
+            With<SoloEmitter<T>>,
+        >,
+        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (entity, timer, sprite, polarity, parent) in emitters.iter_mut() {
+            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
+                continue;
+            };
+            let rate = rate.copied().unwrap_or_default();
+            let speed = speed.copied().unwrap_or_default();
+
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(Duration::from_secs_f32(0.25 / rate.0), TimerMode::Repeating),
+                });
+                continue;
+            };
+
+            let mut new_transform = parent.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+
+            commands.spawn((
+                BulletType::Basic,
+                Velocity(polarity.to_vec2() * 150.0 * speed.0),
+                new_transform,
+                TriggersWith::<T>::default(),
+                Damage::new(1),
+            ));
+
+            commands
+                .spawn((
+                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Decibels(-18.0),
+                        ..PlaybackSettings::ONCE
+                    },
+                ))
+                .effect(BandPassNode::new(1000.0, 4.0));
+        }
+    }
+}
 
 #[derive(Component, Default)]
-#[require(BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity)]
+#[require(
+    BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)),
+    Polarity, Visibility(|| Visibility::Hidden)
+)]
 pub struct DualEmitter<T>(PhantomData<fn() -> T>);
 
 impl<T: Component> DualEmitter<T> {
@@ -42,21 +120,19 @@ impl<T: Component> DualEmitter<T> {
                 &BulletRate,
                 &BulletSpeed,
                 &BulletSprite,
-                &Transform,
                 &Polarity,
+                &Parent,
             ),
             With<DualEmitter<T>>,
         >,
+        parents: Query<&GlobalTransform>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, timer, rate, speed, sprite, transform, polarity) in emitters.iter_mut() {
-            let mut new_transform = transform.clone();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 5.0;
-
+        for (entity, timer, rate, speed, sprite, polarity, parent) in emitters.iter_mut() {
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(Duration::from_secs_f32(0.25 * rate.0), TimerMode::Repeating),
@@ -64,15 +140,22 @@ impl<T: Component> DualEmitter<T> {
                 continue;
             };
 
+            let Ok(parent) = parents.get(parent.get()) else {
+                continue;
+            };
+
+            let mut new_transform = parent.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
 
             commands.spawn((
                 BulletType::Basic,
-                Polarity::North,
+                Velocity(polarity.to_vec2() * 150.0 * speed.0),
                 {
-                    let mut t = new_transform.clone();
+                    let mut t = new_transform;
                     t.translation.x -= 3.;
                     t
                 },
@@ -82,7 +165,7 @@ impl<T: Component> DualEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Polarity::North,
+                Velocity(polarity.to_vec2() * 150.0 * speed.0),
                 {
                     new_transform.translation.x += 3.;
                     new_transform
