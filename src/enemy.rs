@@ -1,16 +1,17 @@
 use crate::{
     HEIGHT,
-    animation::{AnimationController, AnimationIndices, AnimationMode},
+    animation::{AnimationController, AnimationIndices},
     assets, atlas_layout,
     auto_collider::ImageCollider,
     bullet::{
-        BulletRate, BulletSpeed, BulletTimer, Direction,
-        emitter::{DualEmitter, SoloEmitter},
+        BulletRate, BulletSpeed, Direction, Polarity,
+        emitter::{DualEmitter, HomingEmitter, SoloEmitter},
     },
     health::{Dead, Health, HealthSet},
     pickups::{self},
+    player::Player,
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::DynamicTyped};
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
@@ -32,10 +33,17 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<EnemyDeathEvent>()
+            .add_event::<BossDeathEvent>()
             .add_systems(
                 Startup,
-                (init_fire_layout, init_sparks_layout, init_explosion_layout),
+                (
+                    init_fire_layout,
+                    init_sparks_layout,
+                    init_explosion_layout,
+                    init_cruiser_explosion_layout,
+                ),
             )
+            .add_systems(Startup, spawn_boss)
             .add_systems(
                 Update,
                 (
@@ -44,18 +52,18 @@ impl Plugin for EnemyPlugin {
                     update_formations,
                     despawn_formations,
                     (update_back_and_forth, update_circle, update_figure8),
-                    (add_low_health_effects, death_effects),
+                    (add_low_health_effects, death_effects, boss_death_effects),
                 )
                     .chain(),
             )
-            .add_systems(Physics, handle_death.after(HealthSet))
+            .add_systems(Physics, (handle_death, handle_boss_death).after(HealthSet))
             .insert_resource(WaveController::new_delayed(
                 0.,
                 &[
-                    (Formation::Triangle, 8.),
-                    (Formation::Row, 8.),
-                    (Formation::Triangle, 8.),
-                    (Formation::Row, 0.),
+                    //(Formation::Triangle, 8.),
+                    //(Formation::Row, 8.),
+                    //(Formation::Triangle, 8.),
+                    //(Formation::Row, 0.),
                 ],
             ));
     }
@@ -64,6 +72,102 @@ impl Plugin for EnemyPlugin {
 atlas_layout!(FireLayout, init_fire_layout, 96, 4, 5);
 atlas_layout!(SparksLayout, init_sparks_layout, 150, 5, 6);
 atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
+atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
+
+#[derive(Component)]
+#[require(Transform, layers::Enemy)]
+struct Boss;
+
+const BOSS_EASE_DUR: f32 = 4.;
+
+fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
+    let boss = commands
+        .spawn((
+            Boss,
+            Sprite {
+                image: server.load("cruiser_base.png"),
+                flip_y: true,
+                ..Default::default()
+            },
+            Health::full(100),
+            BulletRate(0.5),
+            BulletSpeed(0.8),
+            CollisionTrigger(Collider::from_rect(
+                Vec2::new(-25., 32.),
+                Vec2::new(50., 64.),
+            )),
+        ))
+        .with_children(|root| {
+            root.spawn((
+                DualEmitter::<layers::Player>::new(2.),
+                Transform::from_xyz(-19., -20., 0.),
+            ));
+            root.spawn((
+                DualEmitter::<layers::Player>::new(2.),
+                Transform::from_xyz(19., -20., 0.),
+            ));
+
+            root.spawn((
+                HomingEmitter::<layers::Player, Player>::new(),
+                Transform::from_xyz(30., 10., 0.),
+            ));
+            root.spawn((
+                HomingEmitter::<layers::Player, Player>::new(),
+                Transform::from_xyz(-30., 10., 0.),
+            ));
+        })
+        .id();
+
+    let start_y = HEIGHT / 2. + 64.;
+    let end_y = start_y - 105.;
+    let start = Vec3::ZERO.with_y(start_y);
+    let end = Vec3::ZERO.with_y(end_y);
+
+    commands.animation().insert(tween(
+        Duration::from_secs_f32(BOSS_EASE_DUR),
+        EaseKind::SineOut,
+        boss.into_target().with(translation(start, end)),
+    ));
+}
+
+#[derive(Event)]
+struct BossDeathEvent(Vec2);
+
+fn handle_boss_death(
+    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<Boss>)>,
+    mut commands: Commands,
+    mut writer: EventWriter<BossDeathEvent>,
+) {
+    for (entity, transform) in q.iter() {
+        writer.send(BossDeathEvent(
+            transform.compute_transform().translation.xy(),
+        ));
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn boss_death_effects(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    layout: Res<CruiserExplosion>,
+    mut reader: EventReader<BossDeathEvent>,
+) {
+    for event in reader.read() {
+        commands.spawn((
+            Sprite {
+                image: server.load("cruiser_explosion.png"),
+                texture_atlas: Some(TextureAtlas {
+                    layout: layout.0.clone(),
+                    index: 0,
+                }),
+                flip_y: true,
+                ..Default::default()
+            },
+            AnimationController::from_seconds(AnimationIndices::once_despawn(0..=13), 0.1),
+            Transform::from_translation(event.0.extend(1.)),
+        ));
+    }
+}
 
 #[derive(Debug, Clone, Copy, Component)]
 #[require(Transform, Visibility)]
@@ -204,10 +308,6 @@ impl WaveController {
     }
 
     pub fn new_delayed(delay: f32, seq: &'static [(Formation, f32)]) -> Self {
-        assert!(
-            !seq.is_empty(),
-            "tried to create `WaveController` with empty sequence"
-        );
         Self {
             seq,
             timer: Timer::from_seconds(delay, TimerMode::Repeating),
@@ -375,7 +475,6 @@ impl Enemy {
             *self,
             self.health(),
             self.sprite(server),
-            self.bullets(),
             BulletRate(0.20),
             BulletSpeed(0.5),
             bundle,
@@ -393,17 +492,6 @@ impl Enemy {
         match self {
             Self::Common => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 3)),
             Self::Uncommon => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 3)),
-        }
-    }
-
-    pub fn bullets(&self) -> BulletTimer {
-        match self {
-            Self::Common => BulletTimer {
-                timer: Timer::new(Duration::from_millis(1500), TimerMode::Repeating),
-            },
-            Self::Uncommon => BulletTimer {
-                timer: Timer::new(Duration::from_millis(1250), TimerMode::Repeating),
-            },
         }
     }
 

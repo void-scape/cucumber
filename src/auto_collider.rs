@@ -43,10 +43,7 @@ fn insert_image_collider(
 
         let search_bounds = match sprite.rect {
             Some(rect) => rect,
-            None => {
-                let size = image.size();
-                Rect::from_corners(Vec2::default(), Vec2::new(size.x as f32, size.y as f32))
-            }
+            None => Rect::from_corners(Vec2::ZERO, image.size_f32()),
         };
 
         // let mut bounds = Rect::default();
@@ -101,14 +98,22 @@ fn insert_image_collider(
             }
         }
 
+        if sprite.flip_y {
+            std::mem::swap(&mut min.y, &mut max.y);
+        }
+
+        if sprite.flip_x {
+            std::mem::swap(&mut min.x, &mut max.x);
+        }
+
         let bounds = Rect::from_corners(min, max);
-        let bounds_size = bounds.size();
+        let search_size = search_bounds.size();
         let collider = Collider::from_rect(
             Vec2::new(
-                bounds.min.x - bounds_size.x / 2.0,
-                bounds.max.y + bounds_size.y / 2.0,
+                bounds.min.x - search_size.x / 2.0,
+                bounds.max.y + search_size.y / 2.0,
             ),
-            bounds_size + 1.0,
+            bounds.size() + 1.,
         );
         commands
             .entity(entity)

@@ -31,7 +31,7 @@ impl Plugin for EmitterPlugin {
 
 #[derive(Component, Default)]
 #[require(
-    BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity,
+    Transform, BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity,
     Visibility(|| Visibility::Hidden)
 )]
 pub struct SoloEmitter<T>(PhantomData<fn() -> T>);
@@ -45,18 +45,24 @@ impl<T: Component> SoloEmitter<T> {
 impl<T: Component> SoloEmitter<T> {
     fn shoot_bullets(
         mut emitters: Query<
-            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
+            (
+                Entity,
+                Option<&mut BulletTimer>,
+                &Polarity,
+                &Parent,
+                &GlobalTransform,
+            ),
             With<SoloEmitter<T>>,
         >,
-        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, parent) in emitters.iter_mut() {
-            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
+        for (entity, timer, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok((rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
@@ -70,7 +76,7 @@ impl<T: Component> SoloEmitter<T> {
                 continue;
             };
 
-            let mut new_transform = parent.compute_transform();
+            let mut new_transform = transform.compute_transform();
             new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
 
             if !timer.timer.tick(delta).just_finished() {
@@ -101,7 +107,7 @@ impl<T: Component> SoloEmitter<T> {
 
 #[derive(Component, Default)]
 #[require(
-    BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)),
+    Transform, BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)),
     Polarity, Visibility(|| Visibility::Hidden)
 )]
 pub struct DualEmitter<T>(f32, PhantomData<fn() -> T>);
@@ -120,16 +126,17 @@ impl<T: Component> DualEmitter<T> {
             Option<&mut BulletTimer>,
             &Polarity,
             &Parent,
+            &GlobalTransform,
         )>,
-        parents: Query<(&GlobalTransform, Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, polarity, parent) in emitters.iter_mut() {
-            let Ok((parent, rate, speed)) = parents.get(parent.get()) else {
+        for (entity, emitter, timer, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok((rate, speed)) = parents.get(parent.get()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
@@ -144,7 +151,7 @@ impl<T: Component> DualEmitter<T> {
                 continue;
             };
 
-            let mut new_transform = parent.compute_transform();
+            let mut new_transform = transform.compute_transform();
             new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
 
             if !timer.timer.tick(delta).just_finished() {
@@ -189,7 +196,7 @@ impl<T: Component> DualEmitter<T> {
 }
 
 #[derive(Component, Default)]
-#[require(BulletRate, BulletSpeed, Polarity)]
+#[require(Transform, BulletRate, BulletSpeed, Polarity)]
 pub struct HomingEmitter<T, U>(PhantomData<fn() -> (T, U)>);
 
 impl<T: Component, U: Component> HomingEmitter<T, U> {
@@ -201,18 +208,24 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
 impl<T: Component, U: Component> HomingEmitter<T, U> {
     fn shoot_bullets(
         mut emitters: Query<
-            (Entity, Option<&mut BulletTimer>, &Polarity, &Parent),
+            (
+                Entity,
+                Option<&mut BulletTimer>,
+                &Polarity,
+                &Parent,
+                &GlobalTransform,
+            ),
             With<HomingEmitter<T, U>>,
         >,
-        parents: Query<(&GlobalTransform, Option<&BulletRate>)>,
+        parents: Query<Option<&BulletRate>>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, parent) in emitters.iter_mut() {
-            let Ok((parent, rate)) = parents.get(parent.get()) else {
+        for (entity, timer, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(rate) = parents.get(parent.get()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
@@ -225,7 +238,7 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
                 continue;
             };
 
-            let mut new_transform = parent.compute_transform();
+            let mut new_transform = transform.compute_transform();
             new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
 
             if !timer.timer.tick(delta).just_finished() {
@@ -233,6 +246,10 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
             }
             timer.timer.set_duration(duration);
 
+            let direction = match polarity {
+                Polarity::North => PI / 2.0,
+                Polarity::South => -PI / 2.0,
+            };
             commands.spawn((
                 BulletSprite::from_cell(5, 2),
                 Bullet,
@@ -241,7 +258,7 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
                 Homing::<U>::new(),
                 Heading {
                     speed: 125.0,
-                    direction: PI / 2.0,
+                    direction,
                 },
                 new_transform,
                 TriggersWith::<T>::default(),
