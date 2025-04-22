@@ -1,4 +1,4 @@
-use crate::animation::{AnimationController, AnimationIndices, AnimationMode};
+use crate::animation::{AnimationController, AnimationIndices};
 use crate::assets::CHARACTERS_PATH;
 use crate::{HEIGHT, WIDTH};
 use bevy::prelude::*;
@@ -27,7 +27,7 @@ fn startup(
 
     commands.spawn((
         Sprite::from_atlas_image(server.load(CHARACTERS_PATH), atlas),
-        AnimationController::from_seconds(AnimationIndices::new(AnimationMode::Repeat, 0..5), 0.5),
+        AnimationController::from_seconds(AnimationIndices::repeating(0..5), 0.5),
         Transform::from_xyz(-WIDTH / 2. + 20., -HEIGHT / 2. + 20., 0.),
     ));
 }

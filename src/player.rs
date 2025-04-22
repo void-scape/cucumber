@@ -1,5 +1,5 @@
 use crate::{
-    animation::{AnimationController, AnimationIndices, AnimationMode},
+    animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bullet::emitter::DualEmitter,
@@ -43,7 +43,7 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 #[require(
-    Transform, Velocity, layers::Player, Health(|| Health::PLAYER),
+    Transform, Velocity, layers::Player, Health(|| Health::INVINCIBLE),
     ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0)),
     TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, DynamicBody
 )]
@@ -88,7 +88,7 @@ impl Player {
                                 TextureAtlas::from(misc_layout.0.clone()),
                             ),
                             AnimationController::from_seconds(
-                                AnimationIndices::new(AnimationMode::Repeat, 18..=21),
+                                AnimationIndices::repeating(18..=21),
                                 0.1,
                             ),
                         ));

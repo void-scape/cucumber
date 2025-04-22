@@ -1,14 +1,21 @@
 use crate::{
-    HEIGHT, assets,
+    HEIGHT,
+    animation::{AnimationController, AnimationIndices, AnimationMode},
+    assets, atlas_layout,
     auto_collider::ImageCollider,
     bullet::{
-        BulletRate, BulletSpeed, BulletTimer,
+        BulletRate, BulletSpeed, BulletTimer, Direction,
         emitter::{DualEmitter, SoloEmitter},
     },
     health::{Dead, Health, HealthSet},
     pickups::{self},
 };
 use bevy::prelude::*;
+use bevy_seedling::{
+    prelude::Volume,
+    sample::{PlaybackSettings, SamplePlayer},
+};
+use bevy_trauma_shake::TraumaCommands;
 use bevy_tween::{
     combinator::tween,
     interpolate::translation,
@@ -16,14 +23,19 @@ use bevy_tween::{
     tween::IntoTarget,
 };
 use physics::{Physics, prelude::*};
-use rand::Rng;
+use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
+use strum::IntoEnumIterator;
 
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<EnemyDeathEvent>()
+            .add_systems(
+                Startup,
+                (init_fire_layout, init_sparks_layout, init_explosion_layout),
+            )
             .add_systems(
                 Update,
                 (
@@ -32,12 +44,13 @@ impl Plugin for EnemyPlugin {
                     update_formations,
                     despawn_formations,
                     (update_back_and_forth, update_circle, update_figure8),
+                    (add_low_health_effects, death_effects),
                 )
                     .chain(),
             )
             .add_systems(Physics, handle_death.after(HealthSet))
             .insert_resource(WaveController::new_delayed(
-                3.,
+                0.,
                 &[
                     (Formation::Triangle, 8.),
                     (Formation::Row, 8.),
@@ -47,6 +60,10 @@ impl Plugin for EnemyPlugin {
             ));
     }
 }
+
+atlas_layout!(FireLayout, init_fire_layout, 96, 4, 5);
+atlas_layout!(SparksLayout, init_sparks_layout, 150, 5, 6);
+atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 
 #[derive(Debug, Clone, Copy, Component)]
 #[require(Transform, Visibility)]
@@ -127,7 +144,7 @@ impl Formation {
             })
             .sum();
         info!("`{self:?}` drop heuristic: {heuristic:.2}");
-        rand::rng().random_range(0.0..1.0) > heuristic
+        rand::rng().random_bool(heuristic)
     }
 }
 
@@ -542,4 +559,117 @@ fn handle_death(
         });
         commands.entity(entity).despawn_recursive();
     }
+}
+
+fn death_effects(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut reader: EventReader<EnemyDeathEvent>,
+    atlas: Res<ExplosionLayout>,
+) {
+    for event in reader.read() {
+        commands.add_trauma(0.18);
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.25),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+        commands.spawn((
+            Transform::from_translation(event.position.extend(100.)),
+            Sprite::from_atlas_image(
+                server.load("explosion.png"),
+                TextureAtlas {
+                    layout: atlas.0.clone(),
+                    index: 0,
+                },
+            ),
+            AnimationController::from_seconds(AnimationIndices::once_despawn(0..=9), 0.08),
+        ));
+    }
+}
+
+#[derive(Component)]
+struct LowHealthEffects;
+
+fn add_low_health_effects(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    fire: Res<FireLayout>,
+    sparks: Res<SparksLayout>,
+    query: Query<(Entity, &Health), (With<Enemy>, Without<LowHealthEffects>)>,
+) {
+    const DIST: f32 = 8.;
+    const Y_OFFSET: f32 = 5.;
+
+    let mut rng = rand::rng();
+    for (entity, health) in query.iter() {
+        if health.current() <= health.max() / 2 {
+            let mut chosen = [Direction::default(); 3];
+            Direction::iter().choose_multiple_fill(&mut rng, &mut chosen);
+            commands
+                .entity(entity)
+                .insert(LowHealthEffects)
+                .with_children(|root| {
+                    for dir in chosen.iter() {
+                        root.spawn(fire_effect(
+                            &mut rng,
+                            &server,
+                            &fire,
+                            (dir.to_vec2() * DIST) + Vec2::Y * Y_OFFSET,
+                        ));
+                    }
+                    root.spawn(sparks_effect(&mut rng, &server, &sparks, Vec2::ZERO));
+                });
+        }
+    }
+}
+
+fn fire_effect(
+    rng: &mut ThreadRng,
+    server: &AssetServer,
+    layout: &FireLayout,
+    position: Vec2,
+) -> impl Bundle {
+    (
+        Transform::from_scale(Vec3::splat(0.2)).with_translation(position.extend(1.)),
+        Sprite {
+            image: server.load("fire_sparks.png"),
+            texture_atlas: Some(TextureAtlas {
+                layout: layout.0.clone(),
+                index: 0,
+            }),
+            flip_x: rng.random_bool(0.5),
+            ..Default::default()
+        },
+        AnimationController::from_seconds(
+            AnimationIndices::repeating(0..=18),
+            rng.random_range(0.025..0.05),
+        ),
+    )
+}
+
+fn sparks_effect(
+    rng: &mut ThreadRng,
+    server: &AssetServer,
+    layout: &SparksLayout,
+    position: Vec2,
+) -> impl Bundle {
+    (
+        Transform::from_scale(Vec3::splat(0.2)).with_translation(position.extend(-1.)),
+        Sprite {
+            image: server.load("sparks.png"),
+            texture_atlas: Some(TextureAtlas {
+                layout: layout.0.clone(),
+                index: 0,
+            }),
+            flip_x: rng.random_bool(0.5),
+            ..Default::default()
+        },
+        AnimationController::from_seconds(
+            AnimationIndices::repeating(0..=19),
+            rng.random_range(0.025..0.0251),
+        ),
+    )
 }

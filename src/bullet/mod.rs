@@ -12,12 +12,14 @@ use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
 };
+use bevy_trauma_shake::TraumaCommands;
 use physics::{
     Physics,
     layers::{self, TriggersWith},
     prelude::*,
 };
 use std::time::Duration;
+use strum_macros::EnumIter;
 
 pub mod emitter;
 mod homing;
@@ -75,7 +77,7 @@ impl Polarity {
     }
 }
 
-#[derive(Default, Component)]
+#[derive(Clone, Copy, Default, EnumIter, Component)]
 pub enum Direction {
     NorthWest,
     North,
@@ -260,6 +262,7 @@ fn handle_enemy_collision(
             writer.send(BulletCollisionEvent::new(
                 sprite.cell,
                 transform.compute_transform(),
+                BulletSource::Player,
             ));
             commands.entity(bullet).despawn();
         }
@@ -291,6 +294,7 @@ fn handle_player_collision(
             writer.send(BulletCollisionEvent::new(
                 sprite.cell,
                 transform.compute_transform(),
+                BulletSource::Enemy,
             ));
             commands.entity(bullet).despawn();
         }
@@ -302,14 +306,25 @@ struct BulletCollisionEvent {
     /// The cell in the projectile spritesheet.
     cell: UVec2,
     transform: Transform,
+    source: BulletSource,
 }
 
 impl BulletCollisionEvent {
-    pub fn new(cell: UVec2, mut transform: Transform) -> Self {
+    pub fn new(cell: UVec2, mut transform: Transform, source: BulletSource) -> Self {
         transform.translation = transform.translation.round();
         transform.translation.z = 1.;
-        Self { cell, transform }
+        Self {
+            cell,
+            transform,
+            source,
+        }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BulletSource {
+    Player,
+    Enemy,
 }
 
 fn bullet_collision_effects(
@@ -338,5 +353,11 @@ fn bullet_collision_effects(
                 0.1,
             ),
         ));
+
+        // TODO: fork screen shake and make trauma visible
+        match event.source {
+            BulletSource::Enemy => commands.add_trauma(0.15),
+            BulletSource::Player => commands.add_trauma(0.04),
+        }
     }
 }

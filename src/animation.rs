@@ -47,6 +47,14 @@ impl AnimationIndices {
         }
     }
 
+    pub fn repeating(seq: impl IntoIterator<Item = usize>) -> Self {
+        Self::new(AnimationMode::Repeat, seq)
+    }
+
+    pub fn once_despawn(seq: impl IntoIterator<Item = usize>) -> Self {
+        Self::new(AnimationMode::Despawn, seq)
+    }
+
     pub fn start(&self) -> usize {
         self.seq[0]
     }

@@ -1261,6 +1261,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_trauma_shake"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30e08b6256931cde9134f13be6e57a00509712ac4ce00bb88f8cc42fae229f73"
+dependencies = [
+ "bevy",
+ "noisy_bevy",
+]
+
+[[package]]
 name = "bevy_tween"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1881,9 +1891,13 @@ dependencies = [
  "bevy_seedling",
  "bevy_sequence",
  "bevy_textbox",
+ "bevy_trauma_shake",
  "bevy_tween",
+ "noisy_bevy",
  "physics",
  "rand 0.9.1",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]
@@ -2608,6 +2622,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
 name = "hermit-abi"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3041,6 +3061,15 @@ dependencies = [
  "cfg-if",
  "cfg_aliases 0.2.1",
  "libc",
+]
+
+[[package]]
+name = "noisy_bevy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e24fedeca6003c0d04b916346d386f5a777aee89bf611b3960ab5d64977c165"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
@@ -4128,6 +4157,25 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
+]
 
 [[package]]
 name = "svg_fmt"

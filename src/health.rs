@@ -43,6 +43,7 @@ pub struct Health {
 
 impl Health {
     pub const PLAYER: Self = Health::full(3);
+    pub const INVINCIBLE: Self = Health::full(usize::MAX);
 
     pub const fn full(max: usize) -> Self {
         Self {
