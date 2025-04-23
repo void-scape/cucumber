@@ -1,9 +1,12 @@
 use crate::{
+    GameState, HEIGHT,
     animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
-    bullet::emitter::DualEmitter,
-    bullet::{BulletRate, BulletSpeed, BulletTimer, Polarity, emitter::HomingEmitter},
+    bullet::{
+        BulletCollisionEvent, BulletRate, BulletSource, BulletSpeed, BulletTimer, Polarity,
+        emitter::{DualEmitter, HomingEmitter},
+    },
     enemy::Enemy,
     health::{Dead, Health, HealthSet},
     pickups::{self, PickupEvent, Upgrade, Weapon},
@@ -13,6 +16,14 @@ use bevy::{
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
+use bevy_seedling::prelude::*;
+use bevy_sequence::combinators::delay::run_after;
+use bevy_tween::{
+    combinator::tween,
+    interpolate::translation,
+    prelude::{AnimationBuilderExt, EaseKind},
+    tween::IntoTarget,
+};
 use physics::{
     Physics,
     layers::{self, CollidesWith, TriggersWith},
@@ -20,20 +31,39 @@ use physics::{
 };
 use std::{cmp::Ordering, f32, time::Duration};
 
+pub const PLAYER_HEALTH: usize = 5;
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, |mut commands: Commands| {
+        app.add_systems(OnEnter(GameState::Game), |mut commands: Commands| {
             let starting_weapon = commands
                 .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
                 .id();
 
-            commands
-                .spawn((Player, WeaponEntity(starting_weapon)))
-                .add_child(starting_weapon);
+            let player = commands
+                .spawn((Player, WeaponEntity(starting_weapon), BlockControls))
+                .add_child(starting_weapon)
+                .id();
+            let dur = Duration::from_secs_f32(1.);
+            run_after(
+                dur,
+                move |mut commands: Commands| {
+                    commands.entity(player).remove::<BlockControls>();
+                },
+                &mut commands,
+            );
+            commands.animation().insert(tween(
+                dur,
+                EaseKind::SineOut,
+                player.into_target().with(translation(
+                    Vec3::new(0., -HEIGHT / 2. + 16., 0.),
+                    Vec3::new(0., -HEIGHT / 6., 0.),
+                )),
+            ));
         })
-        .add_systems(Update, handle_pickups)
+        .add_systems(Update, (handle_pickups, damage_effects))
         .add_systems(Physics, handle_death.after(HealthSet))
         .add_input_context::<AliveContext>()
         .add_observer(apply_movement)
@@ -43,7 +73,7 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 #[require(
-    Transform, Velocity, layers::Player, Health(|| Health::INVINCIBLE),
+    Transform, Velocity, layers::Player, Health(|| Health::full(PLAYER_HEALTH)),
     ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0)),
     TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, DynamicBody
 )]
@@ -103,9 +133,12 @@ impl Player {
 #[derive(Component)]
 struct PlayerBlasters;
 
+#[derive(Component)]
+struct BlockControls;
+
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
+    mut player: Query<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
     mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
@@ -136,7 +169,7 @@ fn apply_movement(
 
 fn stop_movement(
     _: Trigger<Completed<MoveAction>>,
-    mut player: Query<(&mut Velocity, &mut Sprite), With<Player>>,
+    mut player: Query<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
     mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
@@ -204,6 +237,26 @@ fn handle_pickups(
             }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
             _ => {}
+        }
+    }
+}
+
+fn damage_effects(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut reader: EventReader<BulletCollisionEvent>,
+) {
+    for event in reader.read() {
+        if event.source == BulletSource::Enemy {
+            commands
+                .spawn((
+                    SamplePlayer::new(server.load("audio/sfx/laser.wav")),
+                    PlaybackSettings::ONCE,
+                ))
+                .effect(VolumeNode {
+                    volume: Volume::Linear(0.2),
+                });
+            //.effect(LowPassNode::new(5_000.));
         }
     }
 }

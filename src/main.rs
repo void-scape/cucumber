@@ -4,7 +4,7 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_pixel_gfx::camera::MainCamera;
-use bevy_pixel_gfx::pixel_perfect::{CanvasDimensions, Scaling};
+use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
 use bevy_trauma_shake::Shake;
 use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
@@ -20,13 +20,18 @@ mod enemy;
 mod fire;
 mod health;
 mod music;
+mod opening;
 mod pickups;
 mod player;
 mod textbox;
+mod ui;
 
 pub const WIDTH: f32 = 128.;
 pub const HEIGHT: f32 = 256.;
+
 pub const RESOLUTION_SCALE: f32 = 3.;
+pub const RES_WIDTH: f32 = WIDTH * 1.25;
+pub const RES_HEIGHT: f32 = HEIGHT;
 
 fn main() {
     let mut app = App::new();
@@ -40,8 +45,8 @@ fn main() {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     resolution: WindowResolution::new(
-                        WIDTH * RESOLUTION_SCALE * 1.25,
-                        HEIGHT * RESOLUTION_SCALE,
+                        RES_WIDTH * RESOLUTION_SCALE,
+                        RES_HEIGHT * RESOLUTION_SCALE,
                     ),
                     ..Default::default()
                 }),
@@ -73,7 +78,11 @@ fn main() {
         health::HealthPlugin,
         auto_collider::AutoColliderPlugin,
         bounds::ScreenBoundsPlugin,
+        ui::UiPlugin,
+        opening::OpeningPlugin,
     ))
+    //.insert_state(GameState::Game)
+    .insert_state(GameState::Opening)
     .add_systems(Startup, configure_screen_shake)
     .register_collision_layer::<layers::Player>(32.0)
     .register_collision_layer::<layers::Enemy>(32.0)
@@ -83,7 +92,7 @@ fn main() {
     .register_trigger_layer::<physics::layers::Wall>()
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Gravity(Vec2::ZERO))
-    .insert_resource(Scaling::Projection)
+    //.insert_resource(Scaling::Projection)
     .run();
 }
 
@@ -98,4 +107,11 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 
 fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
     commands.entity(*main_camera).insert(Shake::default());
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
+enum GameState {
+    #[default]
+    Opening,
+    Game,
 }

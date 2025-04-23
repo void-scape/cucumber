@@ -13,7 +13,8 @@ pub struct HealthSet;
 
 impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
-        app.register_trigger_layer::<HitBox>()
+        app.add_event::<DamageEvent>()
+            .register_trigger_layer::<HitBox>()
             .configure_sets(
                 Physics,
                 HealthSet
@@ -181,12 +182,26 @@ pub fn update_triggered_hitboxes(
     }
 }
 
+#[derive(Event)]
+pub struct DamageEvent {
+    pub entity: Entity,
+    pub damage: usize,
+    pub killed: bool,
+}
+
 pub fn update_health(
-    mut health_query: Query<(&mut Health, &TriggeredHitBoxes), Without<ManualHurtBox>>,
+    mut health_query: Query<(Entity, &mut Health, &TriggeredHitBoxes), Without<ManualHurtBox>>,
+    mut writer: EventWriter<DamageEvent>,
 ) {
-    for (mut health, hit_boxes) in health_query.iter_mut() {
+    for (entity, mut health, hit_boxes) in health_query.iter_mut() {
         for (_, damage) in hit_boxes.triggered().iter() {
-            health.damage(damage.damage());
+            let damage = damage.damage();
+            health.damage(damage);
+            writer.send(DamageEvent {
+                entity,
+                damage,
+                killed: health.dead(),
+            });
         }
     }
 }

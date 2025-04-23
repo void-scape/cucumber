@@ -1,14 +1,15 @@
+use crate::GameState;
 use crate::enemy::Formation;
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 
-const MUSIC_VOLUME: f32 = 0.5;
+const MUSIC_VOLUME: f32 = 0.8;
 
 pub struct MusicPlugin;
 
 impl Plugin for MusicPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, startup)
+        app.add_systems(OnEnter(GameState::Game), startup)
             .add_systems(Update, update_layers);
     }
 }

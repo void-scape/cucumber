@@ -1,21 +1,22 @@
 use crate::{
-    HEIGHT,
+    GameState, HEIGHT,
     animation::{AnimationController, AnimationIndices},
     assets, atlas_layout,
     auto_collider::ImageCollider,
     bullet::{
-        BulletRate, BulletSpeed, Direction, Polarity,
+        BulletRate, BulletSpeed, Direction,
         emitter::{DualEmitter, HomingEmitter, SoloEmitter},
     },
     health::{Dead, Health, HealthSet},
     pickups::{self},
     player::Player,
 };
-use bevy::{prelude::*, reflect::DynamicTyped};
+use bevy::prelude::*;
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
 };
+use bevy_sequence::combinators::delay::run_after;
 use bevy_trauma_shake::TraumaCommands;
 use bevy_tween::{
     combinator::tween,
@@ -43,7 +44,7 @@ impl Plugin for EnemyPlugin {
                     init_cruiser_explosion_layout,
                 ),
             )
-            .add_systems(Startup, spawn_boss)
+            .add_systems(OnEnter(GameState::Game), start_waves)
             .add_systems(
                 Update,
                 (
@@ -54,18 +55,10 @@ impl Plugin for EnemyPlugin {
                     (update_back_and_forth, update_circle, update_figure8),
                     (add_low_health_effects, death_effects, boss_death_effects),
                 )
-                    .chain(),
+                    .chain()
+                    .run_if(in_state(GameState::Game)),
             )
-            .add_systems(Physics, (handle_death, handle_boss_death).after(HealthSet))
-            .insert_resource(WaveController::new_delayed(
-                0.,
-                &[
-                    //(Formation::Triangle, 8.),
-                    //(Formation::Row, 8.),
-                    //(Formation::Triangle, 8.),
-                    //(Formation::Row, 0.),
-                ],
-            ));
+            .add_systems(Physics, (handle_death, handle_boss_death).after(HealthSet));
     }
 }
 
@@ -73,6 +66,18 @@ atlas_layout!(FireLayout, init_fire_layout, 96, 4, 5);
 atlas_layout!(SparksLayout, init_sparks_layout, 150, 5, 6);
 atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
+
+fn start_waves(mut commands: Commands) {
+    commands.insert_resource(WaveController::new_delayed(
+        3.,
+        &[
+            (Formation::Triangle, 8.),
+            //(Formation::Row, 8.),
+            //(Formation::Triangle, 8.),
+            //(Formation::Row, 0.),
+        ],
+    ));
+}
 
 #[derive(Component)]
 #[require(Transform, layers::Enemy)]
@@ -300,6 +305,7 @@ struct WaveController {
     seq: &'static [(Formation, f32)],
     timer: Timer,
     index: usize,
+    finished: bool,
 }
 
 impl WaveController {
@@ -312,6 +318,7 @@ impl WaveController {
             seq,
             timer: Timer::from_seconds(delay, TimerMode::Repeating),
             index: 0,
+            finished: false,
         }
     }
 
@@ -327,18 +334,40 @@ impl WaveController {
                     self.index += 1;
                     Some(*formation)
                 }
-                None => None,
+                None => {
+                    self.finished = true;
+                    None
+                }
             }
         } else {
             None
         }
     }
+
+    pub fn finished(&self) -> bool {
+        self.finished
+    }
 }
 
-fn update_waves(mut commands: Commands, mut controller: ResMut<WaveController>, time: Res<Time>) {
+fn update_waves(
+    mut commands: Commands,
+    mut controller: ResMut<WaveController>,
+    formations: Query<&Formation>,
+    time: Res<Time>,
+    mut finished: Local<bool>,
+) {
+    if *finished {
+        return;
+    }
+
     controller.tick(&time);
     if let Some(formation) = controller.next() {
         commands.spawn(formation);
+    }
+
+    if controller.finished() && formations.is_empty() {
+        run_after(Duration::from_secs_f32(10.), spawn_boss, &mut commands);
+        *finished = true;
     }
 }
 

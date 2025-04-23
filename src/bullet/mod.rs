@@ -302,11 +302,11 @@ fn handle_player_collision(
 }
 
 #[derive(Event)]
-struct BulletCollisionEvent {
+pub struct BulletCollisionEvent {
     /// The cell in the projectile spritesheet.
-    cell: UVec2,
-    transform: Transform,
-    source: BulletSource,
+    pub cell: UVec2,
+    pub transform: Transform,
+    pub source: BulletSource,
 }
 
 impl BulletCollisionEvent {
@@ -322,7 +322,7 @@ impl BulletCollisionEvent {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum BulletSource {
+pub enum BulletSource {
     Player,
     Enemy,
 }
@@ -350,7 +350,7 @@ fn bullet_collision_effects(
             ),
             AnimationController::from_seconds(
                 AnimationIndices::new(AnimationMode::Despawn, 83..=86),
-                0.1,
+                0.05,
             ),
         ));
 
