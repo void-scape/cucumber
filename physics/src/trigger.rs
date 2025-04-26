@@ -4,7 +4,7 @@ use super::{
     prelude::CollidesWith,
     spatial::{SpatialData, SpatialHash},
 };
-use bevy::{prelude::*, utils::hashbrown::HashMap};
+use bevy::{platform::collections::HashMap, prelude::*};
 use std::marker::PhantomData;
 
 /// Marks an entity as a [`TriggerEvent`] source.

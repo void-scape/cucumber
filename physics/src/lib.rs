@@ -84,7 +84,7 @@ impl Plugin for PhysicsPlugin {
             .register_brushing_layer::<layers::Wall>();
 
         app.add_tween_systems(component_tween_system::<TimeScaleRate>())
-            .add_plugins(Wireframe2dPlugin)
+            .add_plugins(Wireframe2dPlugin::default())
             .add_event::<trigger::TriggerEvent>()
             .add_event::<trigger::TriggerEnter>()
             .add_event::<trigger::TriggerExit>()
@@ -101,8 +101,9 @@ impl Plugin for PhysicsPlugin {
                         .chain()
                         .in_set(PhysicsSystems::Velocity),
                     (
+                        bevy::transform::systems::mark_dirty_trees,
+                        bevy::transform::systems::propagate_parent_transforms,
                         bevy::transform::systems::sync_simple_transforms,
-                        bevy::transform::systems::propagate_transforms,
                         // spatial::store_static_body_in_spatial_map,
                     )
                         .chain()

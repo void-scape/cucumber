@@ -115,7 +115,7 @@ pub fn debug_show_trigger_color(
     for event in reader.read() {
         if let Ok(children) = triggers.get(event.trigger) {
             for child in children.iter() {
-                if let Ok(mut frame) = wireframes.get_mut(*child) {
+                if let Ok(mut frame) = wireframes.get_mut(child) {
                     frame.color = Srgba::GREEN.into();
                 }
             }
@@ -137,7 +137,7 @@ pub fn debug_show_collision_color(
         for (t, c, children) in static_bodies.iter() {
             if dyn_c.collides_with(&c.absolute(&t.compute_transform())) {
                 for child in children.iter() {
-                    if let Ok(mut frame) = wireframes.get_mut(*child) {
+                    if let Ok(mut frame) = wireframes.get_mut(child) {
                         frame.color = Srgba::RED.into();
                     }
                 }
