@@ -5,14 +5,17 @@ use crate::{
     health::{Damage, Health, HealthSet},
 };
 use bevy::{
-    ecs::{component::ComponentId, world::DeferredWorld},
+    ecs::{
+        component::{ComponentId, HookContext},
+        world::DeferredWorld,
+    },
     prelude::*,
 };
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
 };
-use bevy_trauma_shake::TraumaCommands;
+// use bevy_trauma_shake::TraumaCommands;
 use physics::{
     Physics,
     layers::{self, TriggersWith},
@@ -174,7 +177,7 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
         lifetime.0.tick(delta);
 
         if lifetime.0.finished() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -193,22 +196,22 @@ fn kill_on_wall(q: Query<(Entity, &Triggers<layers::Wall>)>, mut commands: Comma
 
 #[derive(Clone, Copy, Component)]
 #[require(Bullet, Polarity)]
-#[component(on_add = Self::on_add)]
+#[component(on_add = Self::on_add_hook)]
 pub enum BulletType {
     Basic,
     Common,
 }
 
 impl BulletType {
-    fn on_add(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
-        let ty = *world.get::<BulletType>(entity).unwrap();
+    fn on_add_hook(mut world: DeferredWorld, ctx: HookContext) {
+        let ty = *world.get::<BulletType>(ctx.entity).unwrap();
 
         match ty {
             BulletType::Basic => {
-                world.commands().entity(entity).insert(BasicBullet);
+                world.commands().entity(ctx.entity).insert(BasicBullet);
             }
             BulletType::Common => {
-                world.commands().entity(entity).insert(CommonBullet);
+                world.commands().entity(ctx.entity).insert(CommonBullet);
             }
         }
     }
@@ -230,11 +233,11 @@ impl BulletSprite {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite(|| BulletSprite::from_cell(0, 1)), ImageCollider)]
+#[require(BulletSprite::from_cell(0, 1), ImageCollider)]
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite(|| BulletSprite::from_cell(2, 1)), ImageCollider)]
+#[require(BulletSprite::from_cell(2, 1), ImageCollider)]
 pub struct CommonBullet;
 
 fn handle_enemy_collision(
@@ -259,7 +262,7 @@ fn handle_enemy_collision(
 
         if let Ok(mut enemy) = enemies.get_mut(*first) {
             enemy.damage(**damage);
-            writer.send(BulletCollisionEvent::new(
+            writer.write(BulletCollisionEvent::new(
                 sprite.cell,
                 transform.compute_transform(),
                 BulletSource::Player,
@@ -291,7 +294,7 @@ fn handle_player_collision(
 
         if let Ok(mut player) = player.get_mut(*first) {
             player.damage(**damage);
-            writer.send(BulletCollisionEvent::new(
+            writer.write(BulletCollisionEvent::new(
                 sprite.cell,
                 transform.compute_transform(),
                 BulletSource::Enemy,
@@ -354,10 +357,10 @@ fn bullet_collision_effects(
             ),
         ));
 
-        // TODO: fork screen shake and make trauma visible
-        match event.source {
-            BulletSource::Enemy => commands.add_trauma(0.15),
-            BulletSource::Player => commands.add_trauma(0.04),
-        }
+        // // TODO: fork screen shake and make trauma visible
+        // match event.source {
+        //     BulletSource::Enemy => commands.add_trauma(0.15),
+        //     BulletSource::Player => commands.add_trauma(0.04),
+        // }
     }
 }

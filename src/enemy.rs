@@ -17,7 +17,7 @@ use bevy_seedling::{
     sample::{PlaybackSettings, SamplePlayer},
 };
 use bevy_sequence::combinators::delay::run_after;
-use bevy_trauma_shake::TraumaCommands;
+// use bevy_trauma_shake::TraumaCommands;
 use bevy_tween::{
     combinator::tween,
     interpolate::translation,
@@ -685,7 +685,7 @@ fn death_effects(
     atlas: Res<ExplosionLayout>,
 ) {
     for event in reader.read() {
-        commands.add_trauma(0.18);
+        // commands.add_trauma(0.18);
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/melee.wav")),
             PlaybackSettings {

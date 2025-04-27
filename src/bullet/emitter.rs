@@ -31,8 +31,12 @@ impl Plugin for EmitterPlugin {
 
 #[derive(Component, Default)]
 #[require(
-    Transform, BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)), Polarity,
-    Visibility(|| Visibility::Hidden)
+    Transform,
+    BulletRate,
+    BulletSpeed,
+    BulletSprite::from_cell(0, 0),
+    Polarity,
+    Visibility::Hidden
 )]
 pub struct SoloEmitter<T>(PhantomData<fn() -> T>);
 
@@ -49,7 +53,7 @@ impl<T: Component> SoloEmitter<T> {
                 Entity,
                 Option<&mut BulletTimer>,
                 &Polarity,
-                &Parent,
+                &ChildOf,
                 &GlobalTransform,
             ),
             With<SoloEmitter<T>>,
@@ -107,8 +111,12 @@ impl<T: Component> SoloEmitter<T> {
 
 #[derive(Component, Default)]
 #[require(
-    Transform, BulletRate, BulletSpeed, BulletSprite(|| BulletSprite::from_cell(0, 0)),
-    Polarity, Visibility(|| Visibility::Hidden)
+    Transform,
+    BulletRate,
+    BulletSpeed,
+    BulletSprite::from_cell(0, 0),
+    Polarity,
+    Visibility::Hidden
 )]
 pub struct DualEmitter<T>(f32, PhantomData<fn() -> T>);
 
@@ -125,7 +133,7 @@ impl<T: Component> DualEmitter<T> {
             &DualEmitter<T>,
             Option<&mut BulletTimer>,
             &Polarity,
-            &Parent,
+            &ChildOf,
             &GlobalTransform,
         )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
@@ -136,7 +144,7 @@ impl<T: Component> DualEmitter<T> {
         let delta = time.delta();
 
         for (entity, emitter, timer, polarity, parent, transform) in emitters.iter_mut() {
-            let Ok((rate, speed)) = parents.get(parent.get()) else {
+            let Ok((rate, speed)) = parents.get(parent.parent()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
@@ -212,7 +220,7 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
                 Entity,
                 Option<&mut BulletTimer>,
                 &Polarity,
-                &Parent,
+                &ChildOf,
                 &GlobalTransform,
             ),
             With<HomingEmitter<T, U>>,
