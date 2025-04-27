@@ -12,7 +12,11 @@ use crate::{
     pickups::{self, PickupEvent, Upgrade, Weapon},
 };
 use bevy::{
-    ecs::{component::ComponentId, system::RunSystemOnce, world::DeferredWorld},
+    ecs::{
+        component::HookContext,
+        system::RunSystemOnce,
+        world::DeferredWorld,
+    },
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
@@ -73,9 +77,10 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 #[require(
-    Transform, Velocity, layers::Player, Health(|| Health::full(PLAYER_HEALTH)),
-    ImageCollider, BulletSpeed(|| BulletSpeed(1.0)), BulletRate(|| BulletRate(1.0)),
-    TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, DynamicBody
+    Transform, Velocity, layers::Player, Health::full(PLAYER_HEALTH),
+    ImageCollider, BulletSpeed(1.0), BulletRate(1.0), 
+    TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, 
+    DynamicBody
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
@@ -84,7 +89,7 @@ pub struct Player;
 struct WeaponEntity(Entity);
 
 impl Player {
-    fn on_add(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
         world.commands().queue(move |world: &mut World| {
             world
                 .run_system_once(
@@ -96,12 +101,12 @@ impl Player {
                             Cardinal::wasd_keys(),
                             Cardinal::arrow_keys(),
                             Cardinal::dpad_buttons(),
-                            GamepadStick::Left.with_modifiers_each(
+                            Axial::left_stick().with_modifiers_each(
                                 DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
                             ),
                         ));
 
-                        commands.entity(entity).insert((
+                        commands.entity(ctx.entity).insert((
                             actions,
                             assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
                             BulletTimer {
@@ -109,7 +114,7 @@ impl Player {
                             },
                         ));
 
-                        commands.entity(entity).with_child((
+                        commands.entity(ctx.entity).with_child((
                             PlayerBlasters,
                             Visibility::Hidden,
                             Transform::from_xyz(0., -7., -1.),
@@ -138,12 +143,10 @@ struct BlockControls;
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    mut player: Query<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
-    mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
+    player: Single<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
+    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
 ) {
-    let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
-        return;
-    };
+    let (mut velocity, mut sprite) = player.into_inner();
 
     velocity.0 = trigger.value.normalize_or_zero() * 60.;
     if velocity.0.x.abs() < f32::EPSILON {
@@ -158,32 +161,26 @@ fn apply_movement(
 
     sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
 
-    if let Ok(mut vis) = blasters.get_single_mut() {
-        if velocity.0.y > f32::EPSILON {
-            *vis = Visibility::Visible;
-        } else {
-            *vis = Visibility::Hidden;
-        }
+    if velocity.0.y > f32::EPSILON {
+        **blasters = Visibility::Visible;
+    } else {
+        **blasters = Visibility::Hidden;
     }
 }
 
 fn stop_movement(
     _: Trigger<Completed<MoveAction>>,
-    mut player: Query<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
-    mut blasters: Query<&mut Visibility, With<PlayerBlasters>>,
+    player: Single<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
+    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
 ) {
-    let Ok((mut velocity, mut sprite)) = player.get_single_mut() else {
-        return;
-    };
+    let (mut velocity, mut sprite) = player.into_inner();
 
     velocity.0 = Vec2::default();
     let tl = Vec2::new(1., 4.) * 8.;
     let br = Vec2::new(2., 5.) * 8.;
     sprite.rect = Some(Rect::from_corners(tl, br));
 
-    if let Ok(mut vis) = blasters.get_single_mut() {
-        *vis = Visibility::Hidden;
-    }
+    **blasters = Visibility::Hidden;
 }
 
 #[derive(Debug, InputAction)]
@@ -193,29 +190,21 @@ struct MoveAction;
 #[derive(InputContext)]
 struct AliveContext;
 
-fn handle_death(q: Query<Entity, (With<Player>, With<Dead>)>, mut commands: Commands) {
-    let Ok(player) = q.get_single() else {
-        return;
-    };
-
+fn handle_death(player: Single<Entity, (With<Player>, With<Dead>)>, mut commands: Commands) {
     info!("player died");
-
-    commands.entity(player).despawn_recursive();
+    commands.entity(*player).despawn();
 }
 
 fn handle_pickups(
-    mut q: Query<(Entity, &mut WeaponEntity, &mut BulletRate), With<Player>>,
+    q: Single<(Entity, &mut WeaponEntity, &mut BulletRate), With<Player>>,
     mut events: EventReader<PickupEvent>,
     mut commands: Commands,
 ) {
-    let Ok((player, mut weapon_entity, mut rate)) = q.get_single_mut() else {
-        return;
-    };
-
+    let (player, mut weapon_entity, mut rate) = q.into_inner();
     for event in events.read() {
         match event {
             PickupEvent::Weapon(Weapon::Bullet) => {
-                commands.entity(weapon_entity.0).despawn_recursive();
+                commands.entity(weapon_entity.0).despawn();
 
                 let emitter = commands
                     .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
@@ -224,7 +213,7 @@ fn handle_pickups(
                 commands.entity(player).add_child(emitter);
             }
             PickupEvent::Weapon(Weapon::Missile) => {
-                commands.entity(weapon_entity.0).despawn_recursive();
+                commands.entity(weapon_entity.0).despawn();
 
                 let emitter = commands
                     .spawn((

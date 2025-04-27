@@ -61,7 +61,7 @@ impl RegisterPhysicsLayer for App {
                 crate::spatial::store_static_body_in_spatial_map::<T>
                     .before(PhysicsSystems::Collision)
                     .after(PhysicsSystems::Velocity)
-                    .after(bevy::transform::systems::propagate_transforms),
+                    .after(bevy::transform::systems::sync_simple_transforms),
                 (
                     super::collision::handle_collisions::<T>,
                     super::collision::handle_dynamic_body_collsions::<T>,

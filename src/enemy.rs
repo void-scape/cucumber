@@ -11,13 +11,15 @@ use crate::{
     pickups::{self},
     player::Player,
 };
-use bevy::prelude::*;
+use bevy::{
+    ecs::{component::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
 };
 use bevy_sequence::combinators::delay::run_after;
-use bevy_trauma_shake::TraumaCommands;
 use bevy_tween::{
     combinator::tween,
     interpolate::translation,
@@ -50,12 +52,15 @@ impl Plugin for EnemyPlugin {
                 (
                     update_waves,
                     spawn_formations,
-                    update_formations,
                     despawn_formations,
-                    (update_back_and_forth, update_circle, update_figure8),
                     (add_low_health_effects, death_effects, boss_death_effects),
                 )
                     .chain()
+                    .run_if(in_state(GameState::Game)),
+            )
+            .add_systems(
+                FixedUpdate,
+                (update_back_and_forth, update_circle, update_figure8)
                     .run_if(in_state(GameState::Game)),
             )
             .add_systems(Physics, (handle_death, handle_boss_death).after(HealthSet));
@@ -68,13 +73,14 @@ atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
 
 fn start_waves(mut commands: Commands) {
+    info!("start waves");
     commands.insert_resource(WaveController::new_delayed(
         3.,
         &[
             (Formation::Triangle, 8.),
-            //(Formation::Row, 8.),
-            //(Formation::Triangle, 8.),
-            //(Formation::Row, 0.),
+            (Formation::Row, 8.),
+            (Formation::Triangle, 8.),
+            (Formation::Row, 0.),
         ],
     ));
 }
@@ -144,10 +150,10 @@ fn handle_boss_death(
     mut writer: EventWriter<BossDeathEvent>,
 ) {
     for (entity, transform) in q.iter() {
-        writer.send(BossDeathEvent(
+        writer.write(BossDeathEvent(
             transform.compute_transform().translation.xy(),
         ));
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -258,45 +264,42 @@ impl Formation {
 }
 
 #[derive(Component)]
-struct FormationChildren {
-    /// Child enemy entities on spawn
-    children: Vec<Entity>,
-    death_positions: Vec<(Entity, Vec2)>,
-    last_death: Option<Entity>,
+#[relationship(relationship_target = Units)]
+#[component(on_remove = on_remove_platoon)]
+struct Platoon(Entity);
+
+fn on_remove_platoon(mut world: DeferredWorld, ctx: HookContext) {
+    let platoon = world.entity(ctx.entity).get::<Platoon>().unwrap().0;
+    let position = world
+        .entity(ctx.entity)
+        .get::<GlobalTransform>()
+        .unwrap()
+        .compute_transform()
+        .translation
+        .xy();
+
+    world
+        .commands()
+        .entity(platoon)
+        .entry::<UnitDeaths>()
+        .and_modify(move |mut deaths| deaths.death_position(position));
 }
 
-impl FormationChildren {
-    pub fn with_capacity(cap: usize) -> Self {
-        Self {
-            children: Vec::with_capacity(cap),
-            death_positions: Vec::with_capacity(cap),
-            last_death: None,
-        }
-    }
+#[derive(Component)]
+#[relationship_target(relationship = Platoon)]
+#[require(UnitDeaths)]
+struct Units(Vec<Entity>);
 
-    pub fn entities(&self) -> &[Entity] {
-        &self.children
-    }
+#[derive(Default, Component)]
+struct UnitDeaths(Vec<Vec2>);
 
-    pub fn add_child(&mut self, entity: Entity) {
-        self.children.push(entity);
-    }
-
-    pub fn death_position(&mut self, entity: Entity, position: Vec2) {
-        debug_assert!(self.entities().contains(&entity));
-
-        self.death_positions.push((entity, position));
-        if self.death_positions.capacity() == self.death_positions.len() {
-            self.last_death = Some(entity);
-        }
+impl UnitDeaths {
+    pub fn death_position(&mut self, position: Vec2) {
+        self.0.push(position);
     }
 
     pub fn last_death_position(&self) -> Option<Vec2> {
-        self.last_death.map(|entity| {
-            self.death_positions
-                .iter()
-                .find_map(|(e, p)| (*e == entity).then_some(*p))
-        })?
+        self.0.last().copied()
     }
 }
 
@@ -366,7 +369,8 @@ fn update_waves(
     }
 
     if controller.finished() && formations.is_empty() {
-        run_after(Duration::from_secs_f32(10.), spawn_boss, &mut commands);
+        info!("ran out of formations, spawning boss");
+        run_after(Duration::from_secs_f32(5.), spawn_boss, &mut commands);
         *finished = true;
     }
 }
@@ -378,11 +382,13 @@ const FORMATION_EASE_DUR: f32 = 2.;
 fn spawn_formations(
     mut commands: Commands,
     server: Res<AssetServer>,
-    new_formations: Query<(Entity, &Formation), Without<Children>>,
-    formations: Query<(Entity, &Transform), (With<Formation>, With<Children>)>,
+    new_formations: Query<(Entity, &Formation), Without<UnitDeaths>>,
+    formations: Query<(Entity, &Transform), (With<Formation>, With<Units>)>,
 ) {
     let mut additional_height = 0.;
     for (root, formation) in new_formations.iter() {
+        info!("spawn new formation");
+
         additional_height += formation.height() - PADDING;
 
         let start_y = HEIGHT / 2. - formation.bottomy() + LARGEST_SPRITE_SIZE / 2.;
@@ -397,19 +403,22 @@ fn spawn_formations(
             root.into_target().with(translation(start, end)),
         ));
 
-        let mut children = FormationChildren::with_capacity(formation.len());
+        commands
+            .entity(root)
+            .insert(Transform::from_translation(start));
+
         for (enemy, position, movement) in formation.enemies().iter() {
-            children.add_child(enemy.spawn_child_with(
+            enemy.spawn_child_with(
                 root,
                 &mut commands,
                 &server,
                 *movement,
-                (Transform::from_translation(position.extend(0.)),),
-            ));
+                (
+                    Transform::from_translation(position.extend(0.)),
+                    Platoon(root),
+                ),
+            );
         }
-        commands
-            .entity(root)
-            .insert((children, Transform::from_translation(start)));
     }
 
     if additional_height > 0. {
@@ -426,37 +435,24 @@ fn spawn_formations(
     }
 }
 
-fn update_formations(
-    mut reader: EventReader<EnemyDeathEvent>,
-    mut formations: Query<&mut FormationChildren>,
-) {
-    for event in reader.read() {
-        for mut children in formations.iter_mut() {
-            if children.entities().contains(&event.entity) {
-                children.death_position(event.entity, event.position);
-            }
-        }
-    }
-}
-
 fn despawn_formations(
     mut commands: Commands,
-    formations: Query<(Entity, &Formation, &FormationChildren)>,
+    formations: Query<(Entity, &Formation, &UnitDeaths), Without<Units>>,
 ) {
-    for (entity, formation, children) in formations.iter() {
-        if let Some(position) = children.last_death_position() {
-            commands.entity(entity).despawn_recursive();
-            let mut commands = commands.spawn_empty();
+    for (entity, formation, deaths) in formations.iter() {
+        info!("despawning formation");
+        commands.entity(entity).despawn();
+        let mut commands = commands.spawn_empty();
 
-            if formation.drop_pickup_heuristic() {
-                pickups::spawn_random_pickup(
-                    &mut commands,
-                    (
-                        Transform::from_translation(position.extend(0.)),
-                        pickups::velocity(),
-                    ),
-                );
-            }
+        let position = deaths.last_death_position().unwrap();
+        if formation.drop_pickup_heuristic() {
+            pickups::spawn_random_pickup(
+                &mut commands,
+                (
+                    Transform::from_translation(position.extend(0.)),
+                    pickups::velocity(),
+                ),
+            );
         }
     }
 }
@@ -532,7 +528,7 @@ impl Enemy {
                     commands.insert((
                         BackAndForth {
                             radius: rng.random_range(9.0..11.0),
-                            speed: rng.random_range(0.04..0.06),
+                            speed: rng.random_range(2.2..3.4),
                         },
                         Angle(rng.random_range(0.0..2.0)),
                     ));
@@ -541,7 +537,7 @@ impl Enemy {
                     commands.insert((
                         Circle {
                             radius: rng.random_range(9.0..11.0),
-                            speed: rng.random_range(0.04..0.06),
+                            speed: rng.random_range(2.4..3.6),
                         },
                         Angle(rng.random_range(0.0..2.0)),
                     ));
@@ -550,7 +546,7 @@ impl Enemy {
                     commands.insert((
                         Figure8 {
                             radius: rng.random_range(18.0..22.0),
-                            speed: rng.random_range(0.04..0.06),
+                            speed: rng.random_range(2.4..3.6),
                         },
                         Angle(rng.random_range(0.0..2.0)),
                     ));
@@ -578,6 +574,7 @@ fn update_back_and_forth(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<BackAndForth>, Without<Center>)>,
     mut query: Query<(&BackAndForth, &Center, &mut Angle, &mut Transform)>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -585,9 +582,9 @@ fn update_back_and_forth(
             .insert(Center(transform.translation.xy()));
     }
 
-    for (circle, center, mut angle, mut transform) in query.iter_mut() {
-        transform.translation.x = center.0.x + circle.radius * angle.0.cos();
-        angle.0 += circle.speed;
+    for (baf, center, mut angle, mut transform) in query.iter_mut() {
+        transform.translation.x = center.0.x + baf.radius * angle.0.cos();
+        angle.0 += baf.speed * time.delta_secs();
         if angle.0 >= std::f32::consts::PI * 2. {
             angle.0 = 0.;
         }
@@ -611,6 +608,7 @@ fn update_circle(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Circle>, Without<Center>)>,
     mut query: Query<(&Circle, &Center, &mut Angle, &mut Transform)>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -621,7 +619,7 @@ fn update_circle(
     for (circle, center, mut angle, mut transform) in query.iter_mut() {
         transform.translation.x = center.0.x + circle.radius * angle.0.cos();
         transform.translation.y = center.0.y + circle.radius * angle.0.sin();
-        angle.0 += circle.speed;
+        angle.0 += circle.speed * time.delta_secs();
         if angle.0 >= std::f32::consts::PI * 2. {
             angle.0 = 0.;
         }
@@ -639,6 +637,7 @@ fn update_figure8(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Figure8>, Without<Center>)>,
     mut query: Query<(&mut Figure8, &Center, &mut Angle, &mut Transform)>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -651,7 +650,7 @@ fn update_figure8(
         transform.translation.x = center.0.x + figure8.radius * t.sin();
         transform.translation.y = center.0.y + figure8.radius * t.sin() * t.cos();
 
-        angle.0 += figure8.speed;
+        angle.0 += figure8.speed * time.delta_secs();
         if angle.0 >= std::f32::consts::TAU {
             angle.0 = 0.;
         }
@@ -670,11 +669,11 @@ fn handle_death(
     mut writer: EventWriter<EnemyDeathEvent>,
 ) {
     for (entity, transform) in q.iter() {
-        writer.send(EnemyDeathEvent {
+        writer.write(EnemyDeathEvent {
             entity,
             position: transform.compute_transform().translation.xy(),
         });
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -685,7 +684,7 @@ fn death_effects(
     atlas: Res<ExplosionLayout>,
 ) {
     for event in reader.read() {
-        commands.add_trauma(0.18);
+        // commands.add_trauma(0.18);
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/melee.wav")),
             PlaybackSettings {

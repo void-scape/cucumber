@@ -4,7 +4,7 @@ use crate::player::{PLAYER_HEALTH, Player};
 use crate::{GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
+use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
 use physics::Physics;
 
 pub struct UiPlugin;
@@ -73,12 +73,8 @@ fn health(
 
 fn update_health(
     mut q: Query<(&mut Sprite, &Transform), With<HeartUi>>,
-    player: Query<&Health, With<Player>>,
+    health: Single<&Health, With<Player>>,
 ) {
-    let Ok(health) = player.get_single() else {
-        return;
-    };
-
     let current_health = health.current();
     for (i, (mut sprite, _)) in q
         .iter_mut()
@@ -99,12 +95,8 @@ fn update_upgrades(
     mut commands: Commands,
     server: Res<AssetServer>,
     mut reader: EventReader<PickupEvent>,
-    mut ui: Query<&mut UpgradeUi>,
+    mut upgrade_ui: Single<&mut UpgradeUi>,
 ) {
-    let Ok(mut upgrade_ui) = ui.get_single_mut() else {
-        return;
-    };
-
     for event in reader.read() {
         match event {
             PickupEvent::Upgrade(upgrade) => {

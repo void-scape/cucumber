@@ -106,7 +106,7 @@ fn animate_sprites(
             if let Some(index) = controller.indices.next() {
                 atlas.index = index;
             } else if controller.indices.mode == AnimationMode::Despawn {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
         }
     }

@@ -3,8 +3,21 @@ name = "cucumber"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+resolver = "2"
+members = [
+    "bevy_textbox",
+    "bevy_optix",
+    "bevy_pretty_text",
+    "bevy_sequence",
+    "physics",
+    "noise",
+]
+
 [dependencies]
-bevy = { version = "0.15.3", default-features = false, features = [
+bevy = { version = "0.16", default-features = false, features = [
+    "std",
+    "bevy_log",
     "animation",
     "bevy_asset",
     "bevy_color",
@@ -12,17 +25,13 @@ bevy = { version = "0.15.3", default-features = false, features = [
     "bevy_gilrs",
     "bevy_gizmos",
     "bevy_gltf",
-    "bevy_mesh_picking_backend",
     "bevy_pbr",
-    "bevy_picking",
     "bevy_render",
     "bevy_scene",
     "bevy_sprite",
-    "bevy_sprite_picking_backend",
     "bevy_state",
     "bevy_text",
     "bevy_ui",
-    "bevy_ui_picking_backend",
     "bevy_window",
     "bevy_winit",
     "custom_cursor",
@@ -35,18 +44,18 @@ bevy = { version = "0.15.3", default-features = false, features = [
     "tonemapping_luts",
     "webgl2",
     "x11",
+    "track_location",
 ] }
-bevy_enhanced_input = "0.9"
+bevy_enhanced_input = "0.11"
 bevy_textbox = { path = "bevy_textbox" }
-bevy_pixel_gfx = { path = "bevy_pixel_gfx" }
+bevy_optix = { path = "bevy_optix" }
 bevy_pretty_text = { path = "bevy_pretty_text" }
 bevy_sequence = { path = "bevy_sequence" }
 physics = { path = "physics" }
-bevy_tween = "0.7"
+bevy_tween = { git = "https://github.com/Rabbival/bevy_tween", branch = "bevy-v0.16.0" }
 bevy_seedling = { path = "bevy_seedling" }
-rand = "0.9.1"
-bevy_trauma_shake = "0.4.0"
-noisy_bevy = "0.8.0"
+rand = "0.9"
+# bevy_trauma_shake = "0.4.0"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 

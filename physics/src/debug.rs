@@ -1,11 +1,10 @@
 use super::collision::{Collider, CollidesWith, DynamicBody, StaticBody};
 use super::trigger::{CollisionTrigger, TriggerEvent};
-use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
+use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::sprite::{Wireframe2d, Wireframe2dColor};
-use bevy_pixel_gfx::pixel_perfect::HIGH_RES_LAYER;
-use rand::Rng;
+use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
 
 #[derive(Resource)]
 pub struct ShowCollision(pub bool);
@@ -22,12 +21,9 @@ impl Collider {
                     Mesh2d(meshes.add(Rectangle::new(rect.size.x, rect.size.y))),
                     MeshMaterial2d(materials.add(Color::NONE)),
                     Transform::from_xyz(
-                        // 0., 0.,
                         rect.tl.x + rect.size.x / 2.,
                         rect.tl.y - rect.size.y / 2.,
-                        // rect.tl.x,
-                        // rect.tl.y,
-                        rand::thread_rng().gen_range(500.0..999.0),
+                        999.,
                     ),
                 ),
                 Self::Circle(circle) => (
@@ -115,7 +111,7 @@ pub fn debug_show_trigger_color(
     for event in reader.read() {
         if let Ok(children) = triggers.get(event.trigger) {
             for child in children.iter() {
-                if let Ok(mut frame) = wireframes.get_mut(*child) {
+                if let Ok(mut frame) = wireframes.get_mut(child) {
                     frame.color = Srgba::GREEN.into();
                 }
             }
@@ -137,7 +133,7 @@ pub fn debug_show_collision_color(
         for (t, c, children) in static_bodies.iter() {
             if dyn_c.collides_with(&c.absolute(&t.compute_transform())) {
                 for child in children.iter() {
-                    if let Ok(mut frame) = wireframes.get_mut(*child) {
+                    if let Ok(mut frame) = wireframes.get_mut(child) {
                         frame.color = Srgba::RED.into();
                     }
                 }

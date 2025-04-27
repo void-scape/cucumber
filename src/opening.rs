@@ -5,11 +5,11 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Anchor, Material2d, Material2dPlugin};
 use bevy::text::TextBounds;
-use bevy_pixel_gfx::glitch::{GlitchPlugin, GlitchSettings};
-use bevy_pixel_gfx::pixel_perfect::{
+use bevy_optix::glitch::{GlitchPlugin, GlitchSettings};
+use bevy_optix::pixel_perfect::{
     BackgroundCamera, ForegroundCamera, HIGH_RES_BACKGROUND_LAYER, HIGH_RES_LAYER,
 };
-use bevy_pixel_gfx::post_processing::PostProcessCommand;
+use bevy_optix::post_processing::PostProcessCommand;
 use bevy_pretty_text::prelude::SfxRate;
 use bevy_pretty_text::prelude::*;
 use bevy_seedling::prelude::*;
@@ -216,7 +216,7 @@ fn end(mut commands: Commands, opening_entities: Query<Entity, With<OpeningEntit
     commands.remove_post_process::<GlitchSettings, BackgroundCamera>();
     commands.remove_post_process::<GlitchSettings, ForegroundCamera>();
     for entity in opening_entities.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     commands.set_state(GameState::Game);
 }
@@ -259,8 +259,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<MandelbrotMaterial>>,
     mut windows: Query<&mut Window>,
-) {
-    let window = windows.single_mut();
+) -> Result {
+    let window = windows.single_mut()?;
     let material = materials.add(MandelbrotMaterial {
         params: MandelbrotParams {
             center: Vec2::new(0.38870746, -0.13461724),
@@ -293,6 +293,8 @@ fn setup(
                 .with(mandelbrot_zoom(122.64574, 18479.582)),
         ))
         .insert(OpeningEntity);
+
+    Ok(())
 }
 
 fn update_mandelbrot_zoom(
@@ -313,15 +315,15 @@ fn update_shader_params(
     mut materials: ResMut<Assets<MandelbrotMaterial>>,
     mut material_query: Query<&MeshMaterial2d<MandelbrotMaterial>>,
     mut windows: Query<&mut Window>,
-) {
-    let window = windows.single_mut();
+) -> Result {
+    let window = windows.single_mut()?;
     let aspect_ratio = window.width() / window.height();
 
     let Some(material_handle) = material_query.iter_mut().next() else {
-        return;
+        return Ok(());
     };
     let Some(material) = materials.get_mut(&material_handle.0) else {
-        return;
+        return Ok(());
     };
 
     for event in input.read() {
@@ -360,6 +362,8 @@ fn update_shader_params(
         material.params.center = center;
         material.params.zoom = zoom;
     }
+
+    Ok(())
 }
 
 #[derive(Default, Component)]

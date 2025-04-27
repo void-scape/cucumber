@@ -1,5 +1,5 @@
 use super::{collision::AbsoluteCollider, collision::Collider, collision::StaticBody};
-use bevy::{prelude::*, utils::hashbrown::HashMap};
+use bevy::{platform::collections::HashMap, prelude::*};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SpatialData<D> {
@@ -154,10 +154,8 @@ pub fn store_static_body_in_spatial_map<T: Component>(
     mut hash: Query<(Entity, &mut SpatialHash), With<T>>,
     static_body: Query<(Entity, &GlobalTransform, &Collider), (Added<StaticBody>, With<T>)>,
     mut commands: Commands,
-) {
-    let Ok((hash_entity, mut hash)) = hash.get_single_mut() else {
-        return;
-    };
+) -> Result {
+    let (hash_entity, mut hash) = hash.single_mut()?;
 
     for (entity, global_transform, collider) in static_body.iter() {
         hash.insert(SpatialData {
@@ -168,4 +166,6 @@ pub fn store_static_body_in_spatial_map<T: Component>(
 
         commands.entity(hash_entity).add_child(entity);
     }
+
+    Ok(())
 }

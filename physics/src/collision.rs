@@ -5,9 +5,9 @@ use super::{
     spatial,
 };
 use bevy::{
-    ecs::{component::ComponentId, world::DeferredWorld},
+    ecs::{component::HookContext, world::DeferredWorld},
+    platform::collections::{HashMap, HashSet},
     prelude::*,
-    utils::hashbrown::{HashMap, HashSet},
 };
 use spatial::SpatialHash;
 use std::{cmp::Ordering, marker::PhantomData};
@@ -60,15 +60,15 @@ pub(crate) fn clear_resolution(mut q: Query<&mut TotalResolution>) {
 #[component(on_remove = remove_static_body)]
 pub struct StaticBody;
 
-fn remove_static_body(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
-    if let Some(parent) = world.get::<Parent>(entity) {
-        let Some(global_t) = world.get::<GlobalTransform>(entity) else {
+fn remove_static_body(mut world: DeferredWorld, context: HookContext) {
+    if let Some(parent) = world.get::<ChildOf>(context.entity) {
+        let Some(global_t) = world.get::<GlobalTransform>(context.entity) else {
             return;
         };
-        let collider = world.get::<Collider>(entity).unwrap();
+        let collider = world.get::<Collider>(context.entity).unwrap();
         let collider = collider.global_absolute(global_t);
 
-        if let Some(mut hash) = world.get_mut::<SpatialHash>(parent.get()) {
+        if let Some(mut hash) = world.get_mut::<SpatialHash>(parent.parent()) {
             hash.remove(collider);
         }
     }
@@ -778,7 +778,7 @@ impl Default for TilesetSize {
 
 pub fn build_tile_set_colliders(
     mut commands: Commands,
-    tiles: Query<(&Transform, &Parent), Added<TilesetCollider>>,
+    tiles: Query<(&Transform, &ChildOf), Added<TilesetCollider>>,
     size: Res<TilesetSize>,
     // manual_collision: Query<&Transform, Added<annual::Collision>>,
 ) {
@@ -793,7 +793,7 @@ pub fn build_tile_set_colliders(
 
     let mut parents = HashSet::<Entity>::default();
     for (_, parent) in tiles.iter() {
-        parents.insert(parent.get());
+        parents.insert(parent.parent());
     }
 
     let tile_size = size.0;
@@ -802,7 +802,7 @@ pub fn build_tile_set_colliders(
     for parent in parents.into_iter() {
         let cached_collider_positions = tiles
             .iter()
-            .filter(|(_, p)| p.get() == parent)
+            .filter(|(_, p)| p.parent() == parent)
             .map(|(t, _)| Vec2::new(t.translation.x + offset, t.translation.y + offset))
             .collect::<Vec<_>>();
 

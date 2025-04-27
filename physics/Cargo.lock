@@ -721,9 +721,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_pixel_gfx"
+name = "bevy_optix"
 version = "0.1.0"
-source = "git+https://github.com/void-scape/bevy_pixel_gfx#0161bf92aa543f20b2fc21b21aff4828b8aa3b00"
+source = "git+https://github.com/void-scape/bevy_optix#0161bf92aa543f20b2fc21b21aff4828b8aa3b00"
 dependencies = [
  "bevy",
  "bevy_tween",
@@ -2764,7 +2764,7 @@ name = "physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_pixel_gfx",
+ "bevy_optix",
  "bevy_tween",
  "rand",
  "smallvec",
