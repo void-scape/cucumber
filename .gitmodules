@@ -13,3 +13,6 @@
 [submodule "noise"]
 	path = noise
 	url = https://github.com/void-scape/noise.git
+[submodule "bevy_pretty_text"]
+	path = bevy_pretty_text
+	url = https://github.com/void-scape/bevy_pretty_text.git
