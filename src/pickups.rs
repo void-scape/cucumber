@@ -1,6 +1,6 @@
 use crate::assets;
 use crate::player::Player;
-use bevy::ecs::component::ComponentId;
+use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use physics::layers::RegisterPhysicsLayer;
@@ -43,30 +43,26 @@ pub enum PickupEvent {
 fn pickup_triggered(
     mut commands: Commands,
     mut writer: EventWriter<PickupEvent>,
-    player: Query<&Triggers<PickupLayer>, With<Player>>,
+    player: Single<&Triggers<PickupLayer>, With<Player>>,
     upgrades: Query<(Entity, &Upgrade)>,
     weapons: Query<(Entity, &Weapon)>,
 ) {
-    let Ok(player) = player.get_single() else {
-        return;
-    };
-
     for entity in player.entities().iter() {
         if let Some((_, upgrade)) = upgrades.iter().find(|(upgrade, _)| entity == upgrade) {
-            commands.entity(*entity).despawn_recursive();
-            writer.send(PickupEvent::Upgrade(*upgrade));
+            commands.entity(*entity).despawn();
+            writer.write(PickupEvent::Upgrade(*upgrade));
         }
 
         if let Some((_, weapon)) = weapons.iter().find(|(weapon, _)| entity == weapon) {
-            commands.entity(*entity).despawn_recursive();
-            writer.send(PickupEvent::Weapon(*weapon));
+            commands.entity(*entity).despawn();
+            writer.write(PickupEvent::Weapon(*weapon));
         }
     }
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, PickupLayer, CollisionTrigger(upgrade_trigger))]
-#[component(on_add = Self::on_add)]
+#[require(Transform, PickupLayer, CollisionTrigger = upgrade_trigger())]
+#[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
     Speed(f32),
     Juice(f32),
@@ -88,8 +84,8 @@ impl SpriteHook for Upgrade {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, PickupLayer, CollisionTrigger(weapon_trigger))]
-#[component(on_add = Self::on_add)]
+#[require(Transform, PickupLayer, CollisionTrigger = weapon_trigger())]
+#[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
     Bullet,
     Laser,
@@ -133,10 +129,10 @@ where
 {
     fn sprite(&self, server: &AssetServer) -> Sprite;
 
-    fn on_add(mut world: DeferredWorld, entity: Entity, _: ComponentId) {
-        let t = world.entity(entity).get::<Self>().unwrap();
+    fn sprite_hook(mut world: DeferredWorld, ctx: HookContext) {
+        let t = world.entity(ctx.entity).get::<Self>().unwrap();
         let sprite = t.sprite(world.get_resource::<AssetServer>().unwrap());
-        world.commands().entity(entity).insert(sprite);
+        world.commands().entity(ctx.entity).insert(sprite);
     }
 }
 

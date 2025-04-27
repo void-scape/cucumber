@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_pixel_gfx::camera::MainCamera;
 use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
-use bevy_trauma_shake::Shake;
+//use bevy_trauma_shake::Shake;
 use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
 
@@ -60,8 +60,7 @@ fn main() {
             WIDTH as u32,
             HEIGHT as u32,
         )),
-        bevy_trauma_shake::TraumaPlugin,
-        noisy_bevy::NoisyShaderPlugin,
+        //bevy_trauma_shake::TraumaPlugin,
     ))
     .add_plugins((
         //fire::FirePlugin,
@@ -106,7 +105,7 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 }
 
 fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
-    commands.entity(*main_camera).insert(Shake::default());
+    //commands.entity(*main_camera).insert(Shake::default());
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

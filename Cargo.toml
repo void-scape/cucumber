@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 bevy = { version = "0.16", default-features = false, features = [
+    "std",
+    "bevy_log",
     "animation",
     "bevy_asset",
     "bevy_color",
@@ -12,17 +14,13 @@ bevy = { version = "0.16", default-features = false, features = [
     "bevy_gilrs",
     "bevy_gizmos",
     "bevy_gltf",
-    "bevy_mesh_picking_backend",
     "bevy_pbr",
-    "bevy_picking",
     "bevy_render",
     "bevy_scene",
     "bevy_sprite",
-    "bevy_sprite_picking_backend",
     "bevy_state",
     "bevy_text",
     "bevy_ui",
-    "bevy_ui_picking_backend",
     "bevy_window",
     "bevy_winit",
     "custom_cursor",
@@ -45,7 +43,7 @@ physics = { path = "physics" }
 bevy_tween = { git = "https://github.com/Rabbival/bevy_tween", branch = "bevy-v0.16.0" }
 bevy_seedling = { path = "bevy_seedling" }
 rand = "0.9.1"
-bevy_trauma_shake = "0.4.0"
+# bevy_trauma_shake = "0.4.0"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 
