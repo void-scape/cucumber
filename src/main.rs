@@ -3,9 +3,9 @@
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
-use bevy_pixel_gfx::camera::MainCamera;
-use bevy_pixel_gfx::pixel_perfect::CanvasDimensions;
-//use bevy_trauma_shake::Shake;
+use bevy_optix::camera::MainCamera;
+use bevy_optix::pixel_perfect::CanvasDimensions;
+use bevy_optix::shake::prelude::*;
 use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
 
@@ -56,14 +56,13 @@ fn main() {
         bevy_tween::DefaultTweenPlugins,
         bevy_seedling::SeedlingPlugin::default(),
         physics::PhysicsPlugin,
-        bevy_pixel_gfx::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
+        bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
         )),
-        //bevy_trauma_shake::TraumaPlugin,
+        bevy_optix::shake::ScreenShakePlugin,
     ))
     .add_plugins((
-        //fire::FirePlugin,
         animation::AnimationPlugin,
         music::MusicPlugin,
         assets::AssetPlugin,
@@ -99,13 +98,13 @@ fn main() {
 fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWriter<AppExit>) {
     for e in input.read() {
         if e.key_code == KeyCode::Escape && e.state == ButtonState::Pressed {
-            writer.send(AppExit::Success);
+            writer.write(AppExit::Success);
         }
     }
 }
 
 fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
-    //commands.entity(*main_camera).insert(Shake::default());
+    commands.entity(*main_camera).insert(Shake::default());
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

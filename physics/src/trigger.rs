@@ -72,7 +72,7 @@ pub fn emit_trigger_states(
     for event in events.iter() {
         let entry = active.entry(event.trigger).or_default();
         if !entry.contains(&event.target) {
-            enter.send(TriggerEnter {
+            enter.write(TriggerEnter {
                 trigger: event.trigger,
                 target: event.target,
             });
@@ -88,7 +88,7 @@ pub fn emit_trigger_states(
             true
         } else {
             for target in targets.iter() {
-                exit.send(TriggerExit {
+                exit.write(TriggerExit {
                     trigger: *entity,
                     target: *target,
                 });
@@ -129,7 +129,7 @@ pub fn handle_triggers<T: Component>(
                 if let Ok(mut triggers) = body_triggers.get_mut(*e) {
                     if !triggers.entities().contains(&entity) {
                         triggers.0.push(entity);
-                        writer.send(TriggerEvent {
+                        writer.write(TriggerEvent {
                             trigger: entity,
                             target: *e,
                         });

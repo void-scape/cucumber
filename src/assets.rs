@@ -70,7 +70,7 @@ fn debug_assets(
         if input.state == ButtonState::Pressed && input.key_code == KeyCode::KeyL {
             if *spawned {
                 for asset in assets.iter() {
-                    commands.entity(asset).despawn_recursive();
+                    commands.entity(asset).despawn();
                 }
             } else {
                 let mut y = HEIGHT / 2.;

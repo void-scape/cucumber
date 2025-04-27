@@ -197,7 +197,7 @@ pub fn update_health(
         for (_, damage) in hit_boxes.triggered().iter() {
             let damage = damage.damage();
             health.damage(damage);
-            writer.send(DamageEvent {
+            writer.write(DamageEvent {
                 entity,
                 damage,
                 killed: health.dead(),
@@ -219,6 +219,6 @@ pub fn despawn_dead(
     dead_query: Query<Entity, (With<Dead>, With<DespawnDead>)>,
 ) {
     for entity in dead_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }

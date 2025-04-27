@@ -1,15 +1,15 @@
 [submodule "bevy_textbox"]
 	path = bevy_textbox
 	url = https://github.com/void-scape/bevy_textbox.git
-[submodule "bevy_pixel_gfx"]
-	path = bevy_pixel_gfx
-	url = https://github.com/void-scape/bevy_pixel_gfx.git
-[submodule "bevy_pretty_text"]
-	path = bevy_pretty_text
-	url = https://github.com/void-scape/bevy_pretty_text.git
+[submodule "bevy_optix"]
+	path = bevy_optix
+	url = https://github.com/void-scape/bevy_optix.git
 [submodule "bevy_sequence"]
 	path = bevy_sequence
 	url = https://github.com/CorvusPrudens/bevy_sequence.git
 [submodule "bevy_seedling"]
 	path = bevy_seedling
 	url = https://github.com/CorvusPrudens/bevy_seedling
+[submodule "noise"]
+	path = noise
+	url = https://github.com/void-scape/noise.git

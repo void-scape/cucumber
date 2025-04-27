@@ -5,11 +5,11 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Anchor, Material2d, Material2dPlugin};
 use bevy::text::TextBounds;
-use bevy_pixel_gfx::glitch::{GlitchPlugin, GlitchSettings};
-use bevy_pixel_gfx::pixel_perfect::{
+use bevy_optix::glitch::{GlitchPlugin, GlitchSettings};
+use bevy_optix::pixel_perfect::{
     BackgroundCamera, ForegroundCamera, HIGH_RES_BACKGROUND_LAYER, HIGH_RES_LAYER,
 };
-use bevy_pixel_gfx::post_processing::PostProcessCommand;
+use bevy_optix::post_processing::PostProcessCommand;
 use bevy_pretty_text::prelude::SfxRate;
 use bevy_pretty_text::prelude::*;
 use bevy_seedling::prelude::*;
@@ -216,7 +216,7 @@ fn end(mut commands: Commands, opening_entities: Query<Entity, With<OpeningEntit
     commands.remove_post_process::<GlitchSettings, BackgroundCamera>();
     commands.remove_post_process::<GlitchSettings, ForegroundCamera>();
     for entity in opening_entities.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     commands.set_state(GameState::Game);
 }

@@ -3,47 +3,58 @@ name = "cucumber"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+resolver = "2"
+members = [
+    "bevy_textbox",
+    "bevy_optix",
+    "bevy_pretty_text",
+    "bevy_sequence",
+    "physics",
+    "noise",
+]
+
 [dependencies]
 bevy = { version = "0.16", default-features = false, features = [
-  "std",
-  "bevy_log",
-  "animation",
-  "bevy_asset",
-  "bevy_color",
-  "bevy_core_pipeline",
-  "bevy_gilrs",
-  "bevy_gizmos",
-  "bevy_gltf",
-  "bevy_pbr",
-  "bevy_render",
-  "bevy_scene",
-  "bevy_sprite",
-  "bevy_state",
-  "bevy_text",
-  "bevy_ui",
-  "bevy_window",
-  "bevy_winit",
-  "custom_cursor",
-  "default_font",
-  "hdr",
-  "multi_threaded",
-  "png",
-  "smaa_luts",
-  "sysinfo_plugin",
-  "tonemapping_luts",
-  "webgl2",
-  "x11",
-  "track_location",
+    "std",
+    "bevy_log",
+    "animation",
+    "bevy_asset",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_gilrs",
+    "bevy_gizmos",
+    "bevy_gltf",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_window",
+    "bevy_winit",
+    "custom_cursor",
+    "default_font",
+    "hdr",
+    "multi_threaded",
+    "png",
+    "smaa_luts",
+    "sysinfo_plugin",
+    "tonemapping_luts",
+    "webgl2",
+    "x11",
+    "track_location",
 ] }
 bevy_enhanced_input = "0.11"
 bevy_textbox = { path = "bevy_textbox" }
-bevy_pixel_gfx = { path = "bevy_pixel_gfx" }
+bevy_optix = { path = "bevy_optix" }
 bevy_pretty_text = { path = "bevy_pretty_text" }
 bevy_sequence = { path = "bevy_sequence" }
 physics = { path = "physics" }
 bevy_tween = { git = "https://github.com/Rabbival/bevy_tween", branch = "bevy-v0.16.0" }
 bevy_seedling = { path = "bevy_seedling" }
-rand = "0.9.1"
+rand = "0.9"
 # bevy_trauma_shake = "0.4.0"
 strum = "0.27.1"
 strum_macros = "0.27.1"

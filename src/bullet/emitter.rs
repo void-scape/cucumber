@@ -65,8 +65,8 @@ impl<T: Component> SoloEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, parent, transform) in emitters.iter_mut() {
-            let Ok((rate, speed)) = parents.get(parent.get()) else {
+        for (entity, timer, polarity, child_of, transform) in emitters.iter_mut() {
+            let Ok((rate, speed)) = parents.get(child_of.parent()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
@@ -232,8 +232,8 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, parent, transform) in emitters.iter_mut() {
-            let Ok(rate) = parents.get(parent.get()) else {
+        for (entity, timer, polarity, child_of, transform) in emitters.iter_mut() {
+            let Ok(rate) = parents.get(child_of.parent()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();

@@ -30,5 +30,5 @@ fn init_textbox_input(mut commands: Commands) {
 }
 
 fn receive_textbox_input(_: Trigger<Started<TextboxInput>>, mut writer: EventWriter<input::Input>) {
-    writer.send(input::Input::Interact);
+    writer.write(input::Input::Interact);
 }

@@ -5,10 +5,7 @@ use crate::{
     health::{Damage, Health, HealthSet},
 };
 use bevy::{
-    ecs::{
-        component::{ComponentId, HookContext},
-        world::DeferredWorld,
-    },
+    ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
 };
 use bevy_seedling::{
