@@ -8,11 +8,11 @@ use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
 };
+use bevy_optix::shake::TraumaCommands;
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
 };
-// use bevy_trauma_shake::TraumaCommands;
 use physics::{
     Physics,
     layers::{self, TriggersWith},
@@ -354,10 +354,9 @@ fn bullet_collision_effects(
             ),
         ));
 
-        // // TODO: fork screen shake and make trauma visible
-        // match event.source {
-        //     BulletSource::Enemy => commands.add_trauma(0.15),
-        //     BulletSource::Player => commands.add_trauma(0.04),
-        // }
+        match event.source {
+            BulletSource::Enemy => commands.add_trauma(0.15),
+            BulletSource::Player => commands.add_trauma(0.04),
+        }
     }
 }

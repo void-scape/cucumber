@@ -50,7 +50,7 @@ fn scrolling_background(
             uv_offset: 0.,
         })),
         Speed(SCROLL_SPEED1),
-        Transform::from_xyz(0., 0., -999.),
+        Transform::from_xyz(0., 0., -1.),
     ));
 
     commands.spawn((

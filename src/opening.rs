@@ -6,10 +6,8 @@ use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Anchor, Material2d, Material2dPlugin};
 use bevy::text::TextBounds;
 use bevy_optix::glitch::{GlitchPlugin, GlitchSettings};
-use bevy_optix::pixel_perfect::{
-    BackgroundCamera, ForegroundCamera, HIGH_RES_BACKGROUND_LAYER, HIGH_RES_LAYER,
-};
-use bevy_optix::post_processing::PostProcessCommand;
+use bevy_optix::pixel_perfect::{HIGH_RES_LAYER, OuterCamera};
+use bevy_optix::post_process::PostProcessCommand;
 use bevy_pretty_text::prelude::SfxRate;
 use bevy_pretty_text::prelude::*;
 use bevy_seedling::prelude::*;
@@ -36,17 +34,16 @@ impl Plugin for OpeningPlugin {
 struct OpeningEntity;
 
 fn begin(mut commands: Commands, server: Res<AssetServer>) {
-    commands.post_process::<BackgroundCamera>(GlitchSettings::from_intensity(1.));
-    commands.post_process::<ForegroundCamera>(GlitchSettings::from_intensity(0.25));
+    commands.post_process::<OuterCamera>(GlitchSettings::from_intensity(0.3));
 
     let mask = commands
         .spawn((
             OpeningEntity,
-            HIGH_RES_BACKGROUND_LAYER,
             Sprite::from_color(
                 Color::linear_rgba(0., 0., 0., 1.),
                 Vec2::new(RES_WIDTH * RESOLUTION_SCALE, RES_HEIGHT * RESOLUTION_SCALE),
             ),
+            Transform::from_xyz(0., 0., -2.),
         ))
         .id();
     commands
@@ -213,8 +210,7 @@ fn message_contents(entity: Entity) -> impl Fn(Commands) {
 }
 
 fn end(mut commands: Commands, opening_entities: Query<Entity, With<OpeningEntity>>) {
-    commands.remove_post_process::<GlitchSettings, BackgroundCamera>();
-    commands.remove_post_process::<GlitchSettings, ForegroundCamera>();
+    commands.remove_post_process::<GlitchSettings, OuterCamera>();
     for entity in opening_entities.iter() {
         commands.entity(entity).despawn();
     }
@@ -278,7 +274,7 @@ fn setup(
             MandelbrotZoom::default(),
             MeshMaterial2d(material),
             Mesh2d(quad),
-            HIGH_RES_BACKGROUND_LAYER,
+            Transform::from_xyz(0., 0., -3.),
         ))
         .id();
 
@@ -309,62 +305,62 @@ fn update_mandelbrot_zoom(
     }
 }
 
-fn update_shader_params(
-    time: Res<Time>,
-    mut input: EventReader<KeyboardInput>,
-    mut materials: ResMut<Assets<MandelbrotMaterial>>,
-    mut material_query: Query<&MeshMaterial2d<MandelbrotMaterial>>,
-    mut windows: Query<&mut Window>,
-) -> Result {
-    let window = windows.single_mut()?;
-    let aspect_ratio = window.width() / window.height();
-
-    let Some(material_handle) = material_query.iter_mut().next() else {
-        return Ok(());
-    };
-    let Some(material) = materials.get_mut(&material_handle.0) else {
-        return Ok(());
-    };
-
-    for event in input.read() {
-        material.params.aspect_ratio = aspect_ratio;
-        material.params.color_shift = time.elapsed_secs() * 0.2;
-        let mut center = material.params.center;
-        let mut zoom = material.params.zoom;
-
-        let move_speed = 0.5 / zoom;
-
-        if event.state.is_pressed() {
-            match event.key_code {
-                KeyCode::KeyW => center.y -= move_speed * time.delta_secs(),
-                KeyCode::KeyS => center.y += move_speed * time.delta_secs(),
-                KeyCode::KeyA => center.x -= move_speed * time.delta_secs(),
-                KeyCode::KeyD => center.x += move_speed * time.delta_secs(),
-                KeyCode::KeyE => zoom *= 1.0 + time.delta_secs(),
-                KeyCode::KeyQ => zoom *= 1.0 - time.delta_secs(),
-                _ => {}
-            }
-
-            if !event.repeat {
-                match event.key_code {
-                    KeyCode::Digit1 => {
-                        material.params.max_iterations =
-                            (material.params.max_iterations - 50).max(50)
-                    }
-                    KeyCode::Digit2 => {
-                        material.params.max_iterations = material.params.max_iterations + 50
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        material.params.center = center;
-        material.params.zoom = zoom;
-    }
-
-    Ok(())
-}
+//fn update_shader_params(
+//    time: Res<Time>,
+//    mut input: EventReader<KeyboardInput>,
+//    mut materials: ResMut<Assets<MandelbrotMaterial>>,
+//    mut material_query: Query<&MeshMaterial2d<MandelbrotMaterial>>,
+//    mut windows: Query<&mut Window>,
+//) -> Result {
+//    let window = windows.single_mut()?;
+//    let aspect_ratio = window.width() / window.height();
+//
+//    let Some(material_handle) = material_query.iter_mut().next() else {
+//        return Ok(());
+//    };
+//    let Some(material) = materials.get_mut(&material_handle.0) else {
+//        return Ok(());
+//    };
+//
+//    for event in input.read() {
+//        material.params.aspect_ratio = aspect_ratio;
+//        material.params.color_shift = time.elapsed_secs() * 0.2;
+//        let mut center = material.params.center;
+//        let mut zoom = material.params.zoom;
+//
+//        let move_speed = 0.5 / zoom;
+//
+//        if event.state.is_pressed() {
+//            match event.key_code {
+//                KeyCode::KeyW => center.y -= move_speed * time.delta_secs(),
+//                KeyCode::KeyS => center.y += move_speed * time.delta_secs(),
+//                KeyCode::KeyA => center.x -= move_speed * time.delta_secs(),
+//                KeyCode::KeyD => center.x += move_speed * time.delta_secs(),
+//                KeyCode::KeyE => zoom *= 1.0 + time.delta_secs(),
+//                KeyCode::KeyQ => zoom *= 1.0 - time.delta_secs(),
+//                _ => {}
+//            }
+//
+//            if !event.repeat {
+//                match event.key_code {
+//                    KeyCode::Digit1 => {
+//                        material.params.max_iterations =
+//                            (material.params.max_iterations - 50).max(50)
+//                    }
+//                    KeyCode::Digit2 => {
+//                        material.params.max_iterations = material.params.max_iterations + 50
+//                    }
+//                    _ => {}
+//                }
+//            }
+//        }
+//
+//        material.params.center = center;
+//        material.params.zoom = zoom;
+//    }
+//
+//    Ok(())
+//}
 
 #[derive(Default, Component)]
 pub struct MandelbrotZoom(pub f32);

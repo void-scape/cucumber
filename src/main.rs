@@ -4,7 +4,7 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_optix::camera::MainCamera;
-use bevy_optix::pixel_perfect::CanvasDimensions;
+use bevy_optix::pixel_perfect::{CanvasDimensions, Scaling};
 use bevy_optix::shake::prelude::*;
 use physics::layers::{self, RegisterPhysicsLayer};
 use physics::prelude::Gravity;
@@ -79,7 +79,6 @@ fn main() {
         ui::UiPlugin,
         opening::OpeningPlugin,
     ))
-    //.insert_state(GameState::Game)
     .insert_state(GameState::Opening)
     .add_systems(Startup, configure_screen_shake)
     .register_collision_layer::<layers::Player>(32.0)
@@ -90,7 +89,7 @@ fn main() {
     .register_trigger_layer::<physics::layers::Wall>()
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Gravity(Vec2::ZERO))
-    //.insert_resource(Scaling::Projection)
+    .insert_resource(Scaling::Canvas)
     .run();
 }
 
@@ -104,7 +103,9 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 }
 
 fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
-    commands.entity(*main_camera).insert(Shake::default());
+    commands
+        .entity(*main_camera)
+        .insert(Shake::from_trauma_limit(1.));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
