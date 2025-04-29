@@ -1,6 +1,5 @@
 use crate::characters::Character;
 use crate::{GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
-use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use bevy::sprite::{Anchor, Material2d, Material2dPlugin};
@@ -26,7 +25,7 @@ pub struct OpeningPlugin;
 impl Plugin for OpeningPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((GlitchPlugin, MandelbrotPlugin))
-            .add_systems(Startup, begin);
+            .add_systems(OnEnter(GameState::Opening), begin);
     }
 }
 
@@ -227,8 +226,11 @@ pub struct MandelbrotPlugin;
 impl Plugin for MandelbrotPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<MandelbrotMaterial>::default())
-            .add_systems(Startup, setup)
-            .add_systems(Update, update_mandelbrot_zoom)
+            .add_systems(OnEnter(GameState::Opening), setup)
+            .add_systems(
+                Update,
+                update_mandelbrot_zoom.run_if(in_state(GameState::Opening)),
+            )
             .add_tween_systems(component_tween_system::<TweenMandelbrotZoom>());
         //.add_systems(Update, update_shader_params);
     }

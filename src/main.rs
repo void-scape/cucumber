@@ -82,7 +82,8 @@ fn main() {
         ui::UiPlugin,
         opening::OpeningPlugin,
     ))
-    .insert_state(GameState::Opening)
+    .init_state::<GameState>()
+    .add_systems(Startup, set_state.run_if(in_state(GameState::Startup)))
     .add_systems(Startup, configure_screen_shake)
     .register_collision_layer::<layers::Player>(32.0)
     .register_collision_layer::<layers::Enemy>(32.0)
@@ -94,6 +95,10 @@ fn main() {
     .insert_resource(Gravity(Vec2::ZERO))
     .insert_resource(Scaling::Canvas)
     .run();
+}
+
+fn set_state(mut commands: Commands) {
+    commands.set_state(GameState::Game);
 }
 
 #[cfg(debug_assertions)]
@@ -114,6 +119,7 @@ fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, Wi
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
 enum GameState {
     #[default]
+    Startup,
     Opening,
     Game,
 }
