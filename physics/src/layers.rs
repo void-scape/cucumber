@@ -1,6 +1,5 @@
-use crate::{spatial::SpatialHash, PhysicsSystems};
-
 use super::prelude::{Collision, Triggers};
+use crate::{PhysicsSystems, spatial::SpatialHash};
 use bevy::prelude::*;
 use core::marker::PhantomData;
 

@@ -19,6 +19,7 @@ mod characters;
 mod enemy;
 mod fire;
 mod health;
+mod miniboss;
 mod music;
 mod opening;
 mod pickups;
@@ -82,6 +83,7 @@ fn main() {
         ui::UiPlugin,
         opening::OpeningPlugin,
     ))
+    .add_plugins(miniboss::MinibossPlugin)
     .init_state::<GameState>()
     .add_systems(Startup, set_state.run_if(in_state(GameState::Startup)))
     .add_systems(Startup, configure_screen_shake)

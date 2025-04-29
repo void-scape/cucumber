@@ -1,7 +1,6 @@
 use super::{
-    collision::Collider,
+    collision::{CollideWith, Collider},
     layers::TriggersWith,
-    prelude::CollidesWith,
     spatial::{SpatialData, SpatialHash},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
@@ -110,7 +109,7 @@ pub fn handle_triggers<T: Component>(
     }
 
     let dynamic_body_map = SpatialHash::new_with(
-        64.,
+        256.,
         bodies
             .iter()
             .map(|(e, t, c, _)| SpatialData::from_entity(e, t, c, ())),

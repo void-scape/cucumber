@@ -204,7 +204,7 @@ impl AbsoluteCollider {
     }
 }
 
-impl CollidesWith<Self> for AbsoluteCollider {
+impl CollideWith<Self> for AbsoluteCollider {
     fn collides_with(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Rect(s), Self::Rect(o)) => s.collides_with(o),
@@ -224,7 +224,7 @@ impl CollidesWith<Self> for AbsoluteCollider {
     }
 }
 
-pub(crate) trait CollidesWith<T> {
+pub(crate) trait CollideWith<T> {
     fn collides_with(&self, other: &T) -> bool;
     fn resolution(&self, other: &T) -> Vec2;
 }
@@ -327,7 +327,7 @@ impl RectCollider {
     }
 }
 
-impl CollidesWith<Self> for RectCollider {
+impl CollideWith<Self> for RectCollider {
     fn collides_with(&self, other: &Self) -> bool {
         let not_collided = other.tl.y < self.br().y
             || other.tl.x > self.br().x
@@ -382,7 +382,7 @@ impl CircleCollider {
     }
 }
 
-impl CollidesWith<Self> for CircleCollider {
+impl CollideWith<Self> for CircleCollider {
     fn collides_with(&self, other: &Self) -> bool {
         let distance = self.position.distance_squared(other.position);
         let combined_radii = self.radius + other.radius;
@@ -417,7 +417,7 @@ impl CollidesWith<Self> for CircleCollider {
     }
 }
 
-impl CollidesWith<RectCollider> for CircleCollider {
+impl CollideWith<RectCollider> for CircleCollider {
     fn collides_with(&self, other: &RectCollider) -> bool {
         let other_center = other.center();
 
@@ -492,7 +492,7 @@ impl CollidesWith<RectCollider> for CircleCollider {
     }
 }
 
-impl CollidesWith<CircleCollider> for RectCollider {
+impl CollideWith<CircleCollider> for RectCollider {
     fn collides_with(&self, other: &CircleCollider) -> bool {
         other.collides_with(self)
     }

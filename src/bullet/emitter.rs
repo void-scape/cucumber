@@ -1,6 +1,6 @@
 use super::{
     Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
-    homing::{Heading, Homing},
+    homing::{Heading, Homing, TurnSpeed},
 };
 use crate::{auto_collider::ImageCollider, enemy::Enemy, health::Damage};
 use bevy::prelude::*;
@@ -29,11 +29,15 @@ impl Plugin for EmitterPlugin {
     }
 }
 
+/// Determines the base speed of fired bullets. This value is multiplied by the parent's
+/// [`BulletSpeed`].
+#[derive(Component)]
+pub struct BaseSpeed(pub f32);
+
 #[derive(Component, Default)]
 #[require(
     Transform,
-    BulletRate,
-    BulletSpeed,
+    BaseSpeed(150.),
     BulletSprite::from_cell(0, 0),
     Polarity,
     Visibility::Hidden
@@ -54,6 +58,7 @@ impl<T: Component> SoloEmitter<T> {
             (
                 Entity,
                 Option<&mut BulletTimer>,
+                &BaseSpeed,
                 &Polarity,
                 &ChildOf,
                 &GlobalTransform,
@@ -67,7 +72,7 @@ impl<T: Component> SoloEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, child_of, transform) in emitters.iter_mut() {
+        for (entity, timer, base_speed, polarity, child_of, transform) in emitters.iter_mut() {
             let Ok((rate, speed)) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -92,7 +97,7 @@ impl<T: Component> SoloEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * 150.0 * speed.0),
+                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 new_transform,
                 TriggersWith::<T>::default(),
                 Damage::new(1),
@@ -115,8 +120,7 @@ impl<T: Component> SoloEmitter<T> {
 #[derive(Component, Default)]
 #[require(
     Transform,
-    BulletRate,
-    BulletSpeed,
+    BaseSpeed(150.),
     BulletSprite::from_cell(0, 0),
     Polarity,
     Visibility::Hidden
@@ -135,6 +139,7 @@ impl<T: Component> DualEmitter<T> {
             Entity,
             &DualEmitter<T>,
             Option<&mut BulletTimer>,
+            &BaseSpeed,
             &Polarity,
             &ChildOf,
             &GlobalTransform,
@@ -146,7 +151,8 @@ impl<T: Component> DualEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, polarity, parent, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, base_speed, polarity, parent, transform) in emitters.iter_mut()
+        {
             let Ok((rate, speed)) = parents.get(parent.parent()) else {
                 continue;
             };
@@ -172,7 +178,7 @@ impl<T: Component> DualEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * 150.0 * speed.0),
+                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 {
                     let mut t = new_transform;
                     t.translation.x -= emitter.0;
@@ -184,7 +190,7 @@ impl<T: Component> DualEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * 150.0 * speed.0),
+                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 {
                     new_transform.translation.x += emitter.0;
                     new_transform
@@ -208,7 +214,7 @@ impl<T: Component> DualEmitter<T> {
 }
 
 #[derive(Component, Default)]
-#[require(Transform, BulletRate, BulletSpeed, Polarity)]
+#[require(Transform, BaseSpeed(125.), TurnSpeed, Polarity)]
 pub struct HomingEmitter<T, U>(PhantomData<fn() -> (T, U)>);
 
 impl<T: Component, U: Component> HomingEmitter<T, U> {
@@ -223,24 +229,30 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
             (
                 Entity,
                 Option<&mut BulletTimer>,
+                &BaseSpeed,
+                &TurnSpeed,
                 &Polarity,
                 &ChildOf,
                 &GlobalTransform,
             ),
             With<HomingEmitter<T, U>>,
         >,
-        parents: Query<Option<&BulletRate>>,
+        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, timer, polarity, child_of, transform) in emitters.iter_mut() {
-            let Ok(rate) = parents.get(child_of.parent()) else {
+        for (entity, timer, base_speed, turn_speed, polarity, child_of, transform) in
+            emitters.iter_mut()
+        {
+            let Ok((rate, speed)) = parents.get(child_of.parent()) else {
                 continue;
             };
             let rate = rate.copied().unwrap_or_default();
+            let speed = speed.copied().unwrap_or_default();
+
             let duration = Duration::from_secs_f32(0.33 / rate.0);
 
             let Some(mut timer) = timer else {
@@ -268,8 +280,9 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
                 ImageCollider,
                 Velocity::default(),
                 Homing::<U>::new(),
+                *turn_speed,
                 Heading {
-                    speed: 125.0,
+                    speed: base_speed.0 * speed.0,
                     direction,
                 },
                 new_transform,

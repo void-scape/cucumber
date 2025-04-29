@@ -45,13 +45,10 @@ fn spawn_bounds(mut commands: Commands) {
         CollisionTrigger(horizontal_collider),
     ));
 
-    let vertical_collider = Collider::from_rect(
-        Vec2::new(-thickness / 2.0, crate::HEIGHT / 2.0),
-        Vec2::new(thickness, crate::HEIGHT),
-    );
+    let vertical_collider = Collider::from_rect(Vec2::ZERO, Vec2::new(thickness, crate::HEIGHT));
     // left
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(left - thickness / 2.0, 0.0, 0.0)),
+        Transform::default().with_translation(Vec3::new(left - thickness, top, 0.0)),
         ScreenBounds,
         layers::Wall,
         StaticBody,
@@ -60,9 +57,8 @@ fn spawn_bounds(mut commands: Commands) {
     ));
 
     // right
-
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(right + thickness / 2.0, 0.0, 0.0)),
+        Transform::default().with_translation(Vec3::new(right, top, 0.0)),
         ScreenBounds,
         layers::Wall,
         StaticBody,

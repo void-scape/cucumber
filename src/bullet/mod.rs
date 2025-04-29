@@ -22,7 +22,7 @@ use std::time::Duration;
 use strum_macros::EnumIter;
 
 pub mod emitter;
-mod homing;
+pub mod homing;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum BulletSystems {
@@ -130,16 +130,6 @@ impl Default for BulletSpeed {
     }
 }
 
-// fn init_bullet_velocity(
-//     mut commands: Commands,
-//     bullets: Query<(Entity, &BulletSpeed, &Polarity), Without<Velocity>>,
-// ) {
-//     for (entity, speed, polarity) in bullets.iter() {
-//         let velocity = Velocity(polarity.to_vec2() * speed.0);
-//         commands.entity(entity).insert(velocity);
-//     }
-// }
-//
 fn init_bullet_sprite(
     mut commands: Commands,
     bullets: Query<(Entity, &BulletSprite, &Velocity), Without<Sprite>>,

@@ -28,11 +28,7 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
-use physics::{
-    Physics,
-    layers::{self, CollidesWith, TriggersWith},
-    prelude::*,
-};
+use physics::prelude::*;
 use std::{cmp::Ordering, f32, time::Duration};
 
 pub const PLAYER_HEALTH: usize = 5;
@@ -78,7 +74,8 @@ impl Plugin for PlayerPlugin {
 #[derive(Component)]
 #[require(
     Transform, Velocity, layers::Player, Health::full(PLAYER_HEALTH),
-    ImageCollider, BulletSpeed(1.0), BulletRate(1.0), 
+    //ImageCollider, 
+    BulletSpeed(1.0), BulletRate(1.0), 
     TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, 
     DynamicBody
 )]

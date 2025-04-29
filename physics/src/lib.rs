@@ -2,7 +2,7 @@ use bevy::app::FixedMainScheduleOrder;
 use bevy::sprite::Wireframe2dPlugin;
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use bevy_tween::prelude::Interpolator;
-use bevy_tween::{component_tween_system, BevyTweenRegisterSystems};
+use bevy_tween::{BevyTweenRegisterSystems, component_tween_system};
 use layers::RegisterPhysicsLayer;
 
 pub mod collision;
@@ -15,9 +15,11 @@ pub mod velocity;
 
 #[allow(unused)]
 pub mod prelude {
+    pub use super::Physics;
     pub use super::collision::*;
     pub use super::gravity::*;
     pub use super::layers;
+    pub use super::layers::*;
     pub use super::trigger::*;
     pub use super::velocity::*;
 }

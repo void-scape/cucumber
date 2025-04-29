@@ -1,8 +1,9 @@
 use crate::{enemy::Enemy, player::Player};
 use bevy::prelude::*;
-use physics::{Physics, PhysicsSystems, prelude::Velocity};
+use physics::{PhysicsSystems, prelude::*};
 use rand::distr::{Distribution, weighted::WeightedIndex};
-use std::{f32::consts::PI, marker::PhantomData};
+use std::f32::consts::{PI, TAU};
+use std::marker::PhantomData;
 
 pub struct HomingPlugin;
 
@@ -22,7 +23,7 @@ impl Plugin for HomingPlugin {
 }
 
 #[derive(Component)]
-#[require(Heading)]
+#[require(Heading, TurnSpeed)]
 pub struct Homing<T>(PhantomData<T>);
 
 impl<T: Component> Homing<T> {
@@ -84,30 +85,21 @@ pub struct Heading {
     pub speed: f32,
 }
 
-impl Heading {
-    pub fn new(speed: f32) -> Self {
-        Self {
-            direction: Default::default(),
-            speed,
-        }
+/// The turning speed for headings.
+#[derive(Clone, Copy, PartialEq, Component)]
+pub struct TurnSpeed(pub f32);
+
+impl Default for TurnSpeed {
+    fn default() -> Self {
+        Self(300.0)
     }
 }
 
-/// The turning speed for headings.
-#[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
-pub struct TurnSpeed(pub f32);
-
 impl Heading {
-    pub fn steer_towards(&mut self, turn_speed: f32, from: &Vec3, to: &Vec3) {
-        use std::f32::consts::{PI, TAU};
-
-        // Calculate the desired direction
+    pub fn steer_towards(&mut self, time: &Time, turn_speed: f32, from: &Vec3, to: &Vec3) {
         let desired_direction = (*to - *from).normalize();
-
-        // Convert the desired direction to an angle
         let desired_angle = desired_direction.y.atan2(desired_direction.x);
 
-        // Calculate the smallest angle difference
         let mut angle_diff = (desired_angle - self.direction) % TAU;
         if angle_diff > PI {
             angle_diff = PI - angle_diff;
@@ -115,23 +107,26 @@ impl Heading {
             angle_diff = -PI - angle_diff;
         };
 
-        // Gradually adjust the current direction
-        self.direction += angle_diff * turn_speed;
-
-        // Normalize
+        self.direction += angle_diff * turn_speed * time.delta_secs();
         self.direction %= TAU;
     }
 }
 
 fn steer_homing(
-    mut homing: Query<(Entity, &GlobalTransform, &HomingTarget, &mut Heading)>,
+    mut homing: Query<(
+        Entity,
+        &GlobalTransform,
+        &HomingTarget,
+        &mut Heading,
+        &TurnSpeed,
+    )>,
     targets: Query<&GlobalTransform>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
     let delta = time.delta_secs();
 
-    for (entity, transform, target, mut heading) in homing.iter_mut() {
+    for (entity, transform, target, mut heading, turn_speed) in homing.iter_mut() {
         let Ok(target) = targets.get(target.0) else {
             commands.entity(entity).remove::<HomingTarget>();
             continue;
@@ -140,7 +135,12 @@ fn steer_homing(
         let transform = transform.compute_transform();
         let target = target.compute_transform();
 
-        heading.steer_towards(5.0 * delta, &transform.translation, &target.translation);
+        heading.steer_towards(
+            &time,
+            turn_speed.0 * delta,
+            &transform.translation,
+            &target.translation,
+        );
     }
 }
 

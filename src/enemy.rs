@@ -5,11 +5,11 @@ use crate::{
     auto_collider::ImageCollider,
     bullet::{
         BulletRate, BulletSpeed, Direction,
-        emitter::{DualEmitter, HomingEmitter, SoloEmitter},
+        emitter::{DualEmitter, SoloEmitter},
     },
     health::{Dead, Health, HealthSet},
+    miniboss,
     pickups::{self},
-    player::Player,
 };
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
@@ -27,7 +27,7 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
-use physics::{Physics, prelude::*};
+use physics::prelude::*;
 use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
@@ -37,7 +37,6 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<EnemyDeathEvent>()
-            .add_event::<BossDeathEvent>()
             .add_systems(
                 Startup,
                 (
@@ -46,25 +45,25 @@ impl Plugin for EnemyPlugin {
                     init_explosion_layout,
                     init_cruiser_explosion_layout,
                 ),
-            )
-            .add_systems(OnEnter(GameState::Game), start_waves)
-            .add_systems(
-                Update,
-                (
-                    update_waves,
-                    spawn_formations,
-                    despawn_formations,
-                    (add_low_health_effects, death_effects, boss_death_effects),
-                )
-                    .chain()
-                    .run_if(in_state(GameState::Game)),
-            )
-            .add_systems(
-                FixedUpdate,
-                (update_back_and_forth, update_circle, update_figure8)
-                    .run_if(in_state(GameState::Game)),
-            )
-            .add_systems(Physics, (handle_death, handle_boss_death).after(HealthSet));
+            );
+            //.add_systems(OnEnter(GameState::Game), start_waves)
+            //.add_systems(
+            //    Update,
+            //    (
+            //        update_waves,
+            //        spawn_formations,
+            //        despawn_formations,
+            //        (add_low_health_effects, death_effects),
+            //    )
+            //        .chain()
+            //        .run_if(in_state(GameState::Game)),
+            //)
+            //.add_systems(
+            //    FixedUpdate,
+            //    (update_back_and_forth, update_circle, update_figure8)
+            //        .run_if(in_state(GameState::Game)),
+            //)
+            //.add_systems(Physics, handle_death.after(HealthSet));
     }
 }
 
@@ -76,7 +75,7 @@ atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
 fn start_waves(mut commands: Commands) {
     info!("start waves");
     commands.insert_resource(WaveController::new_delayed(
-        3.,
+        0.,
         &[
             (Formation::Triangle, 8.),
             (Formation::Row, 8.),
@@ -84,101 +83,6 @@ fn start_waves(mut commands: Commands) {
             (Formation::Row, 0.),
         ],
     ));
-}
-
-#[derive(Component)]
-#[require(Transform, layers::Enemy)]
-struct Boss;
-
-const BOSS_EASE_DUR: f32 = 4.;
-
-fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
-    let boss = commands
-        .spawn((
-            Boss,
-            Sprite {
-                image: server.load("cruiser_base.png"),
-                flip_y: true,
-                ..Default::default()
-            },
-            Health::full(100),
-            BulletRate(0.5),
-            BulletSpeed(0.8),
-            CollisionTrigger(Collider::from_rect(
-                Vec2::new(-25., 32.),
-                Vec2::new(50., 64.),
-            )),
-        ))
-        .with_children(|root| {
-            root.spawn((
-                DualEmitter::<layers::Player>::new(2.),
-                Transform::from_xyz(-19., -20., 0.),
-            ));
-            root.spawn((
-                DualEmitter::<layers::Player>::new(2.),
-                Transform::from_xyz(19., -20., 0.),
-            ));
-
-            root.spawn((
-                HomingEmitter::<layers::Player, Player>::new(),
-                Transform::from_xyz(30., 10., 0.),
-            ));
-            root.spawn((
-                HomingEmitter::<layers::Player, Player>::new(),
-                Transform::from_xyz(-30., 10., 0.),
-            ));
-        })
-        .id();
-
-    let start_y = HEIGHT / 2. + 64.;
-    let end_y = start_y - 105.;
-    let start = Vec3::ZERO.with_y(start_y);
-    let end = Vec3::ZERO.with_y(end_y);
-
-    commands.animation().insert(tween(
-        Duration::from_secs_f32(BOSS_EASE_DUR),
-        EaseKind::SineOut,
-        boss.into_target().with(translation(start, end)),
-    ));
-}
-
-#[derive(Event)]
-struct BossDeathEvent(Vec2);
-
-fn handle_boss_death(
-    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<Boss>)>,
-    mut commands: Commands,
-    mut writer: EventWriter<BossDeathEvent>,
-) {
-    for (entity, transform) in q.iter() {
-        writer.write(BossDeathEvent(
-            transform.compute_transform().translation.xy(),
-        ));
-        commands.entity(entity).despawn();
-    }
-}
-
-fn boss_death_effects(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    layout: Res<CruiserExplosion>,
-    mut reader: EventReader<BossDeathEvent>,
-) {
-    for event in reader.read() {
-        commands.spawn((
-            Sprite {
-                image: server.load("cruiser_explosion.png"),
-                texture_atlas: Some(TextureAtlas {
-                    layout: layout.0.clone(),
-                    index: 0,
-                }),
-                flip_y: true,
-                ..Default::default()
-            },
-            AnimationController::from_seconds(AnimationIndices::once_despawn(0..=13), 0.1),
-            Transform::from_translation(event.0.extend(1.)),
-        ));
-    }
 }
 
 #[derive(Debug, Clone, Copy, Component)]
@@ -371,7 +275,11 @@ fn update_waves(
 
     if controller.finished() && formations.is_empty() {
         info!("ran out of formations, spawning boss");
-        run_after(Duration::from_secs_f32(5.), spawn_boss, &mut commands);
+        run_after(
+            Duration::from_secs_f32(5.),
+            miniboss::spawn_boss,
+            &mut commands,
+        );
         *finished = true;
     }
 }

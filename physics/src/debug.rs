@@ -1,4 +1,4 @@
-use super::collision::{Collider, CollidesWith, DynamicBody, StaticBody};
+use super::collision::{CollideWith, Collider, DynamicBody, StaticBody};
 use super::trigger::{CollisionTrigger, TriggerEvent};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
