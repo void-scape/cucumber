@@ -54,7 +54,10 @@ fn main() {
             }),
         bevy_enhanced_input::EnhancedInputPlugin,
         bevy_tween::DefaultTweenPlugins,
-        bevy_seedling::SeedlingPlugin::default(),
+        bevy_seedling::SeedlingPlugin {
+            default_pool_size: Some(32),
+            ..Default::default()
+        },
         physics::PhysicsPlugin,
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,

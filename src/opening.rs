@@ -149,11 +149,14 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
             Sprite::from_image(server.load("textbox.png")),
             SfxRate::new(
                 0.1,
-                (SamplePlayer::new(server.load("audio/sfx/beep.wav")), {
-                    let mut settings = PlaybackSettings::ONCE;
-                    settings.volume = Volume::Linear(0.2);
-                    settings
-                }),
+                (
+                    SamplePlayer::new(server.load("audio/sfx/beep.wav")),
+                    PitchRange(0.99..1.01),
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.2),
+                        ..PlaybackSettings::ONCE
+                    },
+                ),
             ),
             Transform::from_translation(Vec3::default().with_z(100.))
                 .with_scale(Vec3::splat(RESOLUTION_SCALE)),
@@ -180,11 +183,13 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
         }))
         .id();
 
-    commands.spawn((SamplePlayer::new(server.load("audio/sfx/note1.wav")), {
-        let mut settings = PlaybackSettings::ONCE;
-        settings.volume = Volume::Linear(0.2);
-        settings
-    }));
+    commands.spawn((
+        SamplePlayer::new(server.load("audio/sfx/note1.wav")),
+        PlaybackSettings {
+            volume: Volume::Linear(0.2),
+            ..PlaybackSettings::ONCE
+        },
+    ));
 
     // 1.
     run_after(

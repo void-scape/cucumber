@@ -11,7 +11,7 @@ use bevy::{
 use bevy_optix::shake::TraumaCommands;
 use bevy_seedling::{
     prelude::Volume,
-    sample::{PlaybackSettings, SamplePlayer},
+    sample::{PitchRange, PlaybackSettings, SamplePlayer},
 };
 use physics::{
     Physics,
@@ -336,6 +336,7 @@ fn bullet_collision_effects(
     for event in reader.read() {
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+            PitchRange(0.98..1.02),
             PlaybackSettings {
                 volume: Volume::Decibels(-32.0),
                 ..PlaybackSettings::ONCE

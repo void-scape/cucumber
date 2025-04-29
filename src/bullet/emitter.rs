@@ -46,6 +46,8 @@ impl<T: Component> SoloEmitter<T> {
     }
 }
 
+const BULLET_RANGE: core::ops::Range<f64> = 0.9..1.1;
+
 impl<T: Component> SoloEmitter<T> {
     fn shoot_bullets(
         mut emitters: Query<
@@ -99,8 +101,9 @@ impl<T: Component> SoloEmitter<T> {
             commands
                 .spawn((
                     SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                    PitchRange(BULLET_RANGE),
                     PlaybackSettings {
-                        volume: Volume::Decibels(-18.0),
+                        volume: Volume::Decibels(-12.0),
                         ..PlaybackSettings::ONCE
                     },
                 ))
@@ -193,8 +196,9 @@ impl<T: Component> DualEmitter<T> {
             commands
                 .spawn((
                     SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                    PitchRange(BULLET_RANGE),
                     PlaybackSettings {
-                        volume: Volume::Decibels(-18.0),
+                        volume: Volume::Decibels(-12.0),
                         ..PlaybackSettings::ONCE
                     },
                 ))
@@ -276,8 +280,9 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
             commands
                 .spawn((
                     SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                    PitchRange(BULLET_RANGE),
                     PlaybackSettings {
-                        volume: Volume::Decibels(-18.0),
+                        volume: Volume::Decibels(-12.0),
                         ..PlaybackSettings::ONCE
                     },
                 ))
