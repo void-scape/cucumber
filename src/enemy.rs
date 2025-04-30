@@ -1,5 +1,5 @@
 use crate::{
-    GameState, HEIGHT,
+    GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
     assets, atlas_layout,
     auto_collider::ImageCollider,
@@ -7,10 +7,11 @@ use crate::{
         BulletRate, BulletSpeed, Direction,
         emitter::{DualEmitter, SoloEmitter},
     },
-    health::{Dead, Health, HealthSet},
+    health::{Dead, Health},
     miniboss,
     pickups::{self},
 };
+use avian2d::prelude::*;
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
@@ -27,7 +28,6 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
-use physics::prelude::*;
 use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
@@ -45,25 +45,24 @@ impl Plugin for EnemyPlugin {
                     init_explosion_layout,
                     init_cruiser_explosion_layout,
                 ),
+            )
+            .add_systems(OnEnter(GameState::Game), start_waves)
+            .add_systems(
+                Update,
+                (
+                    update_waves,
+                    spawn_formations,
+                    despawn_formations,
+                    (add_low_health_effects, death_effects, handle_death),
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Game)),
+            )
+            .add_systems(
+                FixedUpdate,
+                (update_back_and_forth, update_circle, update_figure8)
+                    .run_if(in_state(GameState::Game)),
             );
-            //.add_systems(OnEnter(GameState::Game), start_waves)
-            //.add_systems(
-            //    Update,
-            //    (
-            //        update_waves,
-            //        spawn_formations,
-            //        despawn_formations,
-            //        (add_low_health_effects, death_effects),
-            //    )
-            //        .chain()
-            //        .run_if(in_state(GameState::Game)),
-            //)
-            //.add_systems(
-            //    FixedUpdate,
-            //    (update_back_and_forth, update_circle, update_figure8)
-            //        .run_if(in_state(GameState::Game)),
-            //)
-            //.add_systems(Physics, handle_death.after(HealthSet));
     }
 }
 
@@ -92,24 +91,28 @@ pub enum Formation {
     Row,
 }
 
-const TRIANGLE: &[(Enemy, Vec2, MovementPattern)] = &[
+const TRIANGLE: &[(EnemyType, Vec2, MovementPattern)] = &[
     (
-        Enemy::Common,
+        EnemyType::Common,
         Vec2::new(-40., -40.),
         MovementPattern::Circle,
     ),
-    (Enemy::Common, Vec2::ZERO, MovementPattern::Figure8),
-    (Enemy::Common, Vec2::new(40., -40.), MovementPattern::Circle),
+    (EnemyType::Common, Vec2::ZERO, MovementPattern::Figure8),
+    (
+        EnemyType::Common,
+        Vec2::new(40., -40.),
+        MovementPattern::Circle,
+    ),
 ];
 
-const ROW: &[(Enemy, Vec2, MovementPattern)] = &[
+const ROW: &[(EnemyType, Vec2, MovementPattern)] = &[
     (
-        Enemy::Uncommon,
+        EnemyType::Uncommon,
         Vec2::new(30., 0.),
         MovementPattern::BackAndForth,
     ),
     (
-        Enemy::Uncommon,
+        EnemyType::Uncommon,
         Vec2::new(-30., 0.),
         MovementPattern::BackAndForth,
     ),
@@ -120,7 +123,7 @@ impl Formation {
         self.enemies().len()
     }
 
-    pub fn enemies(&self) -> &'static [(Enemy, Vec2, MovementPattern)] {
+    pub fn enemies(&self) -> &'static [(EnemyType, Vec2, MovementPattern)] {
         match self {
             Self::Triangle => TRIANGLE,
             Self::Row => ROW,
@@ -158,8 +161,8 @@ impl Formation {
             .map(|(enemy, _, _)| {
                 ENEMY_WEIGHT
                     * match enemy {
-                        Enemy::Common => 0.75,
-                        Enemy::Uncommon => 0.85,
+                        EnemyType::Common => 0.75,
+                        EnemyType::Uncommon => 0.85,
                     }
             })
             .sum();
@@ -366,14 +369,25 @@ fn despawn_formations(
     }
 }
 
+#[derive(Default, Component)]
+pub struct Enemy;
+
 #[derive(Clone, Copy, Component, PartialEq, Eq, Hash)]
-#[require(Transform, Velocity, Visibility, layers::Enemy, ImageCollider)]
-pub enum Enemy {
+#[require(
+    Enemy,
+    Transform,
+    LinearVelocity,
+    Visibility,
+    CollidingEntities,
+    ImageCollider,
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+)]
+pub enum EnemyType {
     Common,
     Uncommon,
 }
 
-impl Enemy {
+impl EnemyType {
     pub fn spawn_child_with(
         &self,
         entity: Entity,
@@ -392,8 +406,8 @@ impl Enemy {
 
     fn insert_emitter(&self, commands: &mut EntityCommands) {
         match self {
-            Self::Common => commands.with_child(SoloEmitter::<layers::Player>::new()),
-            Self::Uncommon => commands.with_child(DualEmitter::<layers::Player>::new(5.)),
+            Self::Common => commands.with_child(SoloEmitter::player()),
+            Self::Uncommon => commands.with_child(DualEmitter::player(5.)),
         };
     }
 
@@ -573,7 +587,7 @@ struct EnemyDeathEvent {
 }
 
 fn handle_death(
-    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<Enemy>)>,
+    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<EnemyType>)>,
     mut commands: Commands,
     mut writer: EventWriter<EnemyDeathEvent>,
 ) {
@@ -623,7 +637,7 @@ fn add_low_health_effects(
     server: Res<AssetServer>,
     fire: Res<FireLayout>,
     sparks: Res<SparksLayout>,
-    query: Query<(Entity, &Health), (With<Enemy>, Without<LowHealthEffects>)>,
+    query: Query<(Entity, &Health), (With<EnemyType>, Without<LowHealthEffects>)>,
 ) {
     const DIST: f32 = 8.;
     const Y_OFFSET: f32 = 5.;

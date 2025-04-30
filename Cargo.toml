@@ -10,7 +10,6 @@ members = [
     "bevy_optix",
     "bevy_pretty_text",
     "bevy_sequence",
-    "physics",
     "noise",
 ]
 
@@ -51,11 +50,17 @@ bevy_textbox = { path = "bevy_textbox" }
 bevy_optix = { path = "bevy_optix" }
 bevy_pretty_text = { path = "bevy_pretty_text" }
 bevy_sequence = { path = "bevy_sequence" }
-physics = { path = "physics" }
 bevy_tween = { git = "https://github.com/Rabbival/bevy_tween", branch = "bevy-v0.16.0" }
 bevy_seedling = { path = "bevy_seedling" }
+# TODO: test `parallel` feature
+avian2d = { git = "https://github.com/Jondolf/avian.git", default-features = false, features = [
+    "2d",
+    "f32",
+    "parry-f32",
+    "default-collider",
+    "debug-plugin",
+] }
 rand = "0.9"
-# bevy_trauma_shake = "0.4.0"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 

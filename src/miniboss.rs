@@ -1,40 +1,30 @@
 use crate::GameState;
-use crate::bullet::homing::TurnSpeed;
-use crate::enemy::CruiserExplosion;
-use crate::health::{Dead, HealthSet};
+use crate::enemy::{CruiserExplosion, Enemy};
+use crate::health::Dead;
 use crate::{
     HEIGHT,
     animation::{AnimationController, AnimationIndices},
-    bullet::{
-        BulletRate, BulletSpeed,
-        emitter::{DualEmitter, HomingEmitter},
-    },
+    bullet::{BulletRate, BulletSpeed},
     health::Health,
-    player::Player,
 };
+use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_tween::{
-    combinator::tween,
-    interpolate::translation,
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::IntoTarget,
-};
-use physics::prelude::*;
-use std::time::Duration;
 
 pub struct MinibossPlugin;
 
 impl Plugin for MinibossPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<BossDeathEvent>()
-            .add_systems(OnEnter(GameState::Game), spawn_boss)
-            .add_systems(Update, boss_death_effects.run_if(in_state(GameState::Game)))
-            .add_systems(Physics, handle_boss_death.after(HealthSet));
+            //.add_systems(OnEnter(GameState::Game), spawn_boss)
+            .add_systems(
+                Update,
+                (boss_death_effects, handle_boss_death).run_if(in_state(GameState::Game)),
+            );
     }
 }
 
 #[derive(Component)]
-#[require(Transform, layers::Enemy)]
+#[require(Transform, Enemy, CollidingEntities, Sensor)]
 struct Boss;
 
 const BOSS_EASE_DUR: f32 = 4.;
@@ -52,37 +42,33 @@ pub fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
             Health::full(100),
             BulletRate(0.5),
             BulletSpeed(0.8),
-            CollisionTrigger(Collider::from_rect(
-                Vec2::new(-25., 32.),
-                Vec2::new(50., 64.),
-            )),
-        ))
-        .with_children(|root| {
-            //root.spawn((
+            Collider::rectangle(75., 90.),
+            //CollisionTrigger(Collider::from_rect(
+            //    Vec2::new(-25., 32.),
+            //    Vec2::new(50., 64.),
+            //)),
+
+            //children![(
             //    DualEmitter::<layers::Player>::new(2.),
             //    Transform::from_xyz(-19., -20., 0.),
-            //));
-            //root.spawn((
+            //)(
             //    DualEmitter::<layers::Player>::new(2.),
             //    Transform::from_xyz(19., -20., 0.),
-            //));
-
-            //root.spawn((
+            //)(
             //    HomingEmitter::<layers::Player, Player>::new(),
             //    TurnSpeed(60.),
             //    Transform::from_xyz(30., 10., 0.),
-            //));
-            //root.spawn((
+            //)(
             //    HomingEmitter::<layers::Player, Player>::new(),
             //    TurnSpeed(60.),
             //    Transform::from_xyz(-30., 10., 0.),
-            //));
-        })
+            //)],
+        ))
         .id();
 
     let start_y = HEIGHT / 2. + 64.;
     let end_y = start_y - 105.;
-    let start = Vec3::ZERO.with_y(start_y);
+    //let start = Vec3::ZERO.with_y(start_y);
     let end = Vec3::ZERO.with_y(end_y);
 
     commands
@@ -99,16 +85,15 @@ pub fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
 struct BossDeathEvent(Vec2);
 
 fn handle_boss_death(
-    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<Boss>)>,
+    boss: Single<(Entity, &GlobalTransform), (With<Dead>, With<Boss>)>,
     mut commands: Commands,
     mut writer: EventWriter<BossDeathEvent>,
 ) {
-    for (entity, transform) in q.iter() {
-        writer.write(BossDeathEvent(
-            transform.compute_transform().translation.xy(),
-        ));
-        commands.entity(entity).despawn();
-    }
+    let (entity, transform) = boss.into_inner();
+    writer.write(BossDeathEvent(
+        transform.compute_transform().translation.xy(),
+    ));
+    commands.entity(entity).despawn();
 }
 
 fn boss_death_effects(

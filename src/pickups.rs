@@ -1,11 +1,9 @@
 use crate::assets;
 use crate::player::Player;
+use avian2d::prelude::*;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use physics::layers::RegisterPhysicsLayer;
-use physics::prelude::{Collider, Velocity};
-use physics::trigger::{CollisionTrigger, Triggers};
 use rand::seq::IteratorRandom;
 
 const PICKUP_SPEED: f32 = 16.;
@@ -15,7 +13,6 @@ pub struct PickupPlugin;
 impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
-            .register_trigger_layer::<PickupLayer>()
             //.add_systems(Startup, debug)
             .add_systems(Update, pickup_triggered);
     }
@@ -30,8 +27,8 @@ fn debug(mut commands: Commands) {
     commands.spawn((Weapon::Missile, Transform::from_xyz(0., 50., 0.)));
 }
 
-pub fn velocity() -> Velocity {
-    Velocity(Vec2::NEG_Y * PICKUP_SPEED)
+pub fn velocity() -> LinearVelocity {
+    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED)
 }
 
 #[derive(Event)]
@@ -40,28 +37,35 @@ pub enum PickupEvent {
     Upgrade(Upgrade),
 }
 
+#[derive(Default, Component)]
+#[require(Transform, RigidBody::Kinematic, Sensor)]
+struct Collectable;
+
 fn pickup_triggered(
     mut commands: Commands,
     mut writer: EventWriter<PickupEvent>,
-    player: Single<&Triggers<PickupLayer>, With<Player>>,
-    upgrades: Query<(Entity, &Upgrade)>,
-    weapons: Query<(Entity, &Weapon)>,
+    player: Single<&CollidingEntities, With<Player>>,
+    collectables: Query<&Collectable>,
+    upgrades: Query<&Upgrade>,
+    weapons: Query<&Weapon>,
 ) {
-    for entity in player.entities().iter() {
-        if let Some((_, upgrade)) = upgrades.iter().find(|(upgrade, _)| entity == upgrade) {
-            commands.entity(*entity).despawn();
+    for entity in player
+        .iter()
+        .copied()
+        .filter(|entity| collectables.get(*entity).is_ok())
+    {
+        if let Ok(upgrade) = upgrades.get(entity) {
+            commands.entity(entity).despawn();
             writer.write(PickupEvent::Upgrade(*upgrade));
-        }
-
-        if let Some((_, weapon)) = weapons.iter().find(|(weapon, _)| entity == weapon) {
-            commands.entity(*entity).despawn();
+        } else if let Ok(weapon) = weapons.get(entity) {
+            commands.entity(entity).despawn();
             writer.write(PickupEvent::Weapon(*weapon));
         }
     }
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, PickupLayer, CollisionTrigger = upgrade_trigger())]
+#[require(Collectable, Collider::rectangle(8., 8.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
     Speed(f32),
@@ -84,7 +88,7 @@ impl SpriteHook for Upgrade {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, PickupLayer, CollisionTrigger = weapon_trigger())]
+#[require(Collectable, Collider::rectangle(16., 16.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
     Bullet,
@@ -106,21 +110,6 @@ impl SpriteHook for Weapon {
     fn sprite(&self, server: &AssetServer) -> Sprite {
         self.sprite(server)
     }
-}
-
-#[derive(Default, Component)]
-pub struct PickupLayer;
-
-fn upgrade_trigger() -> CollisionTrigger {
-    let tl = -(Vec2::X + Vec2::NEG_Y) * 4.;
-    let size = Vec2::ONE * 8.;
-    CollisionTrigger(Collider::from_rect(tl, size))
-}
-
-fn weapon_trigger() -> CollisionTrigger {
-    let tl = -(Vec2::X + Vec2::NEG_Y) * 8.;
-    let size = Vec2::ONE * 16.;
-    CollisionTrigger(Collider::from_rect(tl, size))
 }
 
 trait SpriteHook

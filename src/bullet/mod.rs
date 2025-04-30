@@ -1,9 +1,14 @@
 use crate::{
+    Layer,
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
-    health::{Damage, Health, HealthSet},
+    bounds::ScreenBounds,
+    enemy::Enemy,
+    health::{Damage, Health},
+    player::Player,
 };
+use avian2d::prelude::*;
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
@@ -12,11 +17,6 @@ use bevy_optix::shake::TraumaCommands;
 use bevy_seedling::{
     prelude::Volume,
     sample::{PitchRange, PlaybackSettings, SamplePlayer},
-};
-use physics::{
-    Physics,
-    layers::{self, TriggersWith},
-    prelude::*,
 };
 use std::time::Duration;
 use strum_macros::EnumIter;
@@ -38,10 +38,8 @@ impl Plugin for BulletPlugin {
         app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
             .add_event::<BulletCollisionEvent>()
             .add_systems(
-                Physics,
-                (handle_enemy_collision, handle_player_collision)
-                    .before(HealthSet)
-                    .in_set(BulletSystems::Collision),
+                PostUpdate,
+                (handle_enemy_collision, handle_player_collision).in_set(BulletSystems::Collision),
             )
             .add_systems(
                 Update,
@@ -52,11 +50,7 @@ impl Plugin for BulletPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (
-                    // init_bullet_velocity.in_set(BulletSystems::Velocity),
-                    init_bullet_sprite.in_set(BulletSystems::Sprite),
-                )
-                    .chain(),
+                (init_bullet_sprite.in_set(BulletSystems::Sprite),).chain(),
             );
     }
 }
@@ -132,7 +126,7 @@ impl Default for BulletSpeed {
 
 fn init_bullet_sprite(
     mut commands: Commands,
-    bullets: Query<(Entity, &BulletSprite, &Velocity), Without<Sprite>>,
+    bullets: Query<(Entity, &BulletSprite, &LinearVelocity), Without<Sprite>>,
     server: Res<AssetServer>,
 ) {
     for (entity, sprite, velocity) in bullets.iter() {
@@ -170,19 +164,33 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(BulletSpeed, TriggersWith<layers::Wall>)]
+#[require(Polarity, BulletSpeed, Sensor, RigidBody::Kinematic)]
 pub struct Bullet;
 
-fn kill_on_wall(q: Query<(Entity, &Triggers<layers::Wall>)>, mut commands: Commands) {
-    for (entity, triggers) in q.iter() {
-        if !triggers.entities().is_empty() {
+impl Bullet {
+    pub fn target_layer(target: Layer) -> CollisionLayers {
+        CollisionLayers::new([Layer::Bullet], [target, Layer::Bounds])
+    }
+}
+
+fn kill_on_wall(
+    mut commands: Commands,
+    bounds: Query<&CollidingEntities, With<ScreenBounds>>,
+    bullets: Query<Entity, With<Bullet>>,
+) {
+    for colliding_entities in bounds.iter() {
+        for entity in colliding_entities
+            .iter()
+            .copied()
+            .flat_map(|entity| bullets.get(entity))
+        {
             commands.entity(entity).despawn();
         }
     }
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet, Polarity)]
+#[require(Bullet)]
 #[component(on_add = Self::on_add_hook)]
 pub enum BulletType {
     Basic,
@@ -205,6 +213,7 @@ impl BulletType {
 }
 
 #[derive(Component)]
+#[require(ImageCollider)]
 pub struct BulletSprite {
     path: &'static str,
     cell: UVec2,
@@ -220,35 +229,26 @@ impl BulletSprite {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(0, 1), ImageCollider)]
+#[require(BulletSprite::from_cell(0, 1))]
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(2, 1), ImageCollider)]
+#[require(BulletSprite::from_cell(2, 1))]
 pub struct CommonBullet;
 
 fn handle_enemy_collision(
-    bullets: Query<
-        (
-            Entity,
-            &Damage,
-            &Triggers<layers::Enemy>,
-            &BulletSprite,
-            &GlobalTransform,
-        ),
-        With<Bullet>,
-    >,
-    mut enemies: Query<&mut Health>,
+    bullets: Query<(Entity, &Damage, &BulletSprite, &GlobalTransform), With<Bullet>>,
+    mut enemies: Query<(&CollidingEntities, &mut Health), With<Enemy>>,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
 ) {
-    for (bullet, damage, collision, sprite, transform) in bullets.iter() {
-        let Some(first) = collision.entities().first() else {
-            continue;
-        };
-
-        if let Ok(mut enemy) = enemies.get_mut(*first) {
-            enemy.damage(**damage);
+    for (colliding_entities, mut health) in enemies.iter_mut() {
+        for (bullet, damage, sprite, transform) in colliding_entities
+            .iter()
+            .copied()
+            .flat_map(|entity| bullets.get(entity))
+        {
+            health.damage(**damage);
             writer.write(BulletCollisionEvent::new(
                 sprite.cell,
                 transform.compute_transform(),
@@ -260,34 +260,25 @@ fn handle_enemy_collision(
 }
 
 fn handle_player_collision(
-    bullets: Query<
-        (
-            Entity,
-            &Damage,
-            &Triggers<layers::Player>,
-            &BulletSprite,
-            &GlobalTransform,
-        ),
-        With<Bullet>,
-    >,
-    mut player: Query<&mut Health>,
+    bullets: Query<(Entity, &Damage, &BulletSprite, &GlobalTransform), With<Bullet>>,
+    player: Single<(&CollidingEntities, &mut Health), With<Player>>,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
 ) {
-    for (bullet, damage, collision, sprite, transform) in bullets.iter() {
-        let Some(first) = collision.entities().first() else {
-            continue;
-        };
+    let (colliding_entities, mut health) = player.into_inner();
 
-        if let Ok(mut player) = player.get_mut(*first) {
-            player.damage(**damage);
-            writer.write(BulletCollisionEvent::new(
-                sprite.cell,
-                transform.compute_transform(),
-                BulletSource::Enemy,
-            ));
-            commands.entity(bullet).despawn();
-        }
+    for (bullet, damage, sprite, transform) in colliding_entities
+        .iter()
+        .copied()
+        .flat_map(|entity| bullets.get(entity))
+    {
+        health.damage(**damage);
+        writer.write(BulletCollisionEvent::new(
+            sprite.cell,
+            transform.compute_transform(),
+            BulletSource::Enemy,
+        ));
+        commands.entity(bullet).despawn();
     }
 }
 

@@ -1,13 +1,14 @@
 #![allow(clippy::type_complexity)]
 
+use avian2d::prelude::{Gravity, PhysicsDebugPlugin, PhysicsLayer};
+use bevy::app::FixedMainScheduleOrder;
+use bevy::ecs::schedule::ScheduleLabel;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_optix::camera::MainCamera;
 use bevy_optix::pixel_perfect::{CanvasDimensions, Scaling};
 use bevy_optix::shake::prelude::*;
-use physics::layers::{self, RegisterPhysicsLayer};
-use physics::prelude::Gravity;
 
 mod animation;
 mod assets;
@@ -59,7 +60,9 @@ fn main() {
             default_pool_size: Some(32),
             ..Default::default()
         },
-        physics::PhysicsPlugin,
+        // the average object (bullet) is 8 ppx.
+        avian2d::PhysicsPlugins::new(Avian).with_length_unit(8.),
+        PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
@@ -84,19 +87,35 @@ fn main() {
         opening::OpeningPlugin,
     ))
     .add_plugins(miniboss::MinibossPlugin)
+    .init_schedule(Avian)
+    .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
     .add_systems(Startup, set_state.run_if(in_state(GameState::Startup)))
     .add_systems(Startup, configure_screen_shake)
-    .register_collision_layer::<layers::Player>(32.0)
-    .register_collision_layer::<layers::Enemy>(32.0)
-    .register_collision_layer::<layers::Wall>(32.0)
-    .register_trigger_layer::<physics::layers::Enemy>()
-    .register_trigger_layer::<physics::layers::Player>()
-    .register_trigger_layer::<physics::layers::Wall>()
     .insert_resource(ClearColor(Color::BLACK))
-    .insert_resource(Gravity(Vec2::ZERO))
-    .insert_resource(Scaling::Canvas)
-    .run();
+    .insert_resource(Scaling::Canvas);
+
+    // the defalt schedule for Avian is `FixedPostUpdate`, but I wanted something easier to type,
+    // so it is set to `Avian`
+    app.world_mut()
+        .resource_mut::<FixedMainScheduleOrder>()
+        .insert_after(FixedPostUpdate, Avian);
+
+    app.run();
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ScheduleLabel)]
+pub struct Avian;
+
+// this many layers is probably not necessary
+#[derive(Default, Clone, Copy, PhysicsLayer)]
+pub enum Layer {
+    #[default]
+    Bounds,
+    Bullet,
+    Player,
+    Enemy,
+    Pickups,
 }
 
 fn set_state(mut commands: Commands) {

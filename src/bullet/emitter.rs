@@ -2,13 +2,10 @@ use super::{
     Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
     homing::{Heading, Homing, TurnSpeed},
 };
-use crate::{auto_collider::ImageCollider, enemy::Enemy, health::Damage};
+use crate::{Layer, auto_collider::ImageCollider, enemy::Enemy, health::Damage};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
-use physics::{
-    layers::{self, TriggersWith},
-    prelude::Velocity,
-};
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
 pub struct EmitterPlugin;
@@ -18,12 +15,10 @@ impl Plugin for EmitterPlugin {
         app.add_systems(
             Update,
             (
-                SoloEmitter::<layers::Enemy>::shoot_bullets,
-                SoloEmitter::<layers::Player>::shoot_bullets,
-                DualEmitter::<layers::Enemy>::shoot_bullets,
-                DualEmitter::<layers::Player>::shoot_bullets,
-                HomingEmitter::<layers::Enemy, Enemy>::shoot_bullets,
-                HomingEmitter::<layers::Player, crate::player::Player>::shoot_bullets,
+                SoloEmitter::shoot_bullets,
+                DualEmitter::shoot_bullets,
+                HomingEmitter::<Enemy>::shoot_bullets,
+                HomingEmitter::<crate::player::Player>::shoot_bullets,
             ),
         );
     }
@@ -34,7 +29,7 @@ impl Plugin for EmitterPlugin {
 #[derive(Component)]
 pub struct BaseSpeed(pub f32);
 
-#[derive(Component, Default)]
+#[derive(Component)]
 #[require(
     Transform,
     BaseSpeed(150.),
@@ -42,29 +37,31 @@ pub struct BaseSpeed(pub f32);
     Polarity,
     Visibility::Hidden
 )]
-pub struct SoloEmitter<T>(PhantomData<fn() -> T>);
+pub struct SoloEmitter(Layer);
 
-impl<T: Component> SoloEmitter<T> {
-    pub fn new() -> Self {
-        Self(PhantomData)
+impl SoloEmitter {
+    pub fn player() -> Self {
+        Self(Layer::Player)
+    }
+
+    pub fn enemy() -> Self {
+        Self(Layer::Enemy)
     }
 }
 
 const BULLET_RANGE: core::ops::Range<f64> = 0.9..1.1;
 
-impl<T: Component> SoloEmitter<T> {
+impl SoloEmitter {
     fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                Option<&mut BulletTimer>,
-                &BaseSpeed,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            With<SoloEmitter<T>>,
-        >,
+        mut emitters: Query<(
+            Entity,
+            &SoloEmitter,
+            Option<&mut BulletTimer>,
+            &BaseSpeed,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+        )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -72,7 +69,9 @@ impl<T: Component> SoloEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, base_speed, polarity, child_of, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, base_speed, polarity, child_of, transform) in
+            emitters.iter_mut()
+        {
             let Ok((rate, speed)) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -97,9 +96,9 @@ impl<T: Component> SoloEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 new_transform,
-                TriggersWith::<T>::default(),
+                Bullet::target_layer(emitter.0),
                 Damage::new(1),
             ));
 
@@ -125,19 +124,32 @@ impl<T: Component> SoloEmitter<T> {
     Polarity,
     Visibility::Hidden
 )]
-pub struct DualEmitter<T>(f32, PhantomData<fn() -> T>);
+pub struct DualEmitter {
+    target: Layer,
+    width: f32,
+}
 
-impl<T: Component> DualEmitter<T> {
-    pub fn new(width: f32) -> Self {
-        Self(width, PhantomData)
+impl DualEmitter {
+    pub fn player(width: f32) -> Self {
+        Self {
+            target: Layer::Player,
+            width,
+        }
+    }
+
+    pub fn enemy(width: f32) -> Self {
+        Self {
+            target: Layer::Enemy,
+            width,
+        }
     }
 }
 
-impl<T: Component> DualEmitter<T> {
+impl DualEmitter {
     fn shoot_bullets(
         mut emitters: Query<(
             Entity,
-            &DualEmitter<T>,
+            &DualEmitter,
             Option<&mut BulletTimer>,
             &BaseSpeed,
             &Polarity,
@@ -178,24 +190,24 @@ impl<T: Component> DualEmitter<T> {
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 {
                     let mut t = new_transform;
-                    t.translation.x -= emitter.0;
+                    t.translation.x -= emitter.width;
                     t
                 },
-                TriggersWith::<T>::default(),
+                Bullet::target_layer(emitter.target),
                 Damage::new(1),
             ));
 
             commands.spawn((
                 BulletType::Basic,
-                Velocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 {
-                    new_transform.translation.x += emitter.0;
+                    new_transform.translation.x += emitter.width;
                     new_transform
                 },
-                TriggersWith::<T>::default(),
+                Bullet::target_layer(emitter.target),
                 Damage::new(1),
             ));
 
@@ -215,28 +227,39 @@ impl<T: Component> DualEmitter<T> {
 
 #[derive(Component, Default)]
 #[require(Transform, BaseSpeed(125.), TurnSpeed, Polarity)]
-pub struct HomingEmitter<T, U>(PhantomData<fn() -> (T, U)>);
+pub struct HomingEmitter<T> {
+    target: Layer,
+    _filter: PhantomData<fn() -> T>,
+}
 
-impl<T: Component, U: Component> HomingEmitter<T, U> {
-    pub fn new() -> Self {
-        Self(PhantomData)
+impl<T: Component> HomingEmitter<T> {
+    pub fn player() -> Self {
+        Self {
+            target: Layer::Player,
+            _filter: PhantomData,
+        }
+    }
+
+    pub fn enemy() -> Self {
+        Self {
+            target: Layer::Enemy,
+            _filter: PhantomData,
+        }
     }
 }
 
-impl<T: Component, U: Component> HomingEmitter<T, U> {
+impl<T: Component> HomingEmitter<T> {
     fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                Option<&mut BulletTimer>,
-                &BaseSpeed,
-                &TurnSpeed,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            With<HomingEmitter<T, U>>,
-        >,
+        mut emitters: Query<(
+            Entity,
+            &HomingEmitter<T>,
+            Option<&mut BulletTimer>,
+            &BaseSpeed,
+            &TurnSpeed,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+        )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -244,7 +267,7 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
     ) {
         let delta = time.delta();
 
-        for (entity, timer, base_speed, turn_speed, polarity, child_of, transform) in
+        for (entity, emitter, timer, base_speed, turn_speed, polarity, child_of, transform) in
             emitters.iter_mut()
         {
             let Ok((rate, speed)) = parents.get(child_of.parent()) else {
@@ -278,15 +301,15 @@ impl<T: Component, U: Component> HomingEmitter<T, U> {
                 BulletSprite::from_cell(5, 2),
                 Bullet,
                 ImageCollider,
-                Velocity::default(),
-                Homing::<U>::new(),
+                LinearVelocity::default(),
+                Homing::<T>::new(),
                 *turn_speed,
                 Heading {
                     speed: base_speed.0 * speed.0,
                     direction,
                 },
                 new_transform,
-                TriggersWith::<T>::default(),
+                Bullet::target_layer(emitter.target),
                 Damage::new(1),
             ));
 

@@ -1,19 +1,17 @@
-use crate::health::{Health, HealthSet};
+use crate::health::Health;
 use crate::pickups::PickupEvent;
 use crate::player::{PLAYER_HEALTH, Player};
 use crate::{GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
-use physics::Physics;
 
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Game), (frame, health, init_upgrade_ui))
-            .add_systems(Physics, update_health.after(HealthSet))
-            .add_systems(Update, update_upgrades);
+            .add_systems(Update, (update_health, update_upgrades));
     }
 }
 

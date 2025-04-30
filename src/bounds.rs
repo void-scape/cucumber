@@ -1,5 +1,6 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
-use physics::{layers, prelude::*};
+use crate::Layer;
 
 pub struct ScreenBoundsPlugin;
 
@@ -10,59 +11,45 @@ impl Plugin for ScreenBoundsPlugin {
 }
 
 #[derive(Component)]
+#[require(
+    RigidBody::Static, 
+    CollidingEntities, 
+    CollisionLayers::new([Layer::Bounds], [Layer::Player, Layer::Bullet]),
+)]
 pub struct ScreenBounds;
 
 fn spawn_bounds(mut commands: Commands) {
-    let top = crate::HEIGHT / 2.0;
-    let bottom = -crate::HEIGHT / 2.0;
-    let left = -crate::WIDTH / 2.0;
-    let right = crate::WIDTH / 2.0;
-
-    let thickness = 32.0;
-
-    let horizontal_collider = Collider::from_rect(
-        Vec2::new(left, thickness / 2.0),
-        Vec2::new(crate::WIDTH, thickness),
-    );
+    let top = crate::HEIGHT / 2.;
+    let bottom = -crate::HEIGHT / 2.;
+    let left = -crate::WIDTH / 2.;
+    let right = crate::WIDTH / 2.;
+    let thickness = 32.;
 
     // top
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(0.0, top + thickness / 2.0, 0.0)),
+        Transform::default().with_translation(Vec3::new(0., top + thickness / 2., 0.)),
+        Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
-        layers::Wall,
-        StaticBody,
-        horizontal_collider,
-        CollisionTrigger(horizontal_collider),
     ));
 
     // bottom
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(0.0, bottom - thickness / 2.0, 0.0)),
+        Transform::default().with_translation(Vec3::new(0., bottom - thickness / 2., 0.)),
+        Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
-        layers::Wall,
-        StaticBody,
-        horizontal_collider,
-        CollisionTrigger(horizontal_collider),
     ));
 
-    let vertical_collider = Collider::from_rect(Vec2::ZERO, Vec2::new(thickness, crate::HEIGHT));
     // left
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(left - thickness, top, 0.0)),
+        Transform::default().with_translation(Vec3::new(left - thickness / 2., 0., 0.)),
+        Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
-        layers::Wall,
-        StaticBody,
-        vertical_collider,
-        CollisionTrigger(vertical_collider),
     ));
 
     // right
     commands.spawn((
-        Transform::default().with_translation(Vec3::new(right, top, 0.0)),
+        Transform::default().with_translation(Vec3::new(right + thickness / 2., 0., 0.)),
+        Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
-        layers::Wall,
-        StaticBody,
-        vertical_collider,
-        CollisionTrigger(vertical_collider),
     ));
 }

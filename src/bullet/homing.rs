@@ -1,6 +1,7 @@
+use crate::Avian;
 use crate::{enemy::Enemy, player::Player};
+use avian2d::prelude::*;
 use bevy::prelude::*;
-use physics::{PhysicsSystems, prelude::*};
 use rand::distr::{Distribution, weighted::WeightedIndex};
 use std::f32::consts::{PI, TAU};
 use std::marker::PhantomData;
@@ -14,10 +15,10 @@ impl Plugin for HomingPlugin {
             (select_target::<Player>, select_target::<Enemy>),
         )
         .add_systems(
-            Physics,
+            Avian,
             (steer_homing, apply_heading_velocity)
                 .chain()
-                .before(PhysicsSystems::Velocity),
+                .before(PhysicsSet::StepSimulation),
         );
     }
 }
@@ -144,7 +145,7 @@ fn steer_homing(
     }
 }
 
-fn apply_heading_velocity(mut homing: Query<(&mut Transform, &Heading, &mut Velocity)>) {
+fn apply_heading_velocity(mut homing: Query<(&mut Transform, &Heading, &mut LinearVelocity)>) {
     for (mut transform, heading, mut velocity) in homing.iter_mut() {
         velocity.0.x = heading.speed * heading.direction.cos();
         velocity.0.y = heading.speed * heading.direction.sin();

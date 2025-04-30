@@ -1,22 +1,19 @@
 use crate::{
-    GameState, HEIGHT,
+    GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bullet::{
-        BulletCollisionEvent, BulletRate, BulletSource, BulletSpeed, BulletTimer, Polarity,
+        BulletCollisionEvent, BulletRate, BulletSource, BulletTimer, Polarity,
         emitter::{DualEmitter, HomingEmitter},
     },
     enemy::Enemy,
-    health::{Dead, Health, HealthSet},
-    pickups::{self, PickupEvent, Upgrade, Weapon},
+    health::{Dead, Health},
+    pickups::{PickupEvent, Upgrade, Weapon},
 };
+use avian2d::prelude::*;
 use bevy::{
-    ecs::{
-        component::HookContext,
-        system::RunSystemOnce,
-        world::DeferredWorld,
-    },
+    ecs::{component::HookContext, system::RunSystemOnce, world::DeferredWorld},
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
@@ -28,7 +25,6 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
-use physics::prelude::*;
 use std::{cmp::Ordering, f32, time::Duration};
 
 pub const PLAYER_HEALTH: usize = 5;
@@ -39,7 +35,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Game), |mut commands: Commands| {
             let starting_weapon = commands
-                .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
+                .spawn((DualEmitter::enemy(3.), Polarity::North))
                 .id();
 
             let player = commands
@@ -63,8 +59,10 @@ impl Plugin for PlayerPlugin {
                 )),
             ));
         })
-        .add_systems(Update, (handle_pickups, damage_effects))
-        .add_systems(Physics, handle_death.after(HealthSet))
+        .add_systems(
+            Update,
+            (handle_pickups, damage_effects, handle_death, zero_rotation),
+        )
         .add_input_context::<AliveContext>()
         .add_observer(apply_movement)
         .add_observer(stop_movement);
@@ -73,14 +71,23 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component)]
 #[require(
-    Transform, Velocity, layers::Player, Health::full(PLAYER_HEALTH),
-    //ImageCollider, 
-    BulletSpeed(1.0), BulletRate(1.0), 
-    TriggersWith::<pickups::PickupLayer>, CollidesWith::<layers::Wall>, 
-    DynamicBody
+    Transform,
+    LinearVelocity,
+    Health::full(PLAYER_HEALTH),
+    ImageCollider,
+    RigidBody::Dynamic,
+    CollidingEntities,
+    CollisionLayers = collision_layers(),
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
+
+fn collision_layers() -> CollisionLayers {
+    CollisionLayers::new(
+        [Layer::Player],
+        [Layer::Bounds, Layer::Pickups, Layer::Bullet],
+    )
+}
 
 #[derive(Component)]
 struct WeaponEntity(Entity);
@@ -140,7 +147,7 @@ struct BlockControls;
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    player: Single<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
+    player: Single<(&mut LinearVelocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
     mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let (mut velocity, mut sprite) = player.into_inner();
@@ -167,7 +174,7 @@ fn apply_movement(
 
 fn stop_movement(
     _: Trigger<Completed<MoveAction>>,
-    player: Single<(&mut Velocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
+    player: Single<(&mut LinearVelocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
     mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let (mut velocity, mut sprite) = player.into_inner();
@@ -178,6 +185,15 @@ fn stop_movement(
     sprite.rect = Some(Rect::from_corners(tl, br));
 
     **blasters = Visibility::Hidden;
+}
+
+// TODO: this does not work? we don't brush on anything anyways
+
+/// Brushing along edges rotates the player.
+///
+/// Transform and all physics things are synced in [`PhysicsSet::Sync`].
+fn zero_rotation(mut player: Single<&mut Transform, With<Player>>) {
+    player.rotation = Quat::default();
 }
 
 #[derive(Debug, InputAction)]
@@ -204,7 +220,7 @@ fn handle_pickups(
                 commands.entity(weapon_entity.0).despawn();
 
                 let emitter = commands
-                    .spawn((DualEmitter::<layers::Enemy>::new(3.), Polarity::North))
+                    .spawn((DualEmitter::enemy(3.), Polarity::North))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
@@ -213,10 +229,7 @@ fn handle_pickups(
                 commands.entity(weapon_entity.0).despawn();
 
                 let emitter = commands
-                    .spawn((
-                        HomingEmitter::<layers::Enemy, Enemy>::new(),
-                        Polarity::North,
-                    ))
+                    .spawn((HomingEmitter::<Enemy>::enemy(), Polarity::North))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);

@@ -1,5 +1,5 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
-use physics::prelude::*;
 
 pub struct AutoColliderPlugin;
 
@@ -21,10 +21,9 @@ fn insert_collider(
             continue;
         };
 
-        let offset = Vec2::new(-size.x / 2.0, size.y / 2.0);
         commands
             .entity(entity)
-            .insert(CollisionTrigger(Collider::from_rect(offset, size)));
+            .insert(Collider::rectangle(size.x, size.y));
     }
 }
 
@@ -107,17 +106,10 @@ fn insert_image_collider(
         }
 
         let bounds = Rect::from_corners(min, max);
-        let search_size = search_bounds.size();
-        let collider = Collider::from_rect(
-            Vec2::new(
-                bounds.min.x - search_size.x / 2.0,
-                bounds.max.y + search_size.y / 2.0,
-            ),
-            bounds.size() + 1.,
-        );
+        let size = bounds.size() + 1.;
         commands
             .entity(entity)
-            .insert((CollisionTrigger(collider), collider))
+            .insert(Collider::rectangle(size.x, size.y))
             .remove::<ImageCollider>();
     }
 }
