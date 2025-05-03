@@ -9,8 +9,8 @@ pub struct MusicPlugin;
 
 impl Plugin for MusicPlugin {
     fn build(&self, app: &mut App) {
-        //app.add_systems(OnEnter(GameState::Game), startup)
-        //    .add_systems(Update, update_layers);
+        app.add_systems(OnEnter(GameState::Game), startup)
+            .add_systems(Update, update_layers);
     }
 }
 
