@@ -102,16 +102,15 @@ impl SoloEmitter {
                 Damage::new(1),
             ));
 
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                    PitchRange(BULLET_RANGE),
-                    PlaybackSettings {
-                        volume: Volume::Decibels(-12.0),
-                        ..PlaybackSettings::ONCE
-                    },
-                ))
-                .effect(BandPassNode::new(1000.0, 4.0));
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                PitchRange(BULLET_RANGE),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-12.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
         }
     }
 }
@@ -211,16 +210,15 @@ impl DualEmitter {
                 Damage::new(1),
             ));
 
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                    PitchRange(BULLET_RANGE),
-                    PlaybackSettings {
-                        volume: Volume::Decibels(-12.0),
-                        ..PlaybackSettings::ONCE
-                    },
-                ))
-                .effect(BandPassNode::new(1000.0, 4.0));
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                PitchRange(BULLET_RANGE),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-12.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
         }
     }
 }
@@ -313,16 +311,15 @@ impl<T: Component> HomingEmitter<T> {
                 Damage::new(1),
             ));
 
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                    PitchRange(BULLET_RANGE),
-                    PlaybackSettings {
-                        volume: Volume::Decibels(-12.0),
-                        ..PlaybackSettings::ONCE
-                    },
-                ))
-                .effect(BandPassNode::new(1000.0, 4.0));
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                PitchRange(BULLET_RANGE),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-12.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
         }
     }
 }
