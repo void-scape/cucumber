@@ -128,7 +128,8 @@ pub enum Layer {
 }
 
 fn set_state(mut commands: Commands) {
-    commands.set_state(GameState::Opening);
+    //commands.set_state(GameState::Opening);
+    commands.set_state(GameState::Game);
 }
 
 #[cfg(debug_assertions)]

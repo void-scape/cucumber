@@ -1170,7 +1170,6 @@ dependencies = [
 name = "bevy_seedling"
 version = "0.3.1"
 dependencies = [
- "arrayvec",
  "bevy",
  "bevy_seedling_macros",
  "criterion",
@@ -2358,7 +2357,7 @@ dependencies = [
 [[package]]
 name = "firewheel"
 version = "0.3.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "firewheel-core",
  "firewheel-cpal",
@@ -2370,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "firewheel-core"
 version = "0.3.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "arrayvec",
  "bevy_ecs",
@@ -2386,7 +2385,7 @@ dependencies = [
 [[package]]
 name = "firewheel-cpal"
 version = "0.3.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "cpal",
  "fast-interleave",
@@ -2401,7 +2400,7 @@ dependencies = [
 [[package]]
 name = "firewheel-graph"
 version = "0.3.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "ahash",
  "arrayvec",
@@ -2417,7 +2416,7 @@ dependencies = [
 [[package]]
 name = "firewheel-macros"
 version = "0.1.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "bevy_macro_utils 0.15.3",
  "proc-macro2",
@@ -2429,7 +2428,7 @@ dependencies = [
 [[package]]
 name = "firewheel-nodes"
 version = "0.3.0"
-source = "git+https://github.com/CorvusPrudens/Firewheel?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
+source = "git+https://github.com/CorvusPrudens/Firewheel.git?branch=bevy-16#265f6352f4e1ff3a7d9f4304f11c9fdb509b9cca"
 dependencies = [
  "atomic_float",
  "bevy_ecs",
