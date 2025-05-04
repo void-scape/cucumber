@@ -1,7 +1,7 @@
-use crate::{assets, Layer};
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::player::Player;
+use crate::{Layer, assets};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::YELLOW;
 use bevy::ecs::component::HookContext;
@@ -43,7 +43,13 @@ pub enum PickupEvent {
 }
 
 #[derive(Default, Component)]
-#[require(Transform, RigidBody::Kinematic, Sensor, WallDespawn)]
+#[require(
+    Transform, 
+    RigidBody::Kinematic, 
+    Sensor, 
+    WallDespawn,
+    CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player]),
+)]
 pub struct Collectable;
 
 fn pickup_triggered(
@@ -166,10 +172,5 @@ impl Pickup {
 }
 
 #[derive(Component)]
-#[require(
-    DebugCircle::color(2., YELLOW), 
-    ImageCollider, 
-    Collectable, 
-    CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player]),
-)]
+#[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
 pub struct Material;

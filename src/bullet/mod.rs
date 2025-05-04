@@ -9,6 +9,7 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::{
+    color::palettes::css::{BLUE, LIGHT_BLUE, LIGHT_GREEN, RED, SKY_BLUE},
     ecs::{component::HookContext, world::DeferredWorld},
     platform::collections::HashSet,
     prelude::*,
@@ -127,14 +128,22 @@ impl Default for BulletSpeed {
 
 fn init_bullet_sprite(
     mut commands: Commands,
-    bullets: Query<(Entity, &BulletSprite, Option<&LinearVelocity>), Without<Sprite>>,
+    bullets: Query<(Entity, &BulletSprite, &ColorMod, Option<&LinearVelocity>), Without<Sprite>>,
     server: Res<AssetServer>,
 ) {
-    for (entity, sprite, velocity) in bullets.iter() {
+    for (entity, sprite, color, velocity) in bullets.iter() {
         let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
         if let Some(velocity) = velocity {
             sprite.flip_y = velocity.0.y < 0.;
             sprite.flip_x = velocity.0.x < 0.;
+        }
+        match color {
+            ColorMod::Enemy => {
+                sprite.color = RED.into();
+            }
+            ColorMod::Friendly => {
+                sprite.color = SKY_BLUE.into();
+            }
         }
         commands.entity(entity).insert(sprite);
     }
@@ -168,12 +177,34 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 
 #[derive(Clone, Copy, Component, Default)]
 #[require(Polarity, BulletSpeed, Sensor, RigidBody::Kinematic, WallDespawn)]
+#[component(on_add = Self::add_color_mod)]
 pub struct Bullet;
 
 impl Bullet {
     pub fn target_layer(target: Layer) -> CollisionLayers {
-        CollisionLayers::new([Layer::Bullet], [target, Layer::Bounds])
+        CollisionLayers::new(Layer::Bullet, [target, Layer::Bounds, Layer::Debris])
     }
+
+    fn add_color_mod(mut world: DeferredWorld, ctx: HookContext) {
+        let layers = world.get::<CollisionLayers>(ctx.entity).unwrap();
+
+        let player_mask =
+            CollisionLayers::new(Layer::Bullet, [Layer::Player, Layer::Bounds, Layer::Debris]);
+        if *layers == player_mask {
+            world.commands().entity(ctx.entity).insert(ColorMod::Enemy);
+        } else {
+            world
+                .commands()
+                .entity(ctx.entity)
+                .insert(ColorMod::Friendly);
+        }
+    }
+}
+
+#[derive(Component)]
+enum ColorMod {
+    Friendly,
+    Enemy,
 }
 
 #[derive(Clone, Copy, Component)]

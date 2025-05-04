@@ -34,12 +34,8 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Game), |mut commands: Commands| {
-            // let starting_weapon = commands
-            //     .spawn((DualEmitter::enemy(3.), Polarity::North))
-            //     .id();
-
             let starting_weapon = commands
-                .spawn((LaserEmitter::enemy(), Polarity::North))
+                .spawn((DualEmitter::enemy(3.), Polarity::North))
                 .id();
 
             let player = commands
@@ -81,7 +77,7 @@ impl Plugin for PlayerPlugin {
     ImageCollider,
     RigidBody::Dynamic,
     CollidingEntities,
-    CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet]),
+    CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletRate,
 )]
 #[component(on_add = Self::on_add)]
@@ -228,6 +224,15 @@ fn handle_pickups(
 
                 let emitter = commands
                     .spawn((HomingEmitter::<EnemyType>::enemy(), Polarity::North))
+                    .id();
+                weapon_entity.0 = emitter;
+                commands.entity(player).add_child(emitter);
+            }
+            PickupEvent::Weapon(Weapon::Laser) => {
+                commands.entity(weapon_entity.0).despawn();
+
+                let emitter = commands
+                    .spawn((LaserEmitter::enemy(), Polarity::North))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);

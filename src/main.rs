@@ -30,6 +30,7 @@ mod pickups;
 mod player;
 mod sampler;
 mod textbox;
+mod tween;
 mod ui;
 
 pub const WIDTH: f32 = 128.;
@@ -97,6 +98,7 @@ fn main() {
         miniboss::MinibossPlugin,
         asteroids::AsteroidPlugin,
         minions::MinionPlugin,
+        tween::SequenceTweenPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))

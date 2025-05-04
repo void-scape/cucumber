@@ -8,7 +8,7 @@ use crate::{
         homing::TurnSpeed,
     },
     health::{Dead, Health},
-    miniboss,
+    miniboss, pickups,
     player::Player,
 };
 use avian2d::prelude::*;
@@ -354,18 +354,19 @@ fn despawn_formations(
     for (entity, formation, deaths) in formations.iter() {
         info!("despawning formation");
         commands.entity(entity).despawn();
-        let mut commands = commands.spawn_empty();
 
-        let position = deaths.last_death_position().unwrap();
-        //if formation.drop_pickup_heuristic() {
-        //    pickups::spawn_random_pickup(
-        //        &mut commands,
-        //        (
-        //            Transform::from_translation(position.extend(0.)),
-        //            pickups::velocity(),
-        //        ),
-        //    );
-        //}
+        if formation.drop_pickup_heuristic() {
+            let mut commands = commands.spawn_empty();
+            let position = deaths.last_death_position().unwrap();
+
+            pickups::spawn_random_pickup(
+                &mut commands,
+                (
+                    Transform::from_translation(position.extend(0.)),
+                    pickups::velocity(),
+                ),
+            );
+        }
     }
 }
 
@@ -519,10 +520,10 @@ struct Circle {
 }
 
 #[derive(Default, Component)]
-struct Angle(f32);
+pub struct Angle(pub f32);
 
 #[derive(Component)]
-struct Center(Vec2);
+pub struct Center(pub Vec2);
 
 fn update_circle(
     mut commands: Commands,
@@ -548,9 +549,9 @@ fn update_circle(
 
 #[derive(Component)]
 #[require(Angle)]
-struct Figure8 {
-    radius: f32,
-    speed: f32,
+pub struct Figure8 {
+    pub radius: f32,
+    pub speed: f32,
 }
 
 fn update_figure8(

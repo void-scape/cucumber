@@ -1,20 +1,41 @@
-use crate::Layer;
 use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
+use crate::bullet::Polarity;
+use crate::bullet::emitter::SoloEmitter;
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
+use crate::enemy::{Angle, Center, Figure8};
 use crate::pickups::Material;
 use crate::player::Player;
+use crate::tween::Tween;
+use crate::{GameState, Layer};
 use avian2d::prelude::*;
-use bevy::color::palettes::css::LIGHT_BLUE;
+use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_GREEN};
+use bevy::ecs::component::HookContext;
+use bevy::ecs::world::DeferredWorld;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy_optix::debug::DebugRect;
+use bevy_sequence::prelude::*;
+use bevy_tween::combinator::tween;
+use bevy_tween::interpolate::translation;
+use bevy_tween::prelude::EaseKind;
+use bevy_tween::tween::IntoTarget;
+use rand::Rng;
+use std::time::Duration;
 
 pub struct MinionPlugin;
 
 impl Plugin for MinionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (test, (miner_collect, update_miners).chain()));
+        app.add_systems(
+            Update,
+            ((
+                test,
+                update_gunner_formation,
+                (miner_collect, update_miners).chain(),
+            )
+                .run_if(in_state(GameState::Game)),),
+        );
     }
 }
 
@@ -24,7 +45,11 @@ fn test(
     player: Single<Entity, With<Player>>,
 ) {
     if input.just_pressed(KeyCode::KeyO) {
-        commands.spawn((Miner, Leader(*player)));
+        commands.spawn((Miner, MinerLeader(*player)));
+    }
+
+    if input.just_pressed(KeyCode::KeyP) {
+        commands.spawn((Gunner, GunnerLeader(*player)));
     }
 }
 
@@ -123,13 +148,61 @@ fn miner_collect(
     }
 }
 
-#[derive(Component)]
-#[relationship(relationship_target = Minions)]
-pub struct Leader(Entity);
+fn update_gunner_formation(
+    mut commands: Commands,
+    player_gunners: Single<&Gunners, (With<Player>, Changed<Gunners>)>,
+    gunners: Query<(Entity, &Transform), With<Gunner>>,
+) {
+    let count = player_gunners.len();
+    let width = crate::WIDTH - 32.;
+    let half_width = width / 2.;
+    let step = width / count as f32;
+    let start_x = -half_width + step / 2.;
+
+    let arc_height = 100.0;
+    let formation = (0..count).map(|i| {
+        let x = start_x + i as f32 * step;
+        let normalized_x = x / half_width;
+        let y = -arc_height * (normalized_x * normalized_x);
+        (x, y)
+    });
+
+    for ((gunner, transform), (x, y)) in gunners.iter_many(&player_gunners.0).zip(formation) {
+        let start = transform.translation;
+        let end = transform.translation.with_x(x).with_y(y);
+        let dist = start.distance(end);
+
+        commands.entity(gunner).remove::<(Figure8, Angle, Center)>();
+
+        let frag = Tween(tween(
+            Duration::from_secs_f32(dist / GUNNER_SPEED / 1.25),
+            EaseKind::QuadraticInOut,
+            gunner.into_target().with(translation(start, end)),
+        ))
+        .on_end(move |mut commands: Commands| {
+            let mut rng = rand::rng();
+            commands.entity(gunner).insert((
+                Center(end.xy()),
+                Figure8 {
+                    radius: rng.random_range(18.0..22.0) / (count as f32 * 0.75),
+                    speed: rng.random_range(2.4..3.6),
+                },
+                Angle(0.),
+            ));
+        })
+        .always()
+        .once();
+        spawn_root(frag, &mut commands);
+    }
+}
 
 #[derive(Component)]
-#[relationship_target(relationship = Leader)]
-pub struct Minions(Vec<Entity>);
+#[relationship(relationship_target = Miners)]
+pub struct MinerLeader(Entity);
+
+#[derive(Component)]
+#[relationship_target(relationship = MinerLeader)]
+pub struct Miners(Vec<Entity>);
 
 const MINER_SPEED: f32 = 40.;
 
@@ -150,3 +223,33 @@ const MINER_SPEED: f32 = 40.;
     CollisionLayers::new(Layer::Player, [Layer::Collectable]),
 )]
 pub struct Miner;
+
+#[derive(Component)]
+#[relationship(relationship_target = Gunners)]
+pub struct GunnerLeader(Entity);
+
+#[derive(Component)]
+#[relationship_target(relationship = GunnerLeader)]
+pub struct Gunners(Vec<Entity>);
+
+const GUNNER_SPEED: f32 = 40.;
+const GUNNER_Y: f32 = -20.;
+
+#[derive(Component)]
+#[require(
+    Transform,
+    RigidBody::Kinematic,
+    LinearVelocity,
+    DebugRect::from_size_color(Vec2::splat(4.), LIGHT_GREEN)
+)]
+#[component(on_add = Self::add_emitter)]
+pub struct Gunner;
+
+impl Gunner {
+    fn add_emitter(mut world: DeferredWorld, ctx: HookContext) {
+        world
+            .commands()
+            .entity(ctx.entity)
+            .with_child((SoloEmitter::enemy(), Polarity::North));
+    }
+}

@@ -10,7 +10,7 @@ pub const BACKGROUNDS_PATH: &'static str = "shooters/SpaceShooterAssetPack_BackG
 pub const CHARACTERS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Characters.png";
 pub const UI_PATH: &'static str = "shooters/SpaceShooterAssetPack_IU.png";
 pub const MISC_PATH: &'static str = "shooters/SpaceShooterAssetPack_Miscellaneous.png";
-pub const PROJECTILES_PATH: &'static str = "shooters/SpaceShooterAssetPack_Projectiles.png";
+pub const PROJECTILES_PATH: &'static str = "shooters/SpaceShooterAssetPack_Projectiles_Grayscale.png";
 pub const SHIPS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Ships.png";
 pub const WEAPONS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Weapons.png";
 
