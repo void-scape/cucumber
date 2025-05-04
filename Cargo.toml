@@ -11,6 +11,7 @@ members = [
     "bevy_pretty_text",
     "bevy_sequence",
     "noise",
+    "physics",
 ]
 
 [dependencies]
@@ -52,6 +53,7 @@ bevy_pretty_text = { path = "bevy_pretty_text" }
 bevy_sequence = { path = "bevy_sequence" }
 bevy_tween = { git = "https://github.com/Rabbival/bevy_tween", branch = "bevy-v0.16.0" }
 bevy_seedling = { path = "bevy_seedling" }
+physics = { path = "physics" }
 # TODO: test `parallel` feature
 avian2d = { git = "https://github.com/Jondolf/avian.git", default-features = false, features = [
     "2d",

@@ -1,9 +1,13 @@
 use crate::assets;
+use crate::auto_collider::ImageCollider;
+use crate::bounds::WallDespawn;
 use crate::player::Player;
 use avian2d::prelude::*;
+use bevy::color::palettes::css::YELLOW;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy_optix::debug::DebugCircle;
 use rand::seq::IteratorRandom;
 
 const PICKUP_SPEED: f32 = 16.;
@@ -14,7 +18,7 @@ impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
             //.add_systems(Startup, debug)
-            .add_systems(Update, pickup_triggered);
+            .add_systems(Update, (pickup_triggered, despawn_collectables));
     }
 }
 
@@ -31,15 +35,16 @@ pub fn velocity() -> LinearVelocity {
     LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED)
 }
 
-#[derive(Event)]
+#[derive(Debug, Event)]
 pub enum PickupEvent {
     Weapon(Weapon),
     Upgrade(Upgrade),
+    Material,
 }
 
 #[derive(Default, Component)]
 #[require(Transform, RigidBody::Kinematic, Sensor)]
-struct Collectable;
+pub struct Collectable;
 
 fn pickup_triggered(
     mut commands: Commands,
@@ -48,6 +53,7 @@ fn pickup_triggered(
     collectables: Query<&Collectable>,
     upgrades: Query<&Upgrade>,
     weapons: Query<&Weapon>,
+    materials: Query<&Material>,
 ) {
     for entity in player
         .iter()
@@ -55,16 +61,20 @@ fn pickup_triggered(
         .filter(|entity| collectables.get(*entity).is_ok())
     {
         if let Ok(upgrade) = upgrades.get(entity) {
-            commands.entity(entity).despawn();
             writer.write(PickupEvent::Upgrade(*upgrade));
         } else if let Ok(weapon) = weapons.get(entity) {
-            commands.entity(entity).despawn();
             writer.write(PickupEvent::Weapon(*weapon));
+        } else if materials.get(entity).is_ok() {
+            writer.write(PickupEvent::Material);
+        } else {
+            continue;
         }
+
+        commands.entity(entity).despawn();
     }
 }
 
-#[derive(Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component)]
 #[require(Collectable, Collider::rectangle(8., 8.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
@@ -87,7 +97,7 @@ impl SpriteHook for Upgrade {
     }
 }
 
-#[derive(Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component)]
 #[require(Collectable, Collider::rectangle(16., 16.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
@@ -112,7 +122,7 @@ impl SpriteHook for Weapon {
     }
 }
 
-trait SpriteHook
+pub trait SpriteHook
 where
     Self: Sized + Component,
 {
@@ -152,5 +162,20 @@ impl Pickup {
         .into_iter()
         .choose(&mut rng)
         .unwrap()
+    }
+}
+
+#[derive(Component)]
+#[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
+pub struct Material;
+
+fn despawn_collectables(
+    mut commands: Commands,
+    collectables: Query<(Entity, &Transform), With<Collectable>>,
+) {
+    for (entity, transform) in collectables.iter() {
+        if transform.translation.y < -crate::HEIGHT / 2. - 32. {
+            commands.entity(entity).despawn();
+        }
     }
 }

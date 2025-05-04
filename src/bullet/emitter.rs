@@ -2,7 +2,7 @@ use super::{
     Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
     homing::{Heading, Homing, TurnSpeed},
 };
-use crate::{Layer, auto_collider::ImageCollider, enemy::Enemy, health::Damage};
+use crate::{Layer, auto_collider::ImageCollider, enemy::EnemyType, health::Damage};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
@@ -17,7 +17,7 @@ impl Plugin for EmitterPlugin {
             (
                 SoloEmitter::shoot_bullets,
                 DualEmitter::shoot_bullets,
-                HomingEmitter::<Enemy>::shoot_bullets,
+                HomingEmitter::<EnemyType>::shoot_bullets,
                 HomingEmitter::<crate::player::Player>::shoot_bullets,
             ),
         );

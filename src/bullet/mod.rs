@@ -3,14 +3,14 @@ use crate::{
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
-    bounds::ScreenBounds,
-    enemy::Enemy,
+    bounds::{ScreenBounds, WallDespawn},
     health::{Damage, Health},
     player::Player,
 };
 use avian2d::prelude::*;
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
+    platform::collections::HashSet,
     prelude::*,
 };
 use bevy_optix::shake::TraumaCommands;
@@ -39,18 +39,19 @@ impl Plugin for BulletPlugin {
             .add_event::<BulletCollisionEvent>()
             .add_systems(
                 PostUpdate,
-                (handle_enemy_collision, handle_player_collision).in_set(BulletSystems::Collision),
+                (handle_destructable_collision, handle_player_collision)
+                    .in_set(BulletSystems::Collision),
             )
             .add_systems(
                 Update,
                 (
-                    (manage_lifetime, kill_on_wall).in_set(BulletSystems::Lifetime),
+                    manage_lifetime.in_set(BulletSystems::Lifetime),
                     bullet_collision_effects,
                 ),
             )
             .add_systems(
                 PostUpdate,
-                (init_bullet_sprite.in_set(BulletSystems::Sprite),).chain(),
+                init_bullet_sprite.in_set(BulletSystems::Sprite).chain(),
             );
     }
 }
@@ -164,28 +165,12 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Polarity, BulletSpeed, Sensor, RigidBody::Kinematic)]
+#[require(Polarity, BulletSpeed, Sensor, RigidBody::Kinematic, WallDespawn)]
 pub struct Bullet;
 
 impl Bullet {
     pub fn target_layer(target: Layer) -> CollisionLayers {
         CollisionLayers::new([Layer::Bullet], [target, Layer::Bounds])
-    }
-}
-
-fn kill_on_wall(
-    mut commands: Commands,
-    bounds: Query<&CollidingEntities, With<ScreenBounds>>,
-    bullets: Query<Entity, With<Bullet>>,
-) {
-    for colliding_entities in bounds.iter() {
-        for entity in colliding_entities
-            .iter()
-            .copied()
-            .flat_map(|entity| bullets.get(entity))
-        {
-            commands.entity(entity).despawn();
-        }
     }
 }
 
@@ -236,25 +221,36 @@ pub struct BasicBullet;
 #[require(BulletSprite::from_cell(2, 1))]
 pub struct CommonBullet;
 
-fn handle_enemy_collision(
+/// Marks an enemy as a valid target for bullet collisions.
+#[derive(Default, Component)]
+#[require(CollidingEntities, ImageCollider, RigidBody::Kinematic, Sensor)]
+pub struct Destructable;
+
+fn handle_destructable_collision(
     bullets: Query<(Entity, &Damage, &BulletSprite, &GlobalTransform), With<Bullet>>,
-    mut enemies: Query<(&CollidingEntities, &mut Health), With<Enemy>>,
+    mut destructable: Query<(&CollidingEntities, Option<&mut Health>), With<Destructable>>,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
 ) {
-    for (colliding_entities, mut health) in enemies.iter_mut() {
+    let mut despawned = HashSet::new();
+    for (colliding_entities, mut health) in destructable.iter_mut() {
         for (bullet, damage, sprite, transform) in colliding_entities
             .iter()
             .copied()
             .flat_map(|entity| bullets.get(entity))
         {
-            health.damage(**damage);
-            writer.write(BulletCollisionEvent::new(
-                sprite.cell,
-                transform.compute_transform(),
-                BulletSource::Player,
-            ));
-            commands.entity(bullet).despawn();
+            if despawned.insert(bullet) {
+                if let Some(health) = health.as_mut() {
+                    health.damage(**damage);
+                }
+
+                writer.write(BulletCollisionEvent::new(
+                    sprite.cell,
+                    transform.compute_transform(),
+                    BulletSource::Player,
+                ));
+                commands.entity(bullet).despawn();
+            }
         }
     }
 }

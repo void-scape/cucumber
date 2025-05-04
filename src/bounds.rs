@@ -1,19 +1,39 @@
+use crate::Layer;
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use crate::Layer;
 
 pub struct ScreenBoundsPlugin;
 
 impl Plugin for ScreenBoundsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_bounds);
+        app.add_systems(Startup, spawn_bounds)
+            .add_systems(Update, kill_on_wall);
+    }
+}
+
+#[derive(Default, Component)]
+pub struct WallDespawn;
+
+fn kill_on_wall(
+    mut commands: Commands,
+    bounds: Query<&CollidingEntities, With<ScreenBounds>>,
+    entities: Query<Entity, With<WallDespawn>>,
+) {
+    for colliding_entities in bounds.iter() {
+        for entity in colliding_entities
+            .iter()
+            .copied()
+            .flat_map(|entity| entities.get(entity))
+        {
+            commands.entity(entity).despawn();
+        }
     }
 }
 
 #[derive(Component)]
 #[require(
-    RigidBody::Static, 
-    CollidingEntities, 
+    RigidBody::Static,
+    CollidingEntities,
     CollisionLayers::new([Layer::Bounds], [Layer::Player, Layer::Bullet]),
 )]
 pub struct ScreenBounds;

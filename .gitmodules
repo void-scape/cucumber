@@ -16,3 +16,6 @@
 [submodule "bevy_pretty_text"]
 	path = bevy_pretty_text
 	url = https://github.com/void-scape/bevy_pretty_text.git
+[submodule "physics"]
+	path = physics
+	url = https://github.com/void-scape/physics.git

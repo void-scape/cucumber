@@ -1,5 +1,6 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use bevy_optix::debug::{DebugCircle, DebugRect};
 
 pub struct AutoColliderPlugin;
 
@@ -31,11 +32,28 @@ fn insert_collider(
 pub struct ImageCollider;
 
 fn insert_image_collider(
-    q: Query<(Entity, &Sprite), With<ImageCollider>>,
+    sprites: Query<(Entity, &Sprite), With<ImageCollider>>,
+    debug_rects: Query<(Entity, &DebugRect), With<ImageCollider>>,
+    debug_circles: Query<(Entity, &DebugCircle), With<ImageCollider>>,
     mut commands: Commands,
     images: Res<Assets<Image>>,
 ) {
-    for (entity, sprite) in q.iter() {
+    for (entity, debug_circle) in debug_circles.iter() {
+        commands
+            .entity(entity)
+            .insert(Collider::circle(debug_circle.radius))
+            .remove::<ImageCollider>();
+    }
+
+    for (entity, debug_rect) in debug_rects.iter() {
+        let size = debug_rect.rect.size();
+        commands
+            .entity(entity)
+            .insert(Collider::rectangle(size.x, size.y))
+            .remove::<ImageCollider>();
+    }
+
+    for (entity, sprite) in sprites.iter() {
         let Some(image) = images.get(&sprite.image) else {
             continue;
         };
@@ -45,7 +63,6 @@ fn insert_image_collider(
             None => Rect::from_corners(Vec2::ZERO, image.size_f32()),
         };
 
-        // let mut bounds = Rect::default();
         let mut min = Vec2::default();
         let mut max = Vec2::default();
 

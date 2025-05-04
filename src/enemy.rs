@@ -4,12 +4,11 @@ use crate::{
     assets, atlas_layout,
     auto_collider::ImageCollider,
     bullet::{
-        BulletRate, BulletSpeed, Direction,
+        BulletRate, BulletSpeed, Destructable, Direction,
         emitter::{DualEmitter, SoloEmitter},
     },
     health::{Dead, Health},
     miniboss,
-    pickups::{self},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -357,29 +356,24 @@ fn despawn_formations(
         let mut commands = commands.spawn_empty();
 
         let position = deaths.last_death_position().unwrap();
-        if formation.drop_pickup_heuristic() {
-            pickups::spawn_random_pickup(
-                &mut commands,
-                (
-                    Transform::from_translation(position.extend(0.)),
-                    pickups::velocity(),
-                ),
-            );
-        }
+        //if formation.drop_pickup_heuristic() {
+        //    pickups::spawn_random_pickup(
+        //        &mut commands,
+        //        (
+        //            Transform::from_translation(position.extend(0.)),
+        //            pickups::velocity(),
+        //        ),
+        //    );
+        //}
     }
 }
 
-#[derive(Default, Component)]
-pub struct Enemy;
-
 #[derive(Clone, Copy, Component, PartialEq, Eq, Hash)]
 #[require(
-    Enemy,
     Transform,
-    LinearVelocity,
     Visibility,
-    CollidingEntities,
-    ImageCollider,
+    LinearVelocity,
+    Destructable,
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
 )]
 pub enum EnemyType {

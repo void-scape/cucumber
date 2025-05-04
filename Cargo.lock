@@ -2076,6 +2076,7 @@ dependencies = [
  "bevy_sequence",
  "bevy_textbox",
  "bevy_tween",
+ "physics",
  "rand 0.9.1",
  "strum 0.27.1",
  "strum_macros 0.27.1",
@@ -3848,6 +3849,15 @@ dependencies = [
  "indexmap",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "physics"
+version = "0.1.0"
+dependencies = [
+ "avian2d",
+ "bevy",
+ "bevy_tween",
 ]
 
 [[package]]

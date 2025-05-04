@@ -1,5 +1,6 @@
 use crate::GameState;
-use crate::enemy::{CruiserExplosion, Enemy};
+use crate::bullet::Destructable;
+use crate::enemy::CruiserExplosion;
 use crate::health::Dead;
 use crate::{
     HEIGHT,
@@ -24,7 +25,7 @@ impl Plugin for MinibossPlugin {
 }
 
 #[derive(Component)]
-#[require(Transform, Enemy, CollidingEntities, Sensor)]
+#[require(Transform, Destructable, Sensor)]
 struct Boss;
 
 const BOSS_EASE_DUR: f32 = 4.;

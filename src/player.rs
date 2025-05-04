@@ -7,7 +7,7 @@ use crate::{
         BulletCollisionEvent, BulletRate, BulletSource, BulletTimer, Polarity,
         emitter::{DualEmitter, HomingEmitter},
     },
-    enemy::Enemy,
+    enemy::EnemyType,
     health::{Dead, Health},
     pickups::{PickupEvent, Upgrade, Weapon},
 };
@@ -78,15 +78,13 @@ impl Plugin for PlayerPlugin {
     RigidBody::Dynamic,
     CollidingEntities,
     CollisionLayers = collision_layers(),
+    BulletRate,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
 
 fn collision_layers() -> CollisionLayers {
-    CollisionLayers::new(
-        [Layer::Player],
-        [Layer::Bounds, Layer::Pickups, Layer::Bullet],
-    )
+    CollisionLayers::new([Layer::Player], [Layer::Bounds, Layer::Bullet])
 }
 
 #[derive(Component)]
@@ -229,13 +227,14 @@ fn handle_pickups(
                 commands.entity(weapon_entity.0).despawn();
 
                 let emitter = commands
-                    .spawn((HomingEmitter::<Enemy>::enemy(), Polarity::North))
+                    .spawn((HomingEmitter::<EnemyType>::enemy(), Polarity::North))
                     .id();
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
             }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
-            _ => {}
+            //PickupEvent::Material => {}
+            e => info!("handle: {e:?}"),
         }
     }
 }

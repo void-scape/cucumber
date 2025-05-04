@@ -1,5 +1,6 @@
+use crate::enemy::EnemyType;
 use crate::Avian;
-use crate::{enemy::Enemy, player::Player};
+use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use rand::distr::{Distribution, weighted::WeightedIndex};
@@ -12,7 +13,7 @@ impl Plugin for HomingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (select_target::<Player>, select_target::<Enemy>),
+            (select_target::<Player>, select_target::<EnemyType>),
         )
         .add_systems(
             Avian,

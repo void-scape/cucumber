@@ -50,11 +50,63 @@ pub struct AssetPlugin;
 impl Plugin for AssetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreStartup, init_misc_layout)
-            .add_systems(Update, debug_assets);
+            .add_systems(Update, insert_sprite);
+
+        #[cfg(debug_assertions)]
+        app.add_systems(Update, debug_assets);
     }
 }
 
 atlas_layout!(MiscLayout, init_misc_layout, 8, 13, 8);
+
+#[derive(Component)]
+pub struct AutoSprite {
+    pub path: &'static str,
+    pub cell: UVec2,
+    pub size: SpriteSize,
+}
+
+impl AutoSprite {
+    pub fn new(path: &'static str, cell: UVec2, size: SpriteSize) -> Self {
+        Self { path, cell, size }
+    }
+
+    pub fn new8(path: &'static str, cell: UVec2) -> Self {
+        Self::new(path, cell, SpriteSize::Size8)
+    }
+
+    pub fn new16(path: &'static str, cell: UVec2) -> Self {
+        Self::new(path, cell, SpriteSize::Size16)
+    }
+}
+
+pub enum SpriteSize {
+    Size8,
+    Size16,
+}
+
+fn insert_sprite(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    auto_sprites: Query<(Entity, &AutoSprite)>,
+) {
+    for (entity, sprite) in auto_sprites.iter() {
+        match sprite.size {
+            SpriteSize::Size8 => {
+                commands
+                    .entity(entity)
+                    .insert(sprite_rect8(&server, sprite.path, sprite.cell))
+                    .remove::<AutoSprite>();
+            }
+            SpriteSize::Size16 => {
+                commands
+                    .entity(entity)
+                    .insert(sprite_rect16(&server, sprite.path, sprite.cell))
+                    .remove::<AutoSprite>();
+            }
+        }
+    }
+}
 
 #[derive(Component)]
 struct DebugAsset;

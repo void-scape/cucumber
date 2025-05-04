@@ -12,6 +12,7 @@ use bevy_optix::shake::prelude::*;
 
 mod animation;
 mod assets;
+mod asteroids;
 mod auto_collider;
 mod background;
 mod bounds;
@@ -62,12 +63,14 @@ fn main() {
         },
         // the average object (bullet) is 8 ppx.
         avian2d::PhysicsPlugins::new(Avian).with_length_unit(8.),
-        PhysicsDebugPlugin::new(Avian),
+        //PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
         )),
         bevy_optix::shake::ScreenShakePlugin,
+        bevy_optix::debug::DebugPlugin,
+        physics::PhysicsPlugin,
     ))
     .add_plugins((
         animation::AnimationPlugin,
@@ -86,7 +89,7 @@ fn main() {
         ui::UiPlugin,
         opening::OpeningPlugin,
     ))
-    .add_plugins(miniboss::MinibossPlugin)
+    .add_plugins((miniboss::MinibossPlugin, asteroids::AsteroidPlugin))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
@@ -115,7 +118,6 @@ pub enum Layer {
     Bullet,
     Player,
     Enemy,
-    Pickups,
 }
 
 fn set_state(mut commands: Commands) {
