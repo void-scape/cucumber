@@ -1,6 +1,6 @@
 use super::{
     Bullet, BulletRate, BulletSpeed, BulletSprite, BulletTimer, BulletType, Polarity,
-    homing::{Heading, Homing, TurnSpeed},
+    homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{Layer, auto_collider::ImageCollider, enemy::EnemyType, health::Damage};
 use avian2d::prelude::*;
@@ -301,6 +301,7 @@ impl<T: Component> HomingEmitter<T> {
                 ImageCollider,
                 LinearVelocity::default(),
                 Homing::<T>::new(),
+                HomingRotate,
                 *turn_speed,
                 Heading {
                     speed: base_speed.0 * speed.0,

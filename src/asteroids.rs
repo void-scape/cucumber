@@ -19,8 +19,9 @@ impl Plugin for AsteroidPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (spawn_asteroids, handle_death).run_if(in_state(GameState::Game)),
-        );
+            (spawn_asteroids, handle_death, despawn_clusters).run_if(in_state(GameState::Game)),
+        )
+        .add_systems(FixedUpdate, move_clusters.run_if(in_state(GameState::Game)));
     }
 }
 
@@ -91,6 +92,12 @@ fn spawn_asteroids(
     }
 }
 
+#[derive(Component)]
+#[require(Visibility)]
+pub struct MaterialCluster;
+
+const MATERIAL_SPEED: f32 = 20.; // 20 meters per second
+
 fn handle_death(
     asteroids: Query<(Entity, &GlobalTransform, &Asteroid), With<Dead>>,
     mut commands: Commands,
@@ -105,7 +112,6 @@ fn handle_death(
         let transform = transform.compute_transform();
 
         let material_speed = 50.;
-        let material_lv = Vec2::NEG_Y * material_speed;
         let dur_variation = 0.75;
 
         let mut rng = rand::rng();
@@ -114,24 +120,37 @@ fn handle_death(
             .collect::<Vec<_>>();
         let sampler = Sampler::linear(&speeds, 0.0, 1.0);
 
+        let cluster = commands.spawn((MaterialCluster, transform)).id();
         for angle in 0..children {
             let angle = (angle as f32 / children as f32) * 2. * std::f32::consts::PI;
             let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
 
-            let material = commands.spawn((Material, transform)).id();
-            let animation = commands
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(
-                        (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
-                    ),
-                    EaseKind::CubicOut,
-                    material
-                        .into_target()
-                        .with(linear_velocity(start + material_lv, material_lv)),
-                )
-                .id();
-            commands.entity(material).add_child(animation);
+            let material = commands.spawn((Material, LinearVelocity::ZERO)).id();
+            commands.entity(material).animation().insert_tween_here(
+                Duration::from_secs_f32(
+                    (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
+                ),
+                EaseKind::CubicOut,
+                material
+                    .into_target()
+                    .with(linear_velocity(start, Vec2::ZERO)),
+            );
+            commands.entity(cluster).add_child(material);
         }
+    }
+}
+
+fn move_clusters(mut clusters: Query<&mut Transform, With<MaterialCluster>>, time: Res<Time>) {
+    for mut transform in clusters.iter_mut() {
+        transform.translation.y -= MATERIAL_SPEED * time.delta_secs();
+    }
+}
+
+fn despawn_clusters(
+    mut commands: Commands,
+    clusters: Query<Entity, (With<MaterialCluster>, Without<Children>)>,
+) {
+    for entity in clusters.iter() {
+        commands.entity(entity).despawn();
     }
 }

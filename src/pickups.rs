@@ -1,5 +1,6 @@
 use crate::assets;
 use crate::auto_collider::ImageCollider;
+use crate::bounds::WallDespawn;
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::color::palettes::css::YELLOW;
@@ -17,7 +18,7 @@ impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
             //.add_systems(Startup, debug)
-            .add_systems(Update, (pickup_triggered, despawn_collectables));
+            .add_systems(Update, pickup_triggered);
     }
 }
 
@@ -42,7 +43,7 @@ pub enum PickupEvent {
 }
 
 #[derive(Default, Component)]
-#[require(Transform, RigidBody::Kinematic, Sensor)]
+#[require(Transform, RigidBody::Kinematic, Sensor, WallDespawn)]
 pub struct Collectable;
 
 fn pickup_triggered(
@@ -52,7 +53,7 @@ fn pickup_triggered(
     collectables: Query<&Collectable>,
     upgrades: Query<&Upgrade>,
     weapons: Query<&Weapon>,
-    materials: Query<&Material>,
+    //materials: Query<&Material>,
 ) {
     for entity in player
         .iter()
@@ -63,8 +64,8 @@ fn pickup_triggered(
             writer.write(PickupEvent::Upgrade(*upgrade));
         } else if let Ok(weapon) = weapons.get(entity) {
             writer.write(PickupEvent::Weapon(*weapon));
-        } else if materials.get(entity).is_ok() {
-            writer.write(PickupEvent::Material);
+        //} else if materials.get(entity).is_ok() {
+        //    writer.write(PickupEvent::Material);
         } else {
             continue;
         }
@@ -167,14 +168,3 @@ impl Pickup {
 #[derive(Component)]
 #[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
 pub struct Material;
-
-fn despawn_collectables(
-    mut commands: Commands,
-    collectables: Query<(Entity, &Transform), With<Collectable>>,
-) {
-    for (entity, transform) in collectables.iter() {
-        if transform.translation.y < -crate::HEIGHT / 2. - 32. {
-            commands.entity(entity).despawn();
-        }
-    }
-}

@@ -22,6 +22,7 @@ mod enemy;
 mod fire;
 mod health;
 mod miniboss;
+mod minions;
 mod music;
 mod opening;
 mod pickups;
@@ -36,6 +37,8 @@ pub const HEIGHT: f32 = 256.;
 pub const RESOLUTION_SCALE: f32 = 3.;
 pub const RES_WIDTH: f32 = WIDTH * 1.25;
 pub const RES_HEIGHT: f32 = HEIGHT;
+
+pub const METER: f32 = 8.;
 
 fn main() {
     let mut app = App::new();
@@ -62,8 +65,8 @@ fn main() {
             ..Default::default()
         },
         // the average object (bullet) is 8 ppx.
-        avian2d::PhysicsPlugins::new(Avian).with_length_unit(8.),
-        // PhysicsDebugPlugin::new(Avian),
+        avian2d::PhysicsPlugins::new(Avian).with_length_unit(METER),
+        //PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
@@ -89,7 +92,11 @@ fn main() {
         ui::UiPlugin,
         opening::OpeningPlugin,
     ))
-    .add_plugins((miniboss::MinibossPlugin, asteroids::AsteroidPlugin))
+    .add_plugins((
+        miniboss::MinibossPlugin,
+        asteroids::AsteroidPlugin,
+        minions::MinionPlugin,
+    ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()

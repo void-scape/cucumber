@@ -1,5 +1,5 @@
-use crate::enemy::EnemyType;
 use crate::Avian;
+use crate::enemy::EnemyType;
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -35,7 +35,7 @@ impl<T: Component> Homing<T> {
 }
 
 #[derive(Component)]
-struct HomingTarget(Entity);
+pub struct HomingTarget(pub Entity);
 
 fn select_target<T: Component>(
     homing: Query<(Entity, &GlobalTransform), (With<Homing<T>>, Without<HomingTarget>)>,
@@ -98,8 +98,8 @@ impl Default for TurnSpeed {
 }
 
 impl Heading {
-    pub fn steer_towards(&mut self, time: &Time, turn_speed: f32, from: &Vec3, to: &Vec3) {
-        let desired_direction = (*to - *from).normalize();
+    pub fn steer_towards(&mut self, time: &Time, turn_speed: f32, from: Vec2, to: Vec2) {
+        let desired_direction = (to - from).normalize();
         let desired_angle = desired_direction.y.atan2(desired_direction.x);
 
         let mut angle_diff = (desired_angle - self.direction) % TAU;
@@ -140,18 +140,30 @@ fn steer_homing(
         heading.steer_towards(
             &time,
             turn_speed.0 * delta,
-            &transform.translation,
-            &target.translation,
+            transform.translation.xy(),
+            target.translation.xy(),
         );
     }
 }
 
-fn apply_heading_velocity(mut homing: Query<(&mut Transform, &Heading, &mut LinearVelocity)>) {
-    for (mut transform, heading, mut velocity) in homing.iter_mut() {
+#[derive(Default, Component)]
+pub struct HomingRotate;
+
+fn apply_heading_velocity(
+    mut homing: Query<(
+        &mut Transform,
+        &Heading,
+        &mut LinearVelocity,
+        Option<&HomingRotate>,
+    )>,
+) {
+    for (mut transform, heading, mut velocity, rotate) in homing.iter_mut() {
         velocity.0.x = heading.speed * heading.direction.cos();
         velocity.0.y = heading.speed * heading.direction.sin();
 
-        let new_rotation = Quat::from_rotation_z(heading.direction - PI / 2.0);
-        transform.rotation = new_rotation;
+        if rotate.is_some() {
+            let new_rotation = Quat::from_rotation_z(heading.direction - PI / 2.0);
+            transform.rotation = new_rotation;
+        }
     }
 }
