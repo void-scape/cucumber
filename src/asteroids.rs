@@ -51,8 +51,8 @@ impl Asteroid {
             Self::Small => LinearVelocity(Vec2::NEG_Y * 22.),
         };
         let health = match asteroid {
-            Self::Big => Health::full(15),
-            Self::Small => Health::full(5),
+            Self::Big => Health::full(15.0),
+            Self::Small => Health::full(5.0),
         };
 
         world

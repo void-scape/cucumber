@@ -424,8 +424,8 @@ impl EnemyType {
 
     pub fn health(&self) -> Health {
         match self {
-            Self::Common => Health::full(10),
-            Self::Uncommon => Health::full(15),
+            Self::Common => Health::full(10.0),
+            Self::Uncommon => Health::full(15.0),
         }
     }
 
@@ -637,7 +637,7 @@ fn add_low_health_effects(
 
     let mut rng = rand::rng();
     for (entity, health) in query.iter() {
-        if health.current() <= health.max() / 2 {
+        if health.current() <= health.max() / 2.0 {
             let mut chosen = [Direction::default(); 3];
             Direction::iter().choose_multiple_fill(&mut rng, &mut chosen);
             commands

@@ -29,16 +29,16 @@ impl Plugin for HealthPlugin {
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct Health {
-    current: usize,
-    max: usize,
+    current: f32,
+    max: f32,
     dead: bool,
 }
 
 impl Health {
-    pub const PLAYER: Self = Health::full(3);
-    pub const INVINCIBLE: Self = Health::full(usize::MAX);
+    pub const PLAYER: Self = Health::full(3.0);
+    pub const INVINCIBLE: Self = Health::full(f32::MAX);
 
-    pub const fn full(max: usize) -> Self {
+    pub const fn full(max: f32) -> Self {
         Self {
             current: max,
             dead: false,
@@ -46,30 +46,30 @@ impl Health {
         }
     }
 
-    pub fn heal(&mut self, heal: usize) {
+    pub fn heal(&mut self, heal: f32) {
         self.current = (self.current + heal).max(self.max);
     }
 
-    pub fn damage(&mut self, damage: usize) {
-        self.current = self.current.saturating_sub(damage);
-        self.dead = self.current == 0;
+    pub fn damage(&mut self, damage: f32) {
+        self.current = (self.current - damage).max(0.0);
+        self.dead = self.current == 0.0;
     }
 
     pub fn damage_all(&mut self) {
-        self.current = 0;
+        self.current = 0.0;
         self.dead = true;
     }
 
-    pub fn current(&self) -> usize {
+    pub fn current(&self) -> f32 {
         self.current
     }
 
-    pub fn max(&self) -> usize {
+    pub fn max(&self) -> f32 {
         self.max
     }
 
     pub fn dead(&self) -> bool {
-        self.dead || self.current == 0
+        self.dead || self.current == 0.0
     }
 
     /// Calculate the current proportion of health
@@ -134,10 +134,10 @@ pub struct DespawnDead;
 //}
 
 #[derive(Debug, Default, Clone, Copy, Component)]
-pub struct Damage(usize);
+pub struct Damage(f32);
 
 impl Deref for Damage {
-    type Target = usize;
+    type Target = f32;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -145,11 +145,11 @@ impl Deref for Damage {
 }
 
 impl Damage {
-    pub fn new(damage: usize) -> Self {
+    pub fn new(damage: f32) -> Self {
         Self(damage)
     }
 
-    pub fn damage(&self) -> usize {
+    pub fn damage(&self) -> f32 {
         self.0
     }
 }

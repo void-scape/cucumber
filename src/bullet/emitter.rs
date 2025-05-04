@@ -99,7 +99,7 @@ impl SoloEmitter {
                 LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
                 new_transform,
                 Bullet::target_layer(emitter.0),
-                Damage::new(1),
+                Damage::new(1.0),
             ));
 
             commands.spawn((
@@ -196,7 +196,7 @@ impl DualEmitter {
                     t
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1),
+                Damage::new(1.0),
             ));
 
             commands.spawn((
@@ -207,7 +207,7 @@ impl DualEmitter {
                     new_transform
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1),
+                Damage::new(1.0),
             ));
 
             commands.spawn((
@@ -308,7 +308,7 @@ impl<T: Component> HomingEmitter<T> {
                 },
                 new_transform,
                 Bullet::target_layer(emitter.target),
-                Damage::new(1),
+                Damage::new(1.0),
             ));
 
             commands.spawn((

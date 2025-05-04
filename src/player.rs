@@ -27,7 +27,7 @@ use bevy_tween::{
 };
 use std::{cmp::Ordering, f32, time::Duration};
 
-pub const PLAYER_HEALTH: usize = 5;
+pub const PLAYER_HEALTH: f32 = 5.0;
 
 pub struct PlayerPlugin;
 

@@ -40,7 +40,7 @@ pub fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
                 flip_y: true,
                 ..Default::default()
             },
-            Health::full(100),
+            Health::full(100.0),
             BulletRate(0.5),
             BulletSpeed(0.8),
             Collider::rectangle(75., 90.),

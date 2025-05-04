@@ -38,7 +38,7 @@ fn health(
     server: Res<AssetServer>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    if PLAYER_HEALTH == usize::MAX {
+    if PLAYER_HEALTH == f32::MAX {
         return;
     }
 
@@ -53,7 +53,7 @@ fn health(
 
     let x = (-RES_WIDTH / 2. + HEART_OFFSET) * RESOLUTION_SCALE;
     let mut y = (RES_HEIGHT / 2. - HEART_OFFSET) * RESOLUTION_SCALE;
-    for _ in 0..PLAYER_HEALTH {
+    for _ in 0..(PLAYER_HEALTH as usize) {
         commands.spawn((
             HeartUi,
             Sprite {
@@ -79,7 +79,7 @@ fn update_health(
         .sort_unstable_by::<&Transform>(|a, b| b.translation.y.total_cmp(&a.translation.y))
         .enumerate()
     {
-        sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_health) as usize;
+        sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_health as usize) as usize;
     }
 }
 
