@@ -4,10 +4,12 @@ use crate::{
     assets, atlas_layout,
     bullet::{
         BulletRate, BulletSpeed, Destructable, Direction,
-        emitter::{DualEmitter, SoloEmitter},
+        emitter::{DualEmitter, HomingEmitter, SoloEmitter},
+        homing::TurnSpeed,
     },
     health::{Dead, Health},
     miniboss,
+    player::Player,
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -43,24 +45,24 @@ impl Plugin for EnemyPlugin {
                     init_explosion_layout,
                     init_cruiser_explosion_layout,
                 ),
+            )
+            .add_systems(OnEnter(GameState::Game), start_waves)
+            .add_systems(
+                Update,
+                (
+                    update_waves,
+                    spawn_formations,
+                    despawn_formations,
+                    (add_low_health_effects, death_effects, handle_death),
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Game)),
+            )
+            .add_systems(
+                FixedUpdate,
+                (update_back_and_forth, update_circle, update_figure8)
+                    .run_if(in_state(GameState::Game)),
             );
-            //.add_systems(OnEnter(GameState::Game), start_waves)
-            //.add_systems(
-            //    Update,
-            //    (
-            //        update_waves,
-            //        spawn_formations,
-            //        despawn_formations,
-            //        (add_low_health_effects, death_effects, handle_death),
-            //    )
-            //        .chain()
-            //        .run_if(in_state(GameState::Game)),
-            //)
-            //.add_systems(
-            //    FixedUpdate,
-            //    (update_back_and_forth, update_circle, update_figure8)
-            //        .run_if(in_state(GameState::Game)),
-            //);
     }
 }
 
@@ -400,7 +402,9 @@ impl EnemyType {
     fn insert_emitter(&self, commands: &mut EntityCommands) {
         match self {
             Self::Common => commands.with_child(SoloEmitter::player()),
-            Self::Uncommon => commands.with_child(DualEmitter::player(5.)),
+            Self::Uncommon => {
+                commands.with_child((HomingEmitter::<Player>::player(), TurnSpeed(60.)))
+            }
         };
     }
 

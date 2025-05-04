@@ -127,13 +127,15 @@ impl Default for BulletSpeed {
 
 fn init_bullet_sprite(
     mut commands: Commands,
-    bullets: Query<(Entity, &BulletSprite, &LinearVelocity), Without<Sprite>>,
+    bullets: Query<(Entity, &BulletSprite, Option<&LinearVelocity>), Without<Sprite>>,
     server: Res<AssetServer>,
 ) {
     for (entity, sprite, velocity) in bullets.iter() {
         let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
-        sprite.flip_y = velocity.0.y < 0.;
-        sprite.flip_x = velocity.0.x < 0.;
+        if let Some(velocity) = velocity {
+            sprite.flip_y = velocity.0.y < 0.;
+            sprite.flip_x = velocity.0.x < 0.;
+        }
         commands.entity(entity).insert(sprite);
     }
 }

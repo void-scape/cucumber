@@ -2,7 +2,7 @@ use crate::bullet::Destructable;
 use crate::health::{Dead, Health};
 use crate::pickups::Material;
 use crate::sampler::Sampler;
-use crate::{GameState, assets};
+use crate::{GameState, Layer, assets};
 use avian2d::prelude::*;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -30,7 +30,7 @@ impl Plugin for AsteroidPlugin {
     Destructable,
     // Without this, enemies can also hit asteroids, which is kinda funny
     //
-    // CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new(Layer::Debris, [Layer::Bullet]),
 )]
 #[component(on_add = Self::add_hook)]
 pub enum Asteroid {

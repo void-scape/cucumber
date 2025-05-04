@@ -1,4 +1,5 @@
 #![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 use avian2d::prelude::{Gravity, PhysicsDebugPlugin, PhysicsLayer};
 use bevy::app::FixedMainScheduleOrder;
@@ -66,7 +67,7 @@ fn main() {
         },
         // the average object (bullet) is 8 ppx.
         avian2d::PhysicsPlugins::new(Avian).with_length_unit(METER),
-        //PhysicsDebugPlugin::new(Avian),
+        // PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
@@ -121,10 +122,12 @@ pub struct Avian;
 #[derive(Default, Clone, Copy, PhysicsLayer)]
 pub enum Layer {
     #[default]
+    Default,
     Bounds,
     Bullet,
     Player,
     Enemy,
+    Debris,
 }
 
 fn set_state(mut commands: Commands) {

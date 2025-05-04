@@ -31,11 +31,7 @@ fn kill_on_wall(
 }
 
 #[derive(Component)]
-#[require(
-    RigidBody::Static,
-    CollidingEntities,
-    CollisionLayers::new([Layer::Bounds], [Layer::Player, Layer::Bullet]),
-)]
+#[require(RigidBody::Static, CollidingEntities)]
 pub struct ScreenBounds;
 
 fn spawn_bounds(mut commands: Commands) {
@@ -50,6 +46,7 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(0., top + thickness / 2., 0.)),
         Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
+        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
     ));
 
     // bottom
@@ -57,6 +54,7 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(0., bottom - thickness / 2., 0.)),
         Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
+        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
     ));
 
     // left
@@ -64,6 +62,7 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(left - thickness / 2., 0., 0.)),
         Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
+        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
     ));
 
     // right
@@ -71,5 +70,6 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(right + thickness / 2., 0., 0.)),
         Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
+        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
     ));
 }

@@ -5,7 +5,7 @@ use crate::{
     auto_collider::ImageCollider,
     bullet::{
         BulletCollisionEvent, BulletRate, BulletSource, BulletTimer, Polarity,
-        emitter::{DualEmitter, HomingEmitter},
+        emitter::{DualEmitter, HomingEmitter, LaserEmitter},
     },
     enemy::EnemyType,
     health::{Dead, Health},
@@ -34,8 +34,12 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Game), |mut commands: Commands| {
+            // let starting_weapon = commands
+            //     .spawn((DualEmitter::enemy(3.), Polarity::North))
+            //     .id();
+
             let starting_weapon = commands
-                .spawn((DualEmitter::enemy(3.), Polarity::North))
+                .spawn((LaserEmitter::enemy(), Polarity::North))
                 .id();
 
             let player = commands
@@ -77,15 +81,11 @@ impl Plugin for PlayerPlugin {
     ImageCollider,
     RigidBody::Dynamic,
     CollidingEntities,
-    CollisionLayers = collision_layers(),
+    CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet]),
     BulletRate,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
-
-fn collision_layers() -> CollisionLayers {
-    CollisionLayers::new([Layer::Player], [Layer::Bounds, Layer::Bullet])
-}
 
 #[derive(Component)]
 struct WeaponEntity(Entity);

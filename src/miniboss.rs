@@ -1,7 +1,7 @@
-use crate::GameState;
 use crate::bullet::Destructable;
 use crate::enemy::CruiserExplosion;
 use crate::health::Dead;
+use crate::{GameState, Layer};
 use crate::{
     HEIGHT,
     animation::{AnimationController, AnimationIndices},
@@ -44,6 +44,7 @@ pub fn spawn_boss(mut commands: Commands, server: Res<AssetServer>) {
             BulletRate(0.5),
             BulletSpeed(0.8),
             Collider::rectangle(75., 90.),
+            CollisionLayers::new(Layer::Enemy, 0),
             //CollisionTrigger(Collider::from_rect(
             //    Vec2::new(-25., 32.),
             //    Vec2::new(50., 64.),

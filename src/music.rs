@@ -3,7 +3,7 @@ use crate::enemy::Formation;
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 
-const MUSIC_VOLUME: f32 = 0.8;
+const MUSIC_VOLUME: f32 = 0.4;
 
 pub struct MusicPlugin;
 
