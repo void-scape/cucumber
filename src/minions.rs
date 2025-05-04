@@ -1,3 +1,4 @@
+use crate::Layer;
 use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
@@ -146,5 +147,6 @@ const MINER_SPEED: f32 = 40.;
     },
     TurnSpeed,
     HomingRotate,
+    CollisionLayers::new(Layer::Player, [Layer::Collectable]),
 )]
 pub struct Miner;

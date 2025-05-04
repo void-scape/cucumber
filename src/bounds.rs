@@ -46,7 +46,10 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(0., top + thickness / 2., 0.)),
         Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
-        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
+        CollisionLayers::new(
+            Layer::Bounds,
+            [Layer::Player, Layer::Bullet, Layer::Collectable],
+        ),
     ));
 
     // bottom
@@ -54,7 +57,10 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(0., bottom - thickness / 2., 0.)),
         Collider::rectangle(crate::WIDTH, thickness),
         ScreenBounds,
-        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
+        CollisionLayers::new(
+            Layer::Bounds,
+            [Layer::Player, Layer::Bullet, Layer::Collectable],
+        ),
     ));
 
     // left
@@ -62,7 +68,10 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(left - thickness / 2., 0., 0.)),
         Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
-        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
+        CollisionLayers::new(
+            Layer::Bounds,
+            [Layer::Player, Layer::Bullet, Layer::Collectable],
+        ),
     ));
 
     // right
@@ -70,6 +79,9 @@ fn spawn_bounds(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(right + thickness / 2., 0., 0.)),
         Collider::rectangle(thickness, crate::HEIGHT),
         ScreenBounds,
-        CollisionLayers::new(Layer::Bounds, [Layer::Player, Layer::Bullet]),
+        CollisionLayers::new(
+            Layer::Bounds,
+            [Layer::Player, Layer::Bullet, Layer::Collectable],
+        ),
     ));
 }

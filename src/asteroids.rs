@@ -19,7 +19,7 @@ impl Plugin for AsteroidPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (spawn_asteroids, handle_death, despawn_clusters).run_if(in_state(GameState::Game)),
+            (spawn_asteroids, handle_death, despawn_asteroids).run_if(in_state(GameState::Game)),
         )
         .add_systems(FixedUpdate, move_clusters.run_if(in_state(GameState::Game)));
     }
@@ -28,8 +28,6 @@ impl Plugin for AsteroidPlugin {
 #[derive(Component)]
 #[require(
     Destructable,
-    // Without this, enemies can also hit asteroids, which is kinda funny
-    //
     CollisionLayers::new(Layer::Debris, [Layer::Bullet]),
 )]
 #[component(on_add = Self::add_hook)]
@@ -146,10 +144,17 @@ fn move_clusters(mut clusters: Query<&mut Transform, With<MaterialCluster>>, tim
     }
 }
 
-fn despawn_clusters(
+fn despawn_asteroids(
     mut commands: Commands,
+    asteroids: Query<(Entity, &Transform), With<Asteroid>>,
     clusters: Query<Entity, (With<MaterialCluster>, Without<Children>)>,
 ) {
+    for (entity, transform) in asteroids.iter() {
+        if transform.translation.y <= -crate::HEIGHT / 2. - 8. {
+            commands.entity(entity).despawn();
+        }
+    }
+
     for entity in clusters.iter() {
         commands.entity(entity).despawn();
     }

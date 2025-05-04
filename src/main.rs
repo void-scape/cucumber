@@ -128,6 +128,7 @@ pub enum Layer {
     Player,
     Enemy,
     Debris,
+    Collectable,
 }
 
 fn set_state(mut commands: Commands) {

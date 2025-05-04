@@ -1,4 +1,4 @@
-use crate::assets;
+use crate::{assets, Layer};
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::player::Player;
@@ -166,5 +166,10 @@ impl Pickup {
 }
 
 #[derive(Component)]
-#[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
+#[require(
+    DebugCircle::color(2., YELLOW), 
+    ImageCollider, 
+    Collectable, 
+    CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player]),
+)]
 pub struct Material;
