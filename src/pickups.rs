@@ -1,6 +1,5 @@
 use crate::assets;
 use crate::auto_collider::ImageCollider;
-use crate::bounds::WallDespawn;
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::color::palettes::css::YELLOW;

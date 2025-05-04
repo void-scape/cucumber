@@ -3,7 +3,7 @@ use crate::{
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
-    bounds::{ScreenBounds, WallDespawn},
+    bounds::WallDespawn,
     health::{Damage, Health},
     player::Player,
 };

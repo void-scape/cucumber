@@ -26,6 +26,7 @@ mod music;
 mod opening;
 mod pickups;
 mod player;
+mod sampler;
 mod textbox;
 mod ui;
 

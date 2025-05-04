@@ -2,7 +2,6 @@ use crate::{
     GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
     assets, atlas_layout,
-    auto_collider::ImageCollider,
     bullet::{
         BulletRate, BulletSpeed, Destructable, Direction,
         emitter::{DualEmitter, SoloEmitter},
