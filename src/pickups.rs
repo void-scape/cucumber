@@ -42,6 +42,24 @@ pub enum PickupEvent {
     Material,
 }
 
+impl From<Pickup> for PickupEvent {
+    fn from(value: Pickup) -> Self {
+        match value {
+            Pickup::Upgrade(upgrade) => Self::Upgrade(upgrade),
+            Pickup::Weapon(weapon) => Self::Weapon(weapon),
+        }
+    }
+}
+
+impl From<&Pickup> for PickupEvent {
+    fn from(value: &Pickup) -> Self {
+        match *value {
+            Pickup::Upgrade(upgrade) => Self::Upgrade(upgrade),
+            Pickup::Weapon(weapon) => Self::Weapon(weapon),
+        }
+    }
+}
+
 #[derive(Default, Component)]
 #[require(
     Transform, 
@@ -80,7 +98,7 @@ fn pickup_triggered(
     }
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 #[require(Collectable, Collider::rectangle(8., 8.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
@@ -103,7 +121,7 @@ impl SpriteHook for Upgrade {
     }
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 #[require(Collectable, Collider::rectangle(16., 16.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
@@ -115,9 +133,9 @@ pub enum Weapon {
 impl Weapon {
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Bullet => assets::sprite_rect16(server, assets::WEAPONS_PATH, UVec2::new(0, 0)),
-            Self::Laser => assets::sprite_rect16(server, assets::WEAPONS_PATH, UVec2::new(2, 0)),
-            Self::Missile => assets::sprite_rect16(server, assets::WEAPONS_PATH, UVec2::new(1, 0)),
+            Self::Bullet => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(0, 1)),
+            Self::Laser => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8)),
+            Self::Missile => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(5, 2)),
         }
     }
 }
@@ -141,6 +159,21 @@ where
     }
 }
 
+pub fn random_pickups(num: usize) -> Vec<Pickup> {
+    (0..num).map(|_| Pickup::random()).collect()
+}
+
+pub fn unique_pickups(num: usize) -> Vec<Pickup> {
+    let mut pickups = Vec::with_capacity(num);
+    while pickups.len() != 3 {
+    let pickup = Pickup::random();
+        if !pickups.contains(&pickup) {
+            pickups.push(pickup);
+        }
+    }
+    pickups
+}
+
 pub fn spawn_random_pickup(commands: &mut EntityCommands, bundle: impl Bundle) {
     match Pickup::random() {
         Pickup::Upgrade(upgrade) => commands.insert((upgrade, bundle)),
@@ -148,7 +181,8 @@ pub fn spawn_random_pickup(commands: &mut EntityCommands, bundle: impl Bundle) {
     };
 }
 
-enum Pickup {
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub enum Pickup {
     Upgrade(Upgrade),
     Weapon(Weapon),
 }

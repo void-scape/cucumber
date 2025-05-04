@@ -16,7 +16,7 @@ pub struct MinibossPlugin;
 impl Plugin for MinibossPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<BossDeathEvent>()
-            //.add_systems(OnEnter(GameState::Game), spawn_boss)
+            //.add_systems(OnEnter(GameState::StartGame), spawn_boss)
             .add_systems(
                 Update,
                 (boss_death_effects, handle_boss_death).run_if(in_state(GameState::Game)),

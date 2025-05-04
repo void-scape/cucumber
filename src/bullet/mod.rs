@@ -163,7 +163,7 @@ impl Default for Lifetime {
     }
 }
 
-fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut commands: Commands) {
+fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time<Physics>>, mut commands: Commands) {
     let delta = time.delta();
 
     for (entity, mut lifetime) in q.iter_mut() {

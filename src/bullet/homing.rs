@@ -98,7 +98,7 @@ impl Default for TurnSpeed {
 }
 
 impl Heading {
-    pub fn steer_towards(&mut self, time: &Time, turn_speed: f32, from: Vec2, to: Vec2) {
+    pub fn steer_towards(&mut self, time: &Time<Physics>, turn_speed: f32, from: Vec2, to: Vec2) {
         let desired_direction = (to - from).normalize();
         let desired_angle = desired_direction.y.atan2(desired_direction.x);
 
@@ -123,7 +123,7 @@ fn steer_homing(
         &TurnSpeed,
     )>,
     targets: Query<&GlobalTransform>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
     mut commands: Commands,
 ) {
     let delta = time.delta_secs();

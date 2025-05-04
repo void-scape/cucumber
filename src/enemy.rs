@@ -46,7 +46,7 @@ impl Plugin for EnemyPlugin {
                     init_cruiser_explosion_layout,
                 ),
             )
-            .add_systems(OnEnter(GameState::Game), start_waves)
+            .add_systems(OnEnter(GameState::StartGame), start_waves)
             .add_systems(
                 Update,
                 (
@@ -233,7 +233,7 @@ impl WaveController {
         }
     }
 
-    pub fn tick(&mut self, time: &Time) {
+    pub fn tick(&mut self, time: &Time<Physics>) {
         self.timer.tick(time.delta());
     }
 
@@ -264,7 +264,7 @@ fn update_waves(
     mut commands: Commands,
     mut controller: ResMut<WaveController>,
     formations: Query<&Formation>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
     mut finished: Local<bool>,
 ) {
     if *finished {
@@ -309,7 +309,7 @@ fn spawn_formations(
         let start = Vec3::new(0., start_y, 0.);
         let end = Vec3::new(0., end_y - 20., 0.);
 
-        commands.animation().insert(tween(
+        commands.entity(root).animation().insert(tween(
             Duration::from_secs_f32(FORMATION_EASE_DUR),
             EaseKind::SineOut,
             root.into_target().with(translation(start, end)),
@@ -355,18 +355,18 @@ fn despawn_formations(
         info!("despawning formation");
         commands.entity(entity).despawn();
 
-        if formation.drop_pickup_heuristic() {
-            let mut commands = commands.spawn_empty();
-            let position = deaths.last_death_position().unwrap();
-
-            pickups::spawn_random_pickup(
-                &mut commands,
-                (
-                    Transform::from_translation(position.extend(0.)),
-                    pickups::velocity(),
-                ),
-            );
-        }
+        //if formation.drop_pickup_heuristic() {
+        //    let mut commands = commands.spawn_empty();
+        //    let position = deaths.last_death_position().unwrap();
+        //
+        //    pickups::spawn_random_pickup(
+        //        &mut commands,
+        //        (
+        //            Transform::from_translation(position.extend(0.)),
+        //            pickups::velocity(),
+        //        ),
+        //    );
+        //}
     }
 }
 
@@ -495,7 +495,7 @@ fn update_back_and_forth(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<BackAndForth>, Without<Center>)>,
     mut query: Query<(&BackAndForth, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -529,7 +529,7 @@ fn update_circle(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Circle>, Without<Center>)>,
     mut query: Query<(&Circle, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -558,7 +558,7 @@ fn update_figure8(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Figure8>, Without<Center>)>,
     mut query: Query<(&mut Figure8, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands

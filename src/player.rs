@@ -33,7 +33,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Game), |mut commands: Commands| {
+        app.add_systems(OnEnter(GameState::StartGame), |mut commands: Commands| {
             let starting_weapon = commands
                 .spawn((DualEmitter::enemy(3.), Polarity::North))
                 .id();
@@ -79,9 +79,23 @@ impl Plugin for PlayerPlugin {
     CollidingEntities,
     CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletRate,
+    Materials,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
+
+#[derive(Default, Component)]
+pub struct Materials(usize);
+
+impl Materials {
+    pub fn get(&self) -> usize {
+        self.0
+    }
+
+    pub fn sub(&mut self, n: usize) {
+        self.0 = self.0.saturating_sub(n);
+    }
+}
 
 #[derive(Component)]
 struct WeaponEntity(Entity);
@@ -137,7 +151,7 @@ impl Player {
 struct PlayerBlasters;
 
 #[derive(Component)]
-struct BlockControls;
+pub struct BlockControls;
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
@@ -203,11 +217,11 @@ fn handle_death(player: Single<Entity, (With<Player>, With<Dead>)>, mut commands
 }
 
 fn handle_pickups(
-    q: Single<(Entity, &mut WeaponEntity, &mut BulletRate), With<Player>>,
+    q: Single<(Entity, &mut WeaponEntity, &mut BulletRate, &mut Materials), With<Player>>,
     mut events: EventReader<PickupEvent>,
     mut commands: Commands,
 ) {
-    let (player, mut weapon_entity, mut rate) = q.into_inner();
+    let (player, mut weapon_entity, mut rate, mut materials) = q.into_inner();
     for event in events.read() {
         match event {
             PickupEvent::Weapon(Weapon::Bullet) => {
@@ -238,7 +252,9 @@ fn handle_pickups(
                 commands.entity(player).add_child(emitter);
             }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
-            //PickupEvent::Material => {}
+            PickupEvent::Material => {
+                materials.0 += 1;
+            }
             e => info!("handle: {e:?}"),
         }
     }

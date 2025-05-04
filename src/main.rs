@@ -29,6 +29,7 @@ mod opening;
 mod pickups;
 mod player;
 mod sampler;
+mod selection;
 mod textbox;
 mod tween;
 mod ui;
@@ -99,11 +100,13 @@ fn main() {
         asteroids::AsteroidPlugin,
         minions::MinionPlugin,
         tween::SequenceTweenPlugin,
+        selection::SelectionPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
     .add_systems(Startup, set_state.run_if(in_state(GameState::Startup)))
+    .add_systems(Update, enter_game.run_if(in_state(GameState::StartGame)))
     .add_systems(Startup, configure_screen_shake)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Scaling::Canvas);
@@ -135,7 +138,11 @@ pub enum Layer {
 
 fn set_state(mut commands: Commands) {
     //commands.set_state(GameState::Opening);
-    commands.set_state(GameState::Game);
+    commands.set_state(GameState::StartGame);
+}
+
+fn enter_game(mut commands: Commands) {
+    commands.set_state(GameState::Game)
 }
 
 #[cfg(debug_assertions)]
@@ -158,5 +165,7 @@ enum GameState {
     #[default]
     Startup,
     Opening,
+    StartGame,
     Game,
+    Selection,
 }

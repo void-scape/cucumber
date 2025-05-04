@@ -10,7 +10,9 @@ pub const BACKGROUNDS_PATH: &'static str = "shooters/SpaceShooterAssetPack_BackG
 pub const CHARACTERS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Characters.png";
 pub const UI_PATH: &'static str = "shooters/SpaceShooterAssetPack_IU.png";
 pub const MISC_PATH: &'static str = "shooters/SpaceShooterAssetPack_Miscellaneous.png";
-pub const PROJECTILES_PATH: &'static str = "shooters/SpaceShooterAssetPack_Projectiles_Grayscale.png";
+pub const PROJECTILES_PATH: &'static str =
+    "shooters/SpaceShooterAssetPack_Projectiles_Grayscale.png";
+pub const PROJECTILES_COLORED_PATH: &'static str = "shooters/SpaceShooterAssetPack_Projectiles.png";
 pub const SHIPS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Ships.png";
 pub const WEAPONS_PATH: &'static str = "shooters/SpaceShooterAssetPack_Weapons.png";
 
@@ -26,23 +28,25 @@ const ASSETS: &[&str] = &[
 pub fn sprite_rect8(server: &AssetServer, path: &'static str, cell: UVec2) -> Sprite {
     Sprite {
         image: server.load(path),
-        rect: Some(Rect::from_corners(
-            cell.as_vec2() * 8.,
-            (cell.as_vec2() + 1.) * 8.,
-        )),
+        rect: Some(rect8(cell)),
         ..Default::default()
     }
+}
+
+fn rect8(cell: UVec2) -> Rect {
+    Rect::from_corners(cell.as_vec2() * 8., (cell.as_vec2() + 1.) * 8.)
 }
 
 pub fn sprite_rect16(server: &AssetServer, path: &'static str, cell: UVec2) -> Sprite {
     Sprite {
         image: server.load(path),
-        rect: Some(Rect::from_corners(
-            cell.as_vec2() * 16.,
-            (cell.as_vec2() + 1.) * 16.,
-        )),
+        rect: Some(rect16(cell)),
         ..Default::default()
     }
+}
+
+pub fn rect16(cell: UVec2) -> Rect {
+    Rect::from_corners(cell.as_vec2() * 16., (cell.as_vec2() + 1.) * 16.)
 }
 
 pub struct AssetPlugin;

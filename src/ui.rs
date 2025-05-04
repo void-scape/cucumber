@@ -10,8 +10,11 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Game), (frame, health, init_upgrade_ui))
-            .add_systems(Update, (update_health, update_upgrades));
+        app.add_systems(
+            OnEnter(GameState::StartGame),
+            (frame, health, init_upgrade_ui),
+        )
+        .add_systems(Update, (update_health, update_upgrades));
     }
 }
 

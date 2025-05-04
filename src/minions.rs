@@ -4,7 +4,7 @@ use crate::bullet::Polarity;
 use crate::bullet::emitter::SoloEmitter;
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
 use crate::enemy::{Angle, Center, Figure8};
-use crate::pickups::Material;
+use crate::pickups::{Material, PickupEvent};
 use crate::player::Player;
 use crate::tween::Tween;
 use crate::{GameState, Layer};
@@ -133,6 +133,7 @@ fn miner_collect(
     mut commands: Commands,
     miners: Query<&CollidingEntities, With<Miner>>,
     materials: Query<&Material>,
+    mut writer: EventWriter<PickupEvent>,
 ) {
     let mut despawned = HashSet::new();
     for miner in miners.iter() {
@@ -143,6 +144,7 @@ fn miner_collect(
         {
             if despawned.insert(entity) {
                 commands.entity(entity).despawn();
+                writer.write(PickupEvent::Material);
             }
         }
     }
@@ -164,12 +166,12 @@ fn update_gunner_formation(
         let x = start_x + i as f32 * step;
         let normalized_x = x / half_width;
         let y = -arc_height * (normalized_x * normalized_x);
-        (x, y)
+        Vec2::new(x, y)
     });
 
-    for ((gunner, transform), (x, y)) in gunners.iter_many(&player_gunners.0).zip(formation) {
+    for ((gunner, transform), position) in gunners.iter_many(&player_gunners.0).zip(formation) {
         let start = transform.translation;
-        let end = transform.translation.with_x(x).with_y(y);
+        let end = position.extend(transform.translation.z);
         let dist = start.distance(end);
 
         commands.entity(gunner).remove::<(Figure8, Angle, Center)>();

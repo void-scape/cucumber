@@ -1,3 +1,4 @@
+use avian2d::prelude::Physics;
 use bevy::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
@@ -79,7 +80,7 @@ fn scrolling_background(
 fn update_scrolling_background(
     query: Query<(&MeshMaterial2d<ScrollingTexture>, &Speed)>,
     mut materials: ResMut<Assets<ScrollingTexture>>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
 ) {
     for (handle, speed) in query.iter() {
         let material = materials.get_mut(&handle.0).unwrap();

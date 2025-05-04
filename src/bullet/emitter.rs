@@ -73,7 +73,7 @@ impl SoloEmitter {
             &GlobalTransform,
         )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
-        time: Res<Time>,
+        time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -166,7 +166,7 @@ impl DualEmitter {
             &GlobalTransform,
         )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
-        time: Res<Time>,
+        time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -269,7 +269,7 @@ impl<T: Component> HomingEmitter<T> {
             &GlobalTransform,
         )>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
-        time: Res<Time>,
+        time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -384,7 +384,7 @@ impl LaserEmitter {
         )>,
         mut child: Query<&mut Transform>,
         parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
-        time: Res<Time>,
+        time: Res<Time<Physics>>,
         mut targets: Query<(&mut Health, &GlobalTransform)>,
         mut writer: EventWriter<BulletCollisionEvent>,
         server: Res<AssetServer>,

@@ -63,7 +63,7 @@ impl Asteroid {
 
 fn spawn_asteroids(
     mut commands: Commands,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
     mut big_cooldown: Local<Option<Timer>>,
     mut small_cooldown: Local<Option<Timer>>,
 ) {
@@ -138,7 +138,7 @@ fn handle_death(
     }
 }
 
-fn move_clusters(mut clusters: Query<&mut Transform, With<MaterialCluster>>, time: Res<Time>) {
+fn move_clusters(mut clusters: Query<&mut Transform, With<MaterialCluster>>, time: Res<Time<Physics>>) {
     for mut transform in clusters.iter_mut() {
         transform.translation.y -= MATERIAL_SPEED * time.delta_secs();
     }
