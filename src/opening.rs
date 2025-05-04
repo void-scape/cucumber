@@ -93,28 +93,26 @@ fn begin(mut commands: Commands, server: Res<AssetServer>) {
         .insert(OpeningEntity);
 
     // cutting the next two calls short makes this disappear after text appears????
-    commands
-        .spawn((
-            OpeningEntity,
-            SamplePlayer::new(server.load("audio/drone.wav")),
-            PlaybackSettings::LOOP,
-        ))
-        .effect(VolumeNode {
+    commands.spawn((
+        OpeningEntity,
+        SamplePlayer::new(server.load("audio/drone.wav")),
+        PlaybackSettings::LOOP,
+        sample_effects![VolumeNode {
             volume: Volume::Linear(0.5),
-        });
+        }],
+    ));
 
     // 3.
     run_after(
         Duration::from_secs_f32(0.),
         |mut commands: Commands, server: Res<AssetServer>| {
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/note2.wav")),
-                    PlaybackSettings::ONCE,
-                ))
-                .effect(VolumeNode {
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/note2.wav")),
+                PlaybackSettings::ONCE,
+                sample_effects![VolumeNode {
                     volume: Volume::Linear(0.5),
-                });
+                }],
+            ));
         },
         &mut commands,
     );
@@ -159,27 +157,31 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
             ),
             Transform::from_translation(Vec3::default().with_z(100.))
                 .with_scale(Vec3::splat(RESOLUTION_SCALE)),
+            children![
+                (
+                    Sprite {
+                        image: server.load("continue.png"),
+                        anchor: Anchor::TopLeft,
+                        ..Default::default()
+                    },
+                    Transform::from_translation(Vec3::default().with_z(100.))
+                        .with_scale(Vec3::splat(RESOLUTION_SCALE)),
+                    Continue,
+                    Visibility::Hidden,
+                ),
+                (
+                    Character::Noise,
+                    Transform::from_xyz(-47., -98., 100.).with_scale(Vec3::splat(RESOLUTION_SCALE)),
+                ),
+                (
+                    SamplePlayer::new(server.load("audio/sfx/glitch.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.4),
+                        ..PlaybackSettings::LOOP
+                    }
+                )
+            ],
         ))
-        .with_child((
-            Sprite {
-                image: server.load("continue.png"),
-                anchor: Anchor::TopLeft,
-                ..Default::default()
-            },
-            Transform::from_translation(Vec3::default().with_z(100.))
-                .with_scale(Vec3::splat(RESOLUTION_SCALE)),
-            Continue,
-            Visibility::Hidden,
-        ))
-        .with_child((
-            Character::Noise,
-            Transform::from_xyz(-47., -98., 100.).with_scale(Vec3::splat(RESOLUTION_SCALE)),
-        ))
-        .with_child((SamplePlayer::new(server.load("audio/sfx/glitch.wav")), {
-            let mut settings = PlaybackSettings::LOOP;
-            settings.volume = Volume::Linear(0.4);
-            settings
-        }))
         .id();
 
     commands.spawn((

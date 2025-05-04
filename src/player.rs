@@ -246,15 +246,13 @@ fn damage_effects(
 ) {
     for event in reader.read() {
         if event.source == BulletSource::Enemy {
-            commands
-                .spawn((
-                    SamplePlayer::new(server.load("audio/sfx/laser.wav")),
-                    PlaybackSettings::ONCE,
-                ))
-                .effect(VolumeNode {
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/laser.wav")),
+                PlaybackSettings::ONCE,
+                sample_effects![VolumeNode {
                     volume: Volume::Linear(0.2),
-                });
-            //.effect(LowPassNode::new(5_000.));
+                }],
+            ));
         }
     }
 }

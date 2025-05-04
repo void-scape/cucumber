@@ -59,12 +59,11 @@ fn main() {
         bevy_enhanced_input::EnhancedInputPlugin,
         bevy_tween::DefaultTweenPlugins,
         bevy_seedling::SeedlingPlugin {
-            default_pool_size: Some(32),
             ..Default::default()
         },
         // the average object (bullet) is 8 ppx.
         avian2d::PhysicsPlugins::new(Avian).with_length_unit(8.),
-        //PhysicsDebugPlugin::new(Avian),
+        // PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
             WIDTH as u32,
             HEIGHT as u32,
@@ -122,7 +121,7 @@ pub enum Layer {
 }
 
 fn set_state(mut commands: Commands) {
-    commands.set_state(GameState::Game);
+    commands.set_state(GameState::Opening);
 }
 
 #[cfg(debug_assertions)]
