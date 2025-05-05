@@ -39,25 +39,31 @@ impl Plugin for PlayerPlugin {
                 .id();
 
             let player = commands
-                .spawn((Player, WeaponEntity(starting_weapon), BlockControls))
+                .spawn((
+                    Player,
+                    WeaponEntity(starting_weapon),
+                    Transform::from_xyz(0., -HEIGHT / 6., 0.),
+                ))
                 .add_child(starting_weapon)
                 .id();
-            let dur = Duration::from_secs_f32(1.);
-            run_after(
-                dur,
-                move |mut commands: Commands| {
-                    commands.entity(player).remove::<BlockControls>();
-                },
-                &mut commands,
-            );
-            commands.animation().insert(tween(
-                dur,
-                EaseKind::SineOut,
-                player.into_target().with(translation(
-                    Vec3::new(0., -HEIGHT / 2. + 16., 0.),
-                    Vec3::new(0., -HEIGHT / 6., 0.),
-                )),
-            ));
+            //let dur = Duration::from_secs_f32(1.);
+            //run_after(
+            //    dur,
+            //    move |mut commands: Commands| {
+            //        commands.entity(player).remove::<BlockControls>();
+            //    },
+            //    &mut commands,
+            //);
+            //
+            //commands.entity(player).insert(BlockControls);
+            //commands.animation().insert(tween(
+            //    dur,
+            //    EaseKind::SineOut,
+            //    player.into_target().with(translation(
+            //        Vec3::new(0., -HEIGHT / 2. + 16., 0.),
+            //        Vec3::new(0., -HEIGHT / 6., 0.),
+            //    )),
+            //));
         })
         .add_systems(
             Update,

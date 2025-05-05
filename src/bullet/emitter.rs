@@ -262,6 +262,7 @@ impl<T: Component> HomingEmitter<T> {
             Entity,
             &HomingEmitter<T>,
             Option<&mut BulletTimer>,
+            Option<&BulletRate>,
             &BaseSpeed,
             &TurnSpeed,
             &Polarity,
@@ -275,13 +276,16 @@ impl<T: Component> HomingEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, base_speed, turn_speed, polarity, child_of, transform) in
+        for (entity, emitter, timer, rate, base_speed, turn_speed, polarity, child_of, transform) in
             emitters.iter_mut()
         {
-            let Ok((rate, speed)) = parents.get(child_of.parent()) else {
+            let Ok((parent_rate, speed)) = parents.get(child_of.parent()) else {
                 continue;
             };
-            let rate = rate.copied().unwrap_or_default();
+            let parent_rate = parent_rate.copied().unwrap_or_default();
+            let rate = rate
+                .map(|rate| BulletRate(rate.0 * parent_rate.0))
+                .unwrap_or(parent_rate);
             let speed = speed.copied().unwrap_or_default();
 
             let duration = Duration::from_secs_f32(0.33 / rate.0);
@@ -336,7 +340,7 @@ impl<T: Component> HomingEmitter<T> {
 }
 
 #[derive(Component)]
-#[require(Transform, BaseSpeed(30.), Polarity)]
+#[require(Transform, Visibility, BaseSpeed(30.), Polarity)]
 #[component(on_insert = Self::on_insert_hook)]
 pub struct LaserEmitter(Layer);
 

@@ -45,24 +45,24 @@ impl Plugin for EnemyPlugin {
                     init_explosion_layout,
                     init_cruiser_explosion_layout,
                 ),
-            )
-            .add_systems(OnEnter(GameState::StartGame), start_waves)
-            .add_systems(
-                Update,
-                (
-                    update_waves,
-                    spawn_formations,
-                    despawn_formations,
-                    (add_low_health_effects, death_effects, handle_death),
-                )
-                    .chain()
-                    .run_if(in_state(GameState::Game)),
-            )
-            .add_systems(
-                FixedUpdate,
-                (update_back_and_forth, update_circle, update_figure8)
-                    .run_if(in_state(GameState::Game)),
             );
+            //.add_systems(OnEnter(GameState::StartGame), start_waves)
+            //.add_systems(
+            //    Update,
+            //    (
+            //        update_waves,
+            //        spawn_formations,
+            //        despawn_formations,
+            //        (add_low_health_effects, death_effects, handle_death),
+            //    )
+            //        .chain()
+            //        .run_if(in_state(GameState::Game)),
+            //)
+            //.add_systems(
+            //    FixedUpdate,
+            //    (update_back_and_forth, update_circle, update_figure8)
+            //        .run_if(in_state(GameState::Game)),
+            //);
     }
 }
 
