@@ -87,9 +87,10 @@ fn spawn_asteroids(
     mut small_cooldown: Local<Option<Timer>>,
     spawner: Res<AsteroidSpawner>,
 ) {
-    if !spawner.0 {
-        return;
-    }
+    return;
+    //if !spawner.0 {
+    //    return;
+    //}
 
     const Y: f32 = crate::HEIGHT / 2. + 16.;
     const X: f32 = crate::WIDTH / 2. - 32.;

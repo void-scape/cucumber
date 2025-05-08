@@ -1,6 +1,6 @@
 use super::{
-    Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, BulletType,
-    Destructable, Polarity,
+    BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer,
+    Destructable, Mine, Missile, Orb, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
@@ -21,14 +21,18 @@ pub const BULLET_SPEED: f32 = 150.;
 pub const MISSILE_SPEED: f32 = 130.;
 pub const LASER_SPEED: f32 = 30.;
 pub const MINE_SPEED: f32 = 100.;
+pub const ORB_SPEED: f32 = 100.;
 
 pub const BULLET_DAMAGE: f32 = 1.;
 pub const MISSILE_DAMAGE: f32 = 1.;
 pub const MINE_DAMAGE: f32 = 1.;
+pub const ORB_DAMAGE: f32 = 1.;
 
 const BULLET_RATE: f32 = 0.25;
 const MISSILE_RATE: f32 = 0.33;
 const MINE_RATE: f32 = 0.45;
+const ORB_RATE: f32 = 1.;
+const ORB_SHOT_RATE: f32 = 0.05;
 
 const MINE_HEALTH: f32 = 5.;
 
@@ -50,6 +54,7 @@ impl Plugin for EmitterPlugin {
                 HomingEmitter::<Enemy>::shoot_bullets,
                 HomingEmitter::<Player>::shoot_bullets,
                 MineEmitter::shoot_bullets,
+                OrbEmitter::shoot_bullets,
             )
                 .in_set(EmitterSet),
         );
@@ -144,7 +149,7 @@ impl SoloEmitter {
             timer.timer.set_duration(duration);
 
             commands.spawn((
-                BulletType::Basic,
+                BasicBullet,
                 LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 new_transform,
                 Bullet::target_layer(emitter.0),
@@ -228,7 +233,7 @@ impl DualEmitter {
             timer.timer.set_duration(duration);
 
             commands.spawn((
-                BulletType::Basic,
+                BasicBullet,
                 LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 {
                     let mut t = new_transform;
@@ -240,7 +245,7 @@ impl DualEmitter {
             ));
 
             commands.spawn((
-                BulletType::Basic,
+                BasicBullet,
                 LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 {
                     new_transform.translation.x += emitter.width;
@@ -334,7 +339,7 @@ impl<T: Component> HomingEmitter<T> {
                 Polarity::South => -PI / 2.0,
             };
             commands.spawn((
-                BulletType::Missile,
+                Missile,
                 LinearVelocity::default(),
                 Homing::<T>::new(),
                 HomingRotate,
@@ -552,7 +557,7 @@ impl MineEmitter {
                 * MINE_SPEED
                 * mods.speed;
             commands.spawn((
-                BulletType::Mine,
+                Mine,
                 Destructable,
                 Health::full(MINE_HEALTH),
                 LinearVelocity(velocity),
@@ -568,6 +573,104 @@ impl MineEmitter {
                     ..PlaybackSettings::ONCE
                 },
                 sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
+        }
+    }
+}
+
+#[derive(Component)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+pub struct OrbEmitter {
+    layer: Layer,
+    shot: usize,
+}
+
+impl OrbEmitter {
+    pub fn player() -> Self {
+        Self {
+            layer: Layer::Player,
+            shot: 0,
+        }
+    }
+
+    pub fn enemy() -> Self {
+        Self {
+            layer: Layer::Enemy,
+            shot: 0,
+        }
+    }
+}
+
+impl OrbEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<(
+            Entity,
+            &mut OrbEmitter,
+            Option<&mut BulletTimer>,
+            &BulletModifiers,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+        )>,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time<Physics>>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (entity, mut emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let duration = Duration::from_secs_f32(ORB_RATE / mods.rate);
+            let shot_duration = Duration::from_secs_f32(ORB_SHOT_RATE / mods.rate);
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(duration, TimerMode::Repeating),
+                });
+                continue;
+            };
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+
+            let bullets = 10;
+            let waves = 8;
+
+            let shift = emitter.shot;
+            for angle in 0..bullets {
+                let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
+                    + shift as f32 * std::f32::consts::PI / 4.;
+                commands.spawn((
+                    Orb,
+                    LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
+                    new_transform,
+                    Bullet::target_layer(emitter.layer),
+                    Damage::new(ORB_DAMAGE * mods.damage),
+                ));
+            }
+
+            if emitter.shot >= waves {
+                emitter.shot = 0;
+                timer.timer.set_duration(duration);
+            } else {
+                emitter.shot += 1;
+                timer.timer.set_duration(shot_duration);
+            }
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/orb.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-18.0),
+                    ..PlaybackSettings::ONCE
+                },
             ));
         }
     }

@@ -18,6 +18,7 @@ impl Plugin for MovementPlugin {
 
 #[derive(Debug, Clone, Copy)]
 pub enum MovementPattern {
+    None,
     BackAndForth,
     Circle,
     Figure8,
@@ -121,6 +122,7 @@ impl EnemyType {
     pub fn configure_movement(&self, commands: &mut EntityCommands, movement: MovementPattern) {
         let mut rng = rand::rng();
         match movement {
+            MovementPattern::None => {}
             MovementPattern::BackAndForth => {
                 commands.insert((
                     BackAndForth {

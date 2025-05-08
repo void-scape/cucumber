@@ -1,5 +1,7 @@
 use self::{
-    formation::{Formation, FormationPlugin, FormationSet, MINE_THROWER, ROW, TRIANGLE},
+    formation::{
+        Formation, FormationPlugin, FormationSet, MINE_THROWER, ORB_SLINGER, ROW, TRIANGLE,
+    },
     movement::*,
 };
 use crate::{
@@ -10,7 +12,7 @@ use crate::{
     atlas_layout,
     bullet::{
         Destructable, Direction,
-        emitter::{BulletModifiers, HomingEmitter, MineEmitter, SoloEmitter},
+        emitter::{BulletModifiers, HomingEmitter, MineEmitter, OrbEmitter, SoloEmitter},
         homing::TurnSpeed,
     },
     health::{Dead, Health},
@@ -75,12 +77,13 @@ fn start_waves(mut commands: Commands) {
     commands.insert_resource(WaveController::new_delayed(
         START_DELAY,
         &[
-            (TRIANGLE, 16.),
-            (ROW, 8.),
-            (MINE_THROWER, 8.),
-            (TRIANGLE, 16.),
-            (ROW, 0.),
-            (MINE_THROWER, 8.),
+            (ORB_SLINGER, 0.),
+            //(TRIANGLE, 16.),
+            //(ROW, 8.),
+            //(MINE_THROWER, 8.),
+            //(TRIANGLE, 16.),
+            //(ROW, 0.),
+            //(MINE_THROWER, 8.),
         ],
     ));
 }
@@ -177,6 +180,7 @@ pub enum EnemyType {
     Gunner,
     Missile,
     MineThrower,
+    OrbSlinger,
 }
 
 impl EnemyType {
@@ -203,6 +207,7 @@ impl EnemyType {
                 commands.with_child((HomingEmitter::<Player>::player(), TurnSpeed(60.)))
             }
             Self::MineThrower => commands.with_child(MineEmitter::player()),
+            Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
         };
     }
 
@@ -232,6 +237,7 @@ impl EnemyType {
             Self::Gunner => Health::full(10.0),
             Self::Missile => Health::full(15.0),
             Self::MineThrower => Health::full(15.0),
+            Self::OrbSlinger => Health::full(40.0),
         }
     }
 
@@ -240,8 +246,9 @@ impl EnemyType {
             Self::Gunner => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 3)),
             Self::Missile => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 3)),
             Self::MineThrower => {
-                assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 4))
+                assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(4, 3))
             }
+            Self::OrbSlinger => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 4)),
         }
     }
 
@@ -250,6 +257,7 @@ impl EnemyType {
             Self::Gunner => 1,
             Self::Missile => 2,
             Self::MineThrower => 3,
+            Self::OrbSlinger => 8,
         }
     }
 }

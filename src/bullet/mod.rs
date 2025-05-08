@@ -222,33 +222,6 @@ enum ColorMod {
     Enemy,
 }
 
-#[derive(Clone, Copy, Component)]
-#[require(Bullet, ImageCollider)]
-#[component(on_add = Self::on_add_hook)]
-pub enum BulletType {
-    Basic,
-    Missile,
-    Mine,
-}
-
-impl BulletType {
-    fn on_add_hook(mut world: DeferredWorld, ctx: HookContext) {
-        let ty = *world.get::<BulletType>(ctx.entity).unwrap();
-
-        match ty {
-            BulletType::Basic => {
-                world.commands().entity(ctx.entity).insert(BasicBullet);
-            }
-            BulletType::Missile => {
-                world.commands().entity(ctx.entity).insert(Missile);
-            }
-            BulletType::Mine => {
-                world.commands().entity(ctx.entity).insert(Mine);
-            }
-        }
-    }
-}
-
 #[derive(Component)]
 #[require(ImageCollider)]
 pub struct BulletSprite {
@@ -266,17 +239,21 @@ impl BulletSprite {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(0, 1))]
+#[require(Bullet, ImageCollider, BulletSprite::from_cell(0, 1))]
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(5, 2))]
+#[require(Bullet, ImageCollider, BulletSprite::from_cell(5, 2))]
 pub struct Missile;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(4, 3))]
+#[require(Bullet, ImageCollider, BulletSprite::from_cell(4, 3))]
 #[component(on_remove = Self::explode)]
 pub struct Mine;
+
+#[derive(Clone, Copy, Component)]
+#[require(Bullet, ImageCollider, BulletSprite::from_cell(3, 1))]
+pub struct Orb;
 
 impl Mine {
     fn explode(mut world: DeferredWorld, ctx: HookContext) {
@@ -303,7 +280,7 @@ impl Mine {
 
         for (dir, rot) in dirs.into_iter() {
             world.commands().spawn((
-                BulletType::Basic,
+                BasicBullet,
                 LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
                 transform.with_rotation(Quat::from_rotation_z(rot)),
                 layers,
