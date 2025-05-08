@@ -30,6 +30,9 @@ jobs:
         run: |
           sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
       - name: Build
         run: |
           cargo build --no-default-features --release --target x86_64-unknown-linux-gnu
@@ -77,6 +80,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       - name: Build
         run: |
@@ -130,6 +136,9 @@ jobs:
           export CFLAGS="-fno-stack-check"
           export MACOSX_DEPLOYMENT_TARGET="10.9"
 
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
       - name: Build
         run: |
           cargo build --no-default-features --release --target x86_64-apple-darwin
@@ -181,6 +190,9 @@ jobs:
         # macOS 11 was the first version to support ARM
         run: |
           export MACOSX_DEPLOYMENT_TARGET="11"
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       - name: Build
         run: |
