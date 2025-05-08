@@ -2,7 +2,6 @@ use crate::{
     GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
-    auto_collider::ImageCollider,
     bullet::{
         BulletCollisionEvent, BulletSource, BulletTimer, Polarity,
         emitter::{BulletModifiers, DualEmitter, HomingEmitter, LaserEmitter},
@@ -21,6 +20,7 @@ use bevy::{
 use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
+#[cfg(not(debug_assertions))]
 use bevy_tween::{
     interpolate::translation,
     prelude::{AnimationBuilderExt, EaseKind},
@@ -57,6 +57,7 @@ impl Plugin for PlayerPlugin {
                     &mut commands,
                 );
 
+                #[cfg(not(debug_assertions))]
                 commands
                     .entity(player)
                     .insert(BlockControls)
@@ -74,7 +75,6 @@ impl Plugin for PlayerPlugin {
                 Update,
                 (
                     handle_pickups,
-                    damage_effects,
                     handle_death,
                     zero_rotation,
                     update_player_sprites,
@@ -95,8 +95,8 @@ fn restart(mut commands: Commands, player: Single<Entity, With<Player>>) {
     Transform,
     LinearVelocity,
     Health::full(PLAYER_HEALTH),
-    ImageCollider,
     RigidBody::Dynamic,
+    Collider::rectangle(6., 6.),
     CollidingEntities,
     CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletModifiers,
@@ -297,24 +297,6 @@ fn handle_pickups(
             PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate += *s,
             PickupEvent::Upgrade(Upgrade::Juice(j)) => mods.damage += *j,
             PickupEvent::Material => materials.0 += 1,
-        }
-    }
-}
-
-fn damage_effects(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    mut reader: EventReader<BulletCollisionEvent>,
-) {
-    for event in reader.read() {
-        if event.source == BulletSource::Enemy {
-            commands.spawn((
-                SamplePlayer::new(server.load("audio/sfx/laser.wav")),
-                PlaybackSettings {
-                    volume: Volume::Linear(0.4),
-                    ..Default::default()
-                },
-            ));
         }
     }
 }

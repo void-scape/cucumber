@@ -151,8 +151,10 @@ pub enum Layer {
 }
 
 fn finish_startup(mut commands: Commands) {
+    #[cfg(not(debug_assertions))]
     commands.set_state(GameState::Opening);
-    //commands.set_state(GameState::StartGame);
+    #[cfg(debug_assertions)]
+    commands.set_state(GameState::StartGame);
 }
 
 fn enter_game(mut commands: Commands) {

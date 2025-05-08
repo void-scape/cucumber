@@ -1,4 +1,4 @@
-use crate::enemy::Formation;
+use crate::enemy::formation::Formation;
 use crate::{GameState, miniboss};
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;

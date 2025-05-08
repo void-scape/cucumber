@@ -3,7 +3,7 @@ use crate::auto_collider::ImageCollider;
 use crate::bullet::Polarity;
 use crate::bullet::emitter::SoloEmitter;
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
-use crate::enemy::{Angle, Center, Figure8};
+use crate::enemy::movement::{Angle, Center, Figure8};
 use crate::pickups::{Material, PickupEvent};
 use crate::player::Player;
 use crate::tween::Tween;

@@ -1,10 +1,10 @@
 use super::{
-    Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, BulletType, Polarity,
+    Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, BulletType,
+    Destructable, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
     HEIGHT, Layer,
-    auto_collider::ImageCollider,
     enemy::Enemy,
     health::{Damage, Health},
     player::Player,
@@ -17,12 +17,20 @@ use bevy::{
 use bevy_seedling::prelude::*;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
-const BULLET_SPEED: f32 = 150.;
-const MISSILE_SPEED: f32 = 130.;
-const LASER_SPEED: f32 = 30.;
+pub const BULLET_SPEED: f32 = 150.;
+pub const MISSILE_SPEED: f32 = 130.;
+pub const LASER_SPEED: f32 = 30.;
+pub const MINE_SPEED: f32 = 100.;
+
+pub const BULLET_DAMAGE: f32 = 1.;
+pub const MISSILE_DAMAGE: f32 = 1.;
+pub const MINE_DAMAGE: f32 = 1.;
 
 const BULLET_RATE: f32 = 0.25;
 const MISSILE_RATE: f32 = 0.33;
+const MINE_RATE: f32 = 0.45;
+
+const MINE_HEALTH: f32 = 5.;
 
 const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
 
@@ -41,6 +49,7 @@ impl Plugin for EmitterPlugin {
                 LaserEmitter::laser,
                 HomingEmitter::<Enemy>::shoot_bullets,
                 HomingEmitter::<Player>::shoot_bullets,
+                MineEmitter::shoot_bullets,
             )
                 .in_set(EmitterSet),
         );
@@ -81,13 +90,7 @@ impl BulletModifiers {
 }
 
 #[derive(Component)]
-#[require(
-    Transform,
-    BulletSprite::from_cell(0, 0),
-    BulletModifiers,
-    Polarity,
-    Visibility::Hidden
-)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
 pub struct SoloEmitter(Layer);
 
 impl SoloEmitter {
@@ -145,7 +148,7 @@ impl SoloEmitter {
                 LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 new_transform,
                 Bullet::target_layer(emitter.0),
-                Damage::new(1.0 * mods.damage),
+                Damage::new(BULLET_DAMAGE * mods.damage),
             ));
 
             commands.spawn((
@@ -162,13 +165,7 @@ impl SoloEmitter {
 }
 
 #[derive(Component, Default)]
-#[require(
-    Transform,
-    BulletSprite::from_cell(0, 0),
-    BulletModifiers,
-    Polarity,
-    Visibility::Hidden
-)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
 pub struct DualEmitter {
     target: Layer,
     width: f32,
@@ -239,7 +236,7 @@ impl DualEmitter {
                     t
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0 * mods.damage),
+                Damage::new(BULLET_DAMAGE * mods.damage),
             ));
 
             commands.spawn((
@@ -250,7 +247,7 @@ impl DualEmitter {
                     new_transform
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0 * mods.damage),
+                Damage::new(BULLET_DAMAGE * mods.damage),
             ));
 
             commands.spawn((
@@ -337,9 +334,7 @@ impl<T: Component> HomingEmitter<T> {
                 Polarity::South => -PI / 2.0,
             };
             commands.spawn((
-                BulletSprite::from_cell(5, 2),
-                Bullet,
-                ImageCollider,
+                BulletType::Missile,
                 LinearVelocity::default(),
                 Homing::<T>::new(),
                 HomingRotate,
@@ -350,7 +345,7 @@ impl<T: Component> HomingEmitter<T> {
                 },
                 new_transform,
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0 * mods.damage),
+                Damage::new(MISSILE_DAMAGE * mods.damage),
             ));
 
             commands.spawn((
@@ -414,7 +409,7 @@ impl LaserEmitter {
         mut child: Query<&mut Transform>,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
-        mut targets: Query<(&mut Health, &GlobalTransform)>,
+        mut targets: Query<(&mut Health, &GlobalTransform, Option<&Player>)>,
         mut writer: EventWriter<BulletCollisionEvent>,
         mut commands: Commands,
     ) -> Result {
@@ -467,7 +462,8 @@ impl LaserEmitter {
 
                 child.translation.y = direction.y * (4.0 + child.scale.x * 8.0 / 2.0);
 
-                if let Ok((mut target, target_transform)) = targets.get_mut(hit_data.entity) {
+                if let Ok((mut target, target_transform, player)) = targets.get_mut(hit_data.entity)
+                {
                     if (child.scale.x * 8.0 - hit_data.distance).abs() <= 16.0 {
                         target.damage(15.0 * mods.damage * delta.as_secs_f32());
                     }
@@ -482,6 +478,7 @@ impl LaserEmitter {
                                     Layer::Enemy => BulletSource::Player,
                                     _ => BulletSource::Enemy,
                                 },
+                                player.is_some(),
                             ));
                         }
                     }
@@ -490,5 +487,88 @@ impl LaserEmitter {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Component, Default)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+pub struct MineEmitter(Layer);
+
+impl MineEmitter {
+    pub fn player() -> Self {
+        Self(Layer::Player)
+    }
+
+    pub fn enemy() -> Self {
+        Self(Layer::Enemy)
+    }
+}
+
+impl MineEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<(
+            Entity,
+            &MineEmitter,
+            Option<&mut BulletTimer>,
+            &BulletModifiers,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+        )>,
+        parents: Query<Option<&BulletModifiers>>,
+        player: Single<&Transform, With<Player>>,
+        time: Res<Time<Physics>>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let duration = Duration::from_secs_f32(MINE_RATE / mods.rate);
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(duration, TimerMode::Repeating),
+                });
+                continue;
+            };
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+            timer.timer.set_duration(duration);
+
+            let to_player =
+                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
+            let velocity = polarity.to_vec2().with_x(0.5)
+                * to_player.xy().with_y(-to_player.y)
+                * MINE_SPEED
+                * mods.speed;
+            commands.spawn((
+                BulletType::Mine,
+                Destructable,
+                Health::full(MINE_HEALTH),
+                LinearVelocity(velocity),
+                new_transform,
+                Bullet::target_layer(emitter.0),
+                Damage::new(MINE_DAMAGE * mods.damage),
+            ));
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/mine.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-18.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
+        }
     }
 }

@@ -1,11 +1,14 @@
-use self::homing::HomingRotate;
+use self::{
+    emitter::{BULLET_DAMAGE, BULLET_SPEED},
+    homing::HomingRotate,
+};
 use crate::{
     GameState, Layer,
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bounds::WallDespawn,
-    health::{Damage, Health},
+    health::{Damage, Dead, Health},
     player::Player,
     tween::{OnEnd, physics_time_mult},
 };
@@ -52,7 +55,8 @@ impl Plugin for BulletPlugin {
             .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 PostUpdate,
-                (handle_destructable_collision, handle_player_collision)
+                (handle_bullet_collision, despawn_dead_bullets)
+                    .chain()
                     .in_set(BulletSystems::Collision),
             )
             .add_systems(
@@ -189,16 +193,19 @@ fn manage_lifetime(
 pub struct Bullet;
 
 impl Bullet {
-    pub fn target_layer(target: Layer) -> CollisionLayers {
-        CollisionLayers::new(Layer::Bullet, [target, Layer::Bounds, Layer::Debris])
+    pub fn target_layer(target: impl Into<LayerMask>) -> CollisionLayers {
+        CollisionLayers::new(
+            Layer::Bullet,
+            [
+                target.into(),
+                [Layer::Bounds, Layer::Debris, Layer::Bullet].into(),
+            ],
+        )
     }
 
     fn add_color_mod(mut world: DeferredWorld, ctx: HookContext) {
         let layers = world.get::<CollisionLayers>(ctx.entity).unwrap();
-
-        let player_mask =
-            CollisionLayers::new(Layer::Bullet, [Layer::Player, Layer::Bounds, Layer::Debris]);
-        if *layers == player_mask {
+        if layers.filters.has_all(Layer::Player) {
             world.commands().entity(ctx.entity).insert(ColorMod::Enemy);
         } else {
             world
@@ -216,11 +223,12 @@ enum ColorMod {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet)]
+#[require(Bullet, ImageCollider)]
 #[component(on_add = Self::on_add_hook)]
 pub enum BulletType {
     Basic,
-    Common,
+    Missile,
+    Mine,
 }
 
 impl BulletType {
@@ -231,8 +239,11 @@ impl BulletType {
             BulletType::Basic => {
                 world.commands().entity(ctx.entity).insert(BasicBullet);
             }
-            BulletType::Common => {
-                world.commands().entity(ctx.entity).insert(CommonBullet);
+            BulletType::Missile => {
+                world.commands().entity(ctx.entity).insert(Missile);
+            }
+            BulletType::Mine => {
+                world.commands().entity(ctx.entity).insert(Mine);
             }
         }
     }
@@ -259,23 +270,72 @@ impl BulletSprite {
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(BulletSprite::from_cell(2, 1))]
-pub struct CommonBullet;
+#[require(BulletSprite::from_cell(5, 2))]
+pub struct Missile;
+
+#[derive(Clone, Copy, Component)]
+#[require(BulletSprite::from_cell(4, 3))]
+#[component(on_remove = Self::explode)]
+pub struct Mine;
+
+impl Mine {
+    fn explode(mut world: DeferredWorld, ctx: HookContext) {
+        let transform = *world.get::<Transform>(ctx.entity).unwrap();
+        let mine_layers = *world.get::<CollisionLayers>(ctx.entity).unwrap();
+
+        let layers = if mine_layers.filters.has_all(Layer::Player) {
+            Bullet::target_layer(Layer::Player)
+        } else {
+            Bullet::target_layer(Layer::Enemy)
+        };
+
+        let dirs = [
+            (Direction::NorthEast, -std::f32::consts::PI / 4.),
+            (Direction::NorthWest, std::f32::consts::PI / 4.),
+            (Direction::SouthEast, std::f32::consts::PI / 4.),
+            (Direction::SouthWest, -std::f32::consts::PI / 4.),
+            //
+            (Direction::North, 0.),
+            (Direction::South, 0.),
+            (Direction::East, -std::f32::consts::PI / 2.),
+            (Direction::West, std::f32::consts::PI / 2.),
+        ];
+
+        for (dir, rot) in dirs.into_iter() {
+            world.commands().spawn((
+                BulletType::Basic,
+                LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
+                transform.with_rotation(Quat::from_rotation_z(rot)),
+                layers,
+                Damage::new(BULLET_DAMAGE),
+            ));
+        }
+    }
+}
 
 /// Marks an enemy as a valid target for bullet collisions.
 #[derive(Default, Component)]
 #[require(CollidingEntities, ImageCollider, RigidBody::Kinematic, Sensor)]
 pub struct Destructable;
 
-fn handle_destructable_collision(
-    bullets: Query<(Entity, &Damage, &BulletSprite, &GlobalTransform), With<Bullet>>,
-    mut destructable: Query<(&CollidingEntities, Option<&mut Health>), With<Destructable>>,
+fn handle_bullet_collision(
+    bullets: Query<
+        (
+            Entity,
+            &Damage,
+            &BulletSprite,
+            &GlobalTransform,
+            &CollisionLayers,
+        ),
+        With<Bullet>,
+    >,
+    mut destructable: Query<(&CollidingEntities, Option<&mut Health>, Option<&Player>)>,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
 ) {
     let mut despawned = HashSet::new();
-    for (colliding_entities, mut health) in destructable.iter_mut() {
-        for (bullet, damage, sprite, transform) in colliding_entities
+    for (colliding_entities, mut health, player) in destructable.iter_mut() {
+        for (bullet, damage, sprite, transform, layers) in colliding_entities
             .iter()
             .copied()
             .flat_map(|entity| bullets.get(entity))
@@ -285,10 +345,17 @@ fn handle_destructable_collision(
                     health.damage(**damage);
                 }
 
+                let source = if layers.filters.has_all(Layer::Player) {
+                    BulletSource::Enemy
+                } else {
+                    BulletSource::Player
+                };
+
                 writer.write(BulletCollisionEvent::new(
                     sprite.cell,
                     transform.compute_transform(),
-                    BulletSource::Player,
+                    source,
+                    player.is_some(),
                 ));
                 commands.entity(bullet).despawn();
             }
@@ -296,26 +363,12 @@ fn handle_destructable_collision(
     }
 }
 
-fn handle_player_collision(
-    bullets: Query<(Entity, &Damage, &BulletSprite, &GlobalTransform), With<Bullet>>,
-    player: Single<(&CollidingEntities, &mut Health), With<Player>>,
+fn despawn_dead_bullets(
     mut commands: Commands,
-    mut writer: EventWriter<BulletCollisionEvent>,
+    bullets: Query<Entity, (With<Bullet>, With<Dead>)>,
 ) {
-    let (colliding_entities, mut health) = player.into_inner();
-
-    for (bullet, damage, sprite, transform) in colliding_entities
-        .iter()
-        .copied()
-        .flat_map(|entity| bullets.get(entity))
-    {
-        health.damage(**damage);
-        writer.write(BulletCollisionEvent::new(
-            sprite.cell,
-            transform.compute_transform(),
-            BulletSource::Enemy,
-        ));
-        commands.entity(bullet).despawn();
+    for entity in bullets.iter() {
+        commands.entity(entity).despawn();
     }
 }
 
@@ -325,16 +378,23 @@ pub struct BulletCollisionEvent {
     pub cell: UVec2,
     pub transform: Transform,
     pub source: BulletSource,
+    pub hit_player: bool,
 }
 
 impl BulletCollisionEvent {
-    pub fn new(cell: UVec2, mut transform: Transform, source: BulletSource) -> Self {
+    pub fn new(
+        cell: UVec2,
+        mut transform: Transform,
+        source: BulletSource,
+        hit_player: bool,
+    ) -> Self {
         transform.translation = transform.translation.round();
         transform.translation.z = 1.;
         Self {
             cell,
             transform,
             source,
+            hit_player,
         }
     }
 }
@@ -354,15 +414,6 @@ fn bullet_collision_effects(
 ) {
     for event in reader.read() {
         commands.spawn((
-            SamplePlayer::new(server.load("audio/sfx/melee.wav")),
-            PitchRange(0.98..1.02),
-            PlaybackSettings {
-                volume: Volume::Decibels(-32.0),
-                ..PlaybackSettings::ONCE
-            },
-        ));
-
-        commands.spawn((
             event.transform,
             Sprite::from_atlas_image(
                 server.load(MISC_PATH),
@@ -377,28 +428,39 @@ fn bullet_collision_effects(
         match event.source {
             BulletSource::Player => {}
             BulletSource::Enemy => {
-                let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
-                    commands.remove_post_process::<GlitchSettings, OuterCamera>();
-                    commands.remove_post_process::<GlitchIntensity, OuterCamera>();
-                });
+                if event.hit_player {
+                    commands.spawn((
+                        SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+                        PitchRange(0.98..1.02),
+                        PlaybackSettings {
+                            volume: Volume::Linear(0.25),
+                            ..PlaybackSettings::ONCE
+                        },
+                    ));
 
-                commands.post_process::<OuterCamera>(GlitchSettings::default());
-                commands.post_process::<OuterCamera>(GlitchIntensity::default());
-                commands
-                    .animation()
-                    .insert_tween_here(
-                        Duration::from_secs_f32(0.4),
+                    let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
+                        commands.remove_post_process::<GlitchSettings, OuterCamera>();
+                        commands.remove_post_process::<GlitchIntensity, OuterCamera>();
+                    });
+
+                    commands.post_process::<OuterCamera>(GlitchSettings::default());
+                    commands.post_process::<OuterCamera>(GlitchIntensity::default());
+                    commands
+                        .animation()
+                        .insert_tween_here(
+                            Duration::from_secs_f32(0.4),
+                            EaseKind::Linear,
+                            camera.into_target().with(glitch_intensity(0.3, 0.0)),
+                        )
+                        .insert(on_end);
+
+                    commands.add_trauma(0.15);
+                    commands.animation().insert_tween_here(
+                        Duration::from_secs_f32(0.25),
                         EaseKind::Linear,
-                        camera.into_target().with(glitch_intensity(0.3, 0.0)),
-                    )
-                    .insert(on_end);
-
-                commands.add_trauma(0.15);
-                commands.animation().insert_tween_here(
-                    Duration::from_secs_f32(0.25),
-                    EaseKind::Linear,
-                    TargetResource.with(physics_time_mult(0.25, 1.)),
-                );
+                        TargetResource.with(physics_time_mult(0.25, 1.)),
+                    );
+                }
             }
         }
     }
