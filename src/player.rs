@@ -4,11 +4,13 @@ use crate::{
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bullet::{
-        BulletCollisionEvent, BulletRate, BulletSource, BulletTimer, Polarity,
-        emitter::{DualEmitter, HomingEmitter, LaserEmitter},
+        BulletCollisionEvent, BulletSource, BulletTimer, Polarity,
+        emitter::{BulletModifiers, DualEmitter, HomingEmitter, LaserEmitter},
     },
-    enemy::EnemyType,
+    end,
+    enemy::Enemy,
     health::{Dead, Health},
+    minions::{Miner, MinerLeader},
     pickups::{PickupEvent, Upgrade, Weapon},
 };
 use avian2d::prelude::*;
@@ -20,7 +22,6 @@ use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
 use bevy_tween::{
-    combinator::tween,
     interpolate::translation,
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
@@ -28,51 +29,65 @@ use bevy_tween::{
 use std::{cmp::Ordering, f32, time::Duration};
 
 pub const PLAYER_HEALTH: f32 = 5.0;
+const PLAYER_EASE_DUR: f32 = 1.;
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::StartGame), |mut commands: Commands| {
-            let starting_weapon = commands
-                .spawn((DualEmitter::enemy(3.), Polarity::North))
-                .id();
+        app.add_systems(OnEnter(GameState::Restart), restart)
+            .add_systems(OnEnter(GameState::StartGame), |mut commands: Commands| {
+                let starting_weapon = commands.spawn(Player::bullet_emitter()).id();
+                let player = commands
+                    .spawn((
+                        Player,
+                        WeaponEntity(starting_weapon),
+                        Transform::from_xyz(0., -HEIGHT / 6., 0.),
+                    ))
+                    .add_child(starting_weapon)
+                    .id();
+                commands.spawn((Miner, MinerLeader(player)));
 
-            let player = commands
-                .spawn((
-                    Player,
-                    WeaponEntity(starting_weapon),
-                    Transform::from_xyz(0., -HEIGHT / 6., 0.),
-                ))
-                .add_child(starting_weapon)
-                .id();
-            //let dur = Duration::from_secs_f32(1.);
-            //run_after(
-            //    dur,
-            //    move |mut commands: Commands| {
-            //        commands.entity(player).remove::<BlockControls>();
-            //    },
-            //    &mut commands,
-            //);
-            //
-            //commands.entity(player).insert(BlockControls);
-            //commands.animation().insert(tween(
-            //    dur,
-            //    EaseKind::SineOut,
-            //    player.into_target().with(translation(
-            //        Vec3::new(0., -HEIGHT / 2. + 16., 0.),
-            //        Vec3::new(0., -HEIGHT / 6., 0.),
-            //    )),
-            //));
-        })
-        .add_systems(
-            Update,
-            (handle_pickups, damage_effects, handle_death, zero_rotation),
-        )
-        .add_input_context::<AliveContext>()
-        .add_observer(apply_movement)
-        .add_observer(stop_movement);
+                let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
+                run_after(
+                    dur,
+                    move |mut commands: Commands| {
+                        commands.entity(player).remove::<BlockControls>();
+                    },
+                    &mut commands,
+                );
+
+                commands
+                    .entity(player)
+                    .insert(BlockControls)
+                    .animation()
+                    .insert_tween_here(
+                        dur,
+                        EaseKind::SineOut,
+                        player.into_target().with(translation(
+                            Vec3::new(0., -HEIGHT / 2. + 16., 0.),
+                            Vec3::new(0., -HEIGHT / 6., 0.),
+                        )),
+                    );
+            })
+            .add_systems(
+                Update,
+                (
+                    handle_pickups,
+                    damage_effects,
+                    handle_death,
+                    zero_rotation,
+                    update_player_sprites,
+                ),
+            )
+            .add_input_context::<AliveContext>()
+            .add_observer(apply_movement)
+            .add_observer(stop_movement);
     }
+}
+
+fn restart(mut commands: Commands, player: Single<Entity, With<Player>>) {
+    commands.entity(*player).despawn();
 }
 
 #[derive(Component)]
@@ -84,11 +99,39 @@ impl Plugin for PlayerPlugin {
     RigidBody::Dynamic,
     CollidingEntities,
     CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
-    BulletRate,
+    BulletModifiers,
     Materials,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
+
+impl Player {
+    pub fn bullet_emitter() -> impl Bundle {
+        (
+            DualEmitter::enemy(3.),
+            BulletModifiers {
+                damage: 0.5,
+                ..Default::default()
+            },
+            Polarity::North,
+        )
+    }
+
+    pub fn missile_emitter() -> impl Bundle {
+        (HomingEmitter::<Enemy>::enemy(), Polarity::North)
+    }
+
+    pub fn laser_emitter() -> impl Bundle {
+        (
+            LaserEmitter::enemy(),
+            BulletModifiers {
+                damage: 0.2,
+                ..Default::default()
+            },
+            Polarity::North,
+        )
+    }
+}
 
 #[derive(Default, Component)]
 pub struct Materials(usize);
@@ -104,7 +147,7 @@ impl Materials {
 }
 
 #[derive(Component)]
-struct WeaponEntity(Entity);
+pub struct WeaponEntity(pub Entity);
 
 impl Player {
     fn on_add(mut world: DeferredWorld, ctx: HookContext) {
@@ -161,15 +204,31 @@ pub struct BlockControls;
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    player: Single<(&mut LinearVelocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
-    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
+    player: Single<(&mut LinearVelocity, Option<&BlockControls>), With<Player>>,
 ) {
-    let (mut velocity, mut sprite) = player.into_inner();
+    let (mut velocity, blocked) = player.into_inner();
 
-    velocity.0 = trigger.value.normalize_or_zero() * 60.;
-    if velocity.0.x.abs() < f32::EPSILON {
+    if blocked.is_none() {
+        velocity.0 = trigger.value.normalize_or_zero() * 60.;
+    }
+
+    if velocity.0.x != 0.0 && velocity.0.x.abs() < f32::EPSILON {
         velocity.0.x = 0.;
     }
+}
+
+fn stop_movement(
+    _: Trigger<Completed<MoveAction>>,
+    mut velocity: Single<&mut LinearVelocity, (With<Player>, Without<BlockControls>)>,
+) {
+    velocity.0 = Vec2::default();
+}
+
+fn update_player_sprites(
+    player: Single<(&LinearVelocity, &mut Sprite), (With<Player>, Changed<LinearVelocity>)>,
+    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
+) {
+    let (velocity, mut sprite) = player.into_inner();
 
     let (tl, br) = match velocity.0.x.total_cmp(&0.) {
         Ordering::Less => (Vec2::new(0., 4.), Vec2::new(1., 5.)),
@@ -184,21 +243,6 @@ fn apply_movement(
     } else {
         **blasters = Visibility::Hidden;
     }
-}
-
-fn stop_movement(
-    _: Trigger<Completed<MoveAction>>,
-    player: Single<(&mut LinearVelocity, &mut Sprite), (With<Player>, Without<BlockControls>)>,
-    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
-) {
-    let (mut velocity, mut sprite) = player.into_inner();
-
-    velocity.0 = Vec2::default();
-    let tl = Vec2::new(1., 4.) * 8.;
-    let br = Vec2::new(2., 5.) * 8.;
-    sprite.rect = Some(Rect::from_corners(tl, br));
-
-    **blasters = Visibility::Hidden;
 }
 
 // TODO: this does not work? we don't brush on anything anyways
@@ -217,51 +261,42 @@ struct MoveAction;
 #[derive(InputContext)]
 struct AliveContext;
 
-fn handle_death(player: Single<Entity, (With<Player>, With<Dead>)>, mut commands: Commands) {
-    info!("player died");
+fn handle_death(mut commands: Commands, player: Single<Entity, (With<Player>, With<Dead>)>) {
     commands.entity(*player).despawn();
+    commands.queue(|world: &mut World| world.run_system_once(end::show_loose_screen));
 }
 
 fn handle_pickups(
-    q: Single<(Entity, &mut WeaponEntity, &mut BulletRate, &mut Materials), With<Player>>,
-    mut events: EventReader<PickupEvent>,
     mut commands: Commands,
+    q: Single<
+        (
+            Entity,
+            &mut WeaponEntity,
+            &mut BulletModifiers,
+            &mut Materials,
+        ),
+        With<Player>,
+    >,
+    mut events: EventReader<PickupEvent>,
 ) {
-    let (player, mut weapon_entity, mut rate, mut materials) = q.into_inner();
+    let (player, mut weapon_entity, mut mods, mut materials) = q.into_inner();
     for event in events.read() {
         match event {
-            PickupEvent::Weapon(Weapon::Bullet) => {
+            PickupEvent::Weapon(weapon) => {
                 commands.entity(weapon_entity.0).despawn();
 
-                let emitter = commands
-                    .spawn((DualEmitter::enemy(3.), Polarity::North))
-                    .id();
+                let emitter = match weapon {
+                    Weapon::Bullet => commands.spawn(Player::bullet_emitter()).id(),
+                    Weapon::Missile => commands.spawn(Player::missile_emitter()).id(),
+                    Weapon::Laser => commands.spawn(Player::laser_emitter()).id(),
+                };
+
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
             }
-            PickupEvent::Weapon(Weapon::Missile) => {
-                commands.entity(weapon_entity.0).despawn();
-
-                let emitter = commands
-                    .spawn((HomingEmitter::<EnemyType>::enemy(), Polarity::North))
-                    .id();
-                weapon_entity.0 = emitter;
-                commands.entity(player).add_child(emitter);
-            }
-            PickupEvent::Weapon(Weapon::Laser) => {
-                commands.entity(weapon_entity.0).despawn();
-
-                let emitter = commands
-                    .spawn((LaserEmitter::enemy(), Polarity::North))
-                    .id();
-                weapon_entity.0 = emitter;
-                commands.entity(player).add_child(emitter);
-            }
-            PickupEvent::Upgrade(Upgrade::Speed(s)) => rate.0 += *s,
-            PickupEvent::Material => {
-                materials.0 += 1;
-            }
-            e => info!("handle: {e:?}"),
+            PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate += *s,
+            PickupEvent::Upgrade(Upgrade::Juice(j)) => mods.damage += *j,
+            PickupEvent::Material => materials.0 += 1,
         }
     }
 }
@@ -275,10 +310,10 @@ fn damage_effects(
         if event.source == BulletSource::Enemy {
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/laser.wav")),
-                PlaybackSettings::ONCE,
-                sample_effects![VolumeNode {
-                    volume: Volume::Linear(0.2),
-                }],
+                PlaybackSettings {
+                    volume: Volume::Linear(0.4),
+                    ..Default::default()
+                },
             ));
         }
     }

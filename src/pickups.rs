@@ -66,7 +66,7 @@ impl From<&Pickup> for PickupEvent {
     RigidBody::Kinematic, 
     Sensor, 
     WallDespawn,
-    CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player]),
+    CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player, Layer::Miners]),
 )]
 pub struct Collectable;
 
@@ -77,7 +77,6 @@ fn pickup_triggered(
     collectables: Query<&Collectable>,
     upgrades: Query<&Upgrade>,
     weapons: Query<&Weapon>,
-    //materials: Query<&Material>,
 ) {
     for entity in player
         .iter()
@@ -88,8 +87,6 @@ fn pickup_triggered(
             writer.write(PickupEvent::Upgrade(*upgrade));
         } else if let Ok(weapon) = weapons.get(entity) {
             writer.write(PickupEvent::Weapon(*weapon));
-        //} else if materials.get(entity).is_ok() {
-        //    writer.write(PickupEvent::Material);
         } else {
             continue;
         }
@@ -99,7 +96,7 @@ fn pickup_triggered(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-#[require(Collectable, Collider::rectangle(8., 8.))]
+//#[require(Collectable, Collider::rectangle(8., 8.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
     Speed(f32),
@@ -122,7 +119,7 @@ impl SpriteHook for Upgrade {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-#[require(Collectable, Collider::rectangle(16., 16.))]
+//#[require(Collectable, Collider::rectangle(16., 16.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
     Bullet,
@@ -191,10 +188,10 @@ impl Pickup {
     pub fn random() -> Self {
         let mut rng = rand::rng();
         [
-            Self::Upgrade(Upgrade::Speed(0.5)),
-            Self::Upgrade(Upgrade::Juice(0.5)),
-            Self::Upgrade(Upgrade::Speed(0.5)),
-            Self::Upgrade(Upgrade::Juice(0.5)),
+            Self::Upgrade(Upgrade::Speed(0.2)),
+            Self::Upgrade(Upgrade::Juice(0.2)),
+            Self::Upgrade(Upgrade::Speed(0.2)),
+            Self::Upgrade(Upgrade::Juice(0.2)),
             Self::Weapon(Weapon::Bullet),
             Self::Weapon(Weapon::Missile),
             Self::Weapon(Weapon::Laser),

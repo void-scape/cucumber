@@ -1,14 +1,16 @@
 use crate::{
     GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
-    assets, atlas_layout,
+    assets,
+    asteroids::{AsteroidSpawner, SpawnCluster},
+    atlas_layout,
     bullet::{
-        BulletRate, BulletSpeed, Destructable, Direction,
-        emitter::{DualEmitter, HomingEmitter, SoloEmitter},
+        Destructable, Direction,
+        emitter::{BulletModifiers, HomingEmitter, SoloEmitter},
         homing::TurnSpeed,
     },
     health::{Dead, Health},
-    miniboss, pickups,
+    miniboss,
     player::Player,
 };
 use avian2d::prelude::*;
@@ -32,6 +34,8 @@ use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
 
+const START_DELAY: f32 = 1.5;
+
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
@@ -45,24 +49,25 @@ impl Plugin for EnemyPlugin {
                     init_explosion_layout,
                     init_cruiser_explosion_layout,
                 ),
+            )
+            .add_systems(OnEnter(GameState::Restart), restart)
+            .add_systems(OnEnter(GameState::StartGame), start_waves)
+            .add_systems(
+                Update,
+                (
+                    update_waves,
+                    spawn_formations,
+                    despawn_formations,
+                    (add_low_health_effects, death_effects, handle_death),
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Game)),
+            )
+            .add_systems(
+                FixedUpdate,
+                (update_back_and_forth, update_circle, update_figure8)
+                    .run_if(in_state(GameState::Game)),
             );
-            //.add_systems(OnEnter(GameState::StartGame), start_waves)
-            //.add_systems(
-            //    Update,
-            //    (
-            //        update_waves,
-            //        spawn_formations,
-            //        despawn_formations,
-            //        (add_low_health_effects, death_effects, handle_death),
-            //    )
-            //        .chain()
-            //        .run_if(in_state(GameState::Game)),
-            //)
-            //.add_systems(
-            //    FixedUpdate,
-            //    (update_back_and_forth, update_circle, update_figure8)
-            //        .run_if(in_state(GameState::Game)),
-            //);
     }
 }
 
@@ -71,14 +76,25 @@ atlas_layout!(SparksLayout, init_sparks_layout, 150, 5, 6);
 atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
 
+fn restart(mut commands: Commands, formations: Query<Entity, With<Formation>>) {
+    for entity in formations.iter() {
+        commands
+            .entity(entity)
+            // there are two relationships here, and when you don't specify `Children`, `Units`
+            // will panic as entities are deleted
+            .despawn_related::<Children>()
+            .despawn();
+    }
+}
+
 fn start_waves(mut commands: Commands) {
     info!("start waves");
     commands.insert_resource(WaveController::new_delayed(
-        0.,
+        START_DELAY,
         &[
-            (Formation::Triangle, 8.),
-            (Formation::Row, 8.),
-            (Formation::Triangle, 8.),
+            (Formation::Triangle, 16.),
+            (Formation::Row, 16.),
+            (Formation::Triangle, 16.),
             (Formation::Row, 0.),
         ],
     ));
@@ -233,8 +249,11 @@ impl WaveController {
         }
     }
 
-    pub fn tick(&mut self, time: &Time<Physics>) {
+    pub fn tick(&mut self, time: &Time<Physics>, formations_empty: bool) {
         self.timer.tick(time.delta());
+        if formations_empty {
+            self.timer.set_elapsed(self.timer.duration());
+        }
     }
 
     pub fn next(&mut self) -> Option<Formation> {
@@ -262,28 +281,29 @@ impl WaveController {
 
 fn update_waves(
     mut commands: Commands,
-    mut controller: ResMut<WaveController>,
+    controller: Option<ResMut<WaveController>>,
     formations: Query<&Formation>,
     time: Res<Time<Physics>>,
-    mut finished: Local<bool>,
+    mut asteroids: ResMut<AsteroidSpawner>,
 ) {
-    if *finished {
+    let Some(mut controller) = controller else {
         return;
-    }
+    };
 
-    controller.tick(&time);
+    controller.tick(&time, formations.is_empty());
     if let Some(formation) = controller.next() {
         commands.spawn(formation);
     }
 
     if controller.finished() && formations.is_empty() {
+        asteroids.0 = false;
+        commands.remove_resource::<WaveController>();
         info!("ran out of formations, spawning boss");
         run_after(
             Duration::from_secs_f32(5.),
             miniboss::spawn_boss,
             &mut commands,
         );
-        *finished = true;
     }
 }
 
@@ -351,8 +371,7 @@ fn despawn_formations(
     mut commands: Commands,
     formations: Query<(Entity, &Formation, &UnitDeaths), Without<Units>>,
 ) {
-    for (entity, formation, deaths) in formations.iter() {
-        info!("despawning formation");
+    for (entity, _formation, _deaths) in formations.iter() {
         commands.entity(entity).despawn();
 
         //if formation.drop_pickup_heuristic() {
@@ -370,6 +389,9 @@ fn despawn_formations(
     }
 }
 
+#[derive(Default, Component)]
+pub struct Enemy;
+
 #[derive(Clone, Copy, Component, PartialEq, Eq, Hash)]
 #[require(
     Transform,
@@ -377,6 +399,7 @@ fn despawn_formations(
     LinearVelocity,
     Destructable,
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    Enemy,
 )]
 pub enum EnemyType {
     Common,
@@ -421,8 +444,11 @@ impl EnemyType {
             *self,
             self.health(),
             self.sprite(server),
-            BulletRate(0.20),
-            BulletSpeed(0.5),
+            BulletModifiers {
+                rate: 0.2,
+                speed: 0.5,
+                ..Default::default()
+            },
             bundle,
         ));
     }
@@ -438,6 +464,13 @@ impl EnemyType {
         match self {
             Self::Common => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 3)),
             Self::Uncommon => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 3)),
+        }
+    }
+
+    pub fn materials(&self) -> usize {
+        match self {
+            Self::Common => 1,
+            Self::Uncommon => 2,
         }
     }
 
@@ -579,20 +612,23 @@ fn update_figure8(
 }
 
 #[derive(Event)]
-struct EnemyDeathEvent {
+pub struct EnemyDeathEvent {
     entity: Entity,
     position: Vec2,
 }
 
 fn handle_death(
-    q: Query<(Entity, &GlobalTransform), (With<Dead>, With<EnemyType>)>,
+    q: Query<(Entity, &GlobalTransform, &EnemyType), With<Dead>>,
     mut commands: Commands,
-    mut writer: EventWriter<EnemyDeathEvent>,
+    mut deaths: EventWriter<EnemyDeathEvent>,
+    mut clusters: EventWriter<SpawnCluster>,
 ) {
-    for (entity, transform) in q.iter() {
-        writer.write(EnemyDeathEvent {
-            entity,
-            position: transform.compute_transform().translation.xy(),
+    for (entity, transform, enemy_type) in q.iter() {
+        let position = transform.compute_transform().translation.xy();
+        deaths.write(EnemyDeathEvent { entity, position });
+        clusters.write(SpawnCluster {
+            materials: enemy_type.materials(),
+            position,
         });
         commands.entity(entity).despawn();
     }

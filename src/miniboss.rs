@@ -1,76 +1,72 @@
 use crate::asteroids::AsteroidSpawner;
 use crate::auto_collider::ImageCollider;
 use crate::bullet::Destructable;
-use crate::bullet::emitter::{BaseSpeed, HomingEmitter, LaserEmitter, SoloEmitter};
+use crate::bullet::emitter::{BulletModifiers, HomingEmitter, LaserEmitter, SoloEmitter};
 use crate::bullet::homing::TurnSpeed;
-use crate::enemy::CruiserExplosion;
+use crate::enemy::{CruiserExplosion, Enemy};
 use crate::health::Dead;
-use crate::player::Player;
-use crate::{GameState, Layer};
+use crate::player::{BlockControls, Player, WeaponEntity};
+use crate::tween::OnEnd;
+use crate::{GameState, Layer, end};
 use crate::{
     HEIGHT,
     animation::{AnimationController, AnimationIndices},
-    bullet::{BulletRate, BulletSpeed},
     health::Health,
 };
 use avian2d::prelude::*;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity_disabling::Disabled;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy_optix::debug::DebugRect;
-use bevy_seedling::prelude::*;
+use bevy_sequence::combinators::delay::run_after;
 use bevy_tween::interpolate::translation;
 use bevy_tween::prelude::{AnimationBuilderExt, EaseKind, RepeatStyle};
 use bevy_tween::tween::IntoTarget;
+use physics::linear_velocity;
 use std::time::Duration;
+
+const BOSS_HEALTH: f32 = 600.0;
 
 pub struct MinibossPlugin;
 
 impl Plugin for MinibossPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<BossDeathEvent>()
-            .add_systems(OnEnter(GameState::StartGame), spawn_boss)
+            //.add_systems(OnEnter(GameState::StartGame), spawn_boss)
+            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 Update,
                 (
                     update_boss_state,
                     update_solo_emitters,
-                    boss_death_effects,
                     handle_boss_death,
+                    boss_death_effects,
                 )
+                    .chain()
                     .run_if(in_state(GameState::Game)),
             );
     }
 }
 
+fn restart(mut commands: Commands, boss: Single<Entity, With<Boss>>) {
+    commands.entity(*boss).despawn();
+}
+
 #[derive(Component)]
 #[require(Transform, Destructable)]
-struct Boss;
+pub struct Boss;
 
-//const BOSS_EASE_DUR: f32 = 4.;
+const BOSS_EASE_DUR: f32 = 4.;
 
-pub fn spawn_boss(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    mut asteroids: ResMut<AsteroidSpawner>,
-) {
-    commands.spawn((
-        SamplePlayer::new(server.load("audio/music/midir.wav")),
-        PlaybackSettings::LOOP,
-        sample_effects![VolumeNode {
-            volume: Volume::Linear(0.5),
-        }],
-    ));
-
-    asteroids.0 = false;
+pub fn spawn_boss(mut commands: Commands) {
     let boss = commands
         .spawn((
             Boss,
+            Enemy,
             DebugRect::from_size(Vec2::new(crate::WIDTH / 2., crate::WIDTH / 3.75)),
             ImageCollider,
-            Health::full(500.0),
+            Health::full(BOSS_HEALTH),
             CollisionLayers::new(Layer::Enemy, Layer::Bullet),
             //Sprite {
             //    image: server.load("cruiser_base.png"),
@@ -87,28 +83,22 @@ pub fn spawn_boss(
 
     let start_y = HEIGHT / 2. + 64.;
     let end_y = start_y - 105.;
-    //let start = Vec3::ZERO.with_y(start_y);
+    let start = Vec3::ZERO.with_y(start_y);
     let end = Vec3::ZERO.with_y(end_y);
-
-    //let init = AttackPattern::SoloDance
-    //    .on_start(init_solo_emitter)
-    //    .on_visit(update_solo_emitters)
-    //    .on_end(clean_solo_emitters)
-    //    .always()
-    //    .once();
-    //spawn_root(init, &mut commands);
 
     commands
         .entity(boss)
-        .insert(Transform::from_translation(end));
-    //commands.animation().insert(tween(
-    //    Duration::from_secs_f32(BOSS_EASE_DUR),
-    //    EaseKind::SineOut,
-    //    boss.into_target().with(translation(start, end)),
-    //));
+        .insert(Transform::from_translation(end))
+        .animation()
+        .insert_tween_here(
+            Duration::from_secs_f32(BOSS_EASE_DUR),
+            EaseKind::SineOut,
+            boss.into_target().with(translation(start, end)),
+        );
 }
 
 fn update_boss_state(
+    _enable: Single<&Boss>,
     mut commands: Commands,
     solo: Option<Single<Entity, With<InsertSoloDance>>>,
     wave: Option<Single<Entity, With<InsertWaves>>>,
@@ -117,9 +107,6 @@ fn update_boss_state(
     mut last_wave: Local<(bool, usize)>,
 ) {
     let timer = timer.get_or_insert_with(|| {
-        //commands.spawn(InsertWaves);
-        //*last_wave = true;
-
         commands.spawn(InsertSoloDance::A);
         Timer::from_seconds(10., TimerMode::Repeating)
     });
@@ -148,7 +135,10 @@ fn update_boss_state(
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
-struct SoloDance;
+enum SoloDance {
+    A,
+    B,
+}
 
 #[derive(Clone, Copy, Component)]
 #[component(on_add = Self::guns, on_remove = Self::remove_guns)]
@@ -163,106 +153,27 @@ impl InsertSoloDance {
         world.commands().queue(move |world: &mut World| {
             world.run_system_once(
                 move |mut commands: Commands, boss: Single<Entity, With<Boss>>| {
+                    let dance = match solo {
+                        InsertSoloDance::A => SoloDance::A,
+                        InsertSoloDance::B => SoloDance::B,
+                    };
+
                     let dance = commands
                         .spawn((
-                            SoloDance,
-                            BulletRate(0.5),
-                            BulletSpeed(0.8),
+                            dance,
+                            BulletModifiers {
+                                rate: 0.5,
+                                speed: 0.8,
+                                ..Default::default()
+                            },
                             children![
                                 ActiveSoloSet(SoloSet::A),
-                                //
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(-25., -20., 0.),
-                                    SoloSet::A,
-                                ),
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(-15., -20., 0.),
-                                    SoloSet::A,
-                                ),
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(-5., -20., 0.),
-                                    SoloSet::A,
-                                ),
-                                //
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(25., -20., 0.),
-                                    SoloSet::B,
-                                ),
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(15., -20., 0.),
-                                    SoloSet::B,
-                                ),
-                                (
-                                    SoloEmitter::player(),
-                                    Transform::from_xyz(5., -20., 0.),
-                                    SoloSet::B,
-                                ),
+                                (LaserEmitter::player(), Transform::from_xyz(-35., -20., 0.)),
+                                (LaserEmitter::player(), Transform::from_xyz(35., -20., 0.))
                             ],
                         ))
                         .id();
                     commands.entity(*boss).add_child(dance);
-
-                    match solo {
-                        InsertSoloDance::A => {
-                            commands.entity(dance).with_children(|root| {
-                                root.spawn((
-                                    LaserEmitter::player(),
-                                    Transform::from_xyz(-35., -20., 0.),
-                                ));
-                                root.spawn((
-                                    LaserEmitter::player(),
-                                    Transform::from_xyz(35., -20., 0.),
-                                ));
-                                root.spawn((
-                                    HomingEmitter::<Player>::player(),
-                                    TurnSpeed(60.),
-                                    BaseSpeed(100.),
-                                    BulletRate(0.35),
-                                    Transform::from_xyz(-45., -20., 0.),
-                                ));
-                                root.spawn((
-                                    HomingEmitter::<Player>::player(),
-                                    TurnSpeed(60.),
-                                    BaseSpeed(100.),
-                                    BulletRate(0.35),
-                                    Transform::from_xyz(45., -20., 0.),
-                                ));
-                            });
-                        }
-                        InsertSoloDance::B => {
-                            let lasers = commands
-                                .spawn((Transform::default(), Visibility::default()))
-                                .with_children(|root| {
-                                    root.spawn((
-                                        LaserEmitter::player(),
-                                        Transform::from_xyz(-35., 0., 0.),
-                                    ));
-                                    root.spawn((
-                                        LaserEmitter::player(),
-                                        Transform::from_xyz(35., 0., 0.),
-                                    ));
-                                })
-                                .id();
-                            commands
-                                .entity(dance)
-                                .add_child(lasers)
-                                .animation()
-                                .repeat_style(RepeatStyle::PingPong)
-                                .insert_tween_here(
-                                    Duration::from_secs_f32(10.),
-                                    EaseKind::Linear,
-                                    lasers.into_target().with(translation(
-                                        Vec3::new(-25., -20., 0.),
-                                        Vec3::new(25., -20., 0.),
-                                    )),
-                                );
-                        }
-                    }
                 },
             )
         });
@@ -292,13 +203,28 @@ struct ActiveSoloSet(SoloSet);
 
 fn update_solo_emitters(
     mut commands: Commands,
+    dance: Single<(Entity, &SoloDance)>,
     mut active_solo_set: Single<&mut ActiveSoloSet>,
-    solos: Query<(Entity, &SoloSet), Or<(With<Disabled>, Without<Disabled>)>>,
+    solos: Query<Entity, With<SoloSet>>,
     mut solo_timer: Local<Option<Timer>>,
     time: Res<Time<Physics>>,
+    mut phase_b_count: Local<usize>,
 ) {
+    let (dance_entity, dance) = dance.into_inner();
+
     if active_solo_set.is_added() {
-        *solo_timer = Some(Timer::from_seconds(5., TimerMode::Repeating));
+        match dance {
+            SoloDance::A => {
+                *solo_timer = Some(Timer::from_seconds(5., TimerMode::Repeating));
+            }
+            SoloDance::B => {
+                *solo_timer = Some(Timer::from_seconds(
+                    (1. - *phase_b_count as f32 * 0.2).max(0.4),
+                    TimerMode::Repeating,
+                ));
+                *phase_b_count += 1;
+            }
+        }
     }
 
     let solo_timer = solo_timer.as_mut().unwrap();
@@ -315,11 +241,32 @@ fn update_solo_emitters(
     }
 
     if active_solo_set.is_added() || active_solo_set.is_changed() {
-        for (entity, solo) in solos.iter() {
-            if *solo == active_solo_set.0 {
-                commands.entity(entity).remove::<Disabled>();
-            } else {
-                commands.entity(entity).insert(Disabled);
+        for entity in solos.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        match active_solo_set.0 {
+            SoloSet::A => {
+                commands.entity(dance_entity).with_children(|root| {
+                    for p in [-25., -15., -5.].into_iter() {
+                        root.spawn((
+                            SoloEmitter::player(),
+                            Transform::from_xyz(p, -20., 0.),
+                            SoloSet::A,
+                        ));
+                    }
+                });
+            }
+            SoloSet::B => {
+                commands.entity(dance_entity).with_children(|root| {
+                    for p in [25., 15., 5.].into_iter() {
+                        root.spawn((
+                            SoloEmitter::player(),
+                            Transform::from_xyz(p, -20., 0.),
+                            SoloSet::B,
+                        ));
+                    }
+                });
             }
         }
     }
@@ -327,7 +274,7 @@ fn update_solo_emitters(
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
-struct Waves;
+pub struct Waves;
 
 #[derive(Clone, Copy, Component)]
 #[component(on_add = Self::guns, on_remove = Self::remove_guns)]
@@ -343,7 +290,14 @@ impl InsertWaves {
             world.run_system_once(
                 move |mut commands: Commands, boss: Single<Entity, With<Boss>>| {
                     let waves = commands
-                        .spawn((Waves, BulletRate(0.5), BulletSpeed(0.8)))
+                        .spawn((
+                            Waves,
+                            BulletModifiers {
+                                rate: 0.5,
+                                speed: 0.8,
+                                ..Default::default()
+                            },
+                        ))
                         .id();
                     match wave {
                         InsertWaves::A => {}
@@ -352,15 +306,21 @@ impl InsertWaves {
                                 root.spawn((
                                     HomingEmitter::<Player>::player(),
                                     TurnSpeed(60.),
-                                    BaseSpeed(100.),
-                                    BulletRate(0.35),
+                                    BulletModifiers {
+                                        rate: 0.35,
+                                        speed: 0.8,
+                                        ..Default::default()
+                                    },
                                     Transform::from_xyz(-45., -20., 0.),
                                 ));
                                 root.spawn((
                                     HomingEmitter::<Player>::player(),
                                     TurnSpeed(60.),
-                                    BaseSpeed(100.),
-                                    BulletRate(0.35),
+                                    BulletModifiers {
+                                        rate: 0.35,
+                                        speed: 0.8,
+                                        ..Default::default()
+                                    },
                                     Transform::from_xyz(45., -20., 0.),
                                 ));
                             });
@@ -372,8 +332,11 @@ impl InsertWaves {
                         .spawn((
                             Transform::default(),
                             Visibility::default(),
-                            BulletRate(0.6),
-                            BulletSpeed(0.5),
+                            BulletModifiers {
+                                rate: 0.6,
+                                speed: 0.5,
+                                ..Default::default()
+                            },
                             children![
                                 (SoloEmitter::player(), Transform::from_xyz(10., 0., 0.)),
                                 (SoloEmitter::player(), Transform::from_xyz(0., 0., 0.)),
@@ -413,7 +376,7 @@ impl InsertWaves {
 }
 
 #[derive(Event)]
-struct BossDeathEvent(Vec2);
+pub struct BossDeathEvent(Vec2);
 
 fn handle_boss_death(
     boss: Single<(Entity, &GlobalTransform), (With<Dead>, With<Boss>)>,
@@ -434,7 +397,9 @@ fn boss_death_effects(
     server: Res<AssetServer>,
     layout: Res<CruiserExplosion>,
     mut reader: EventReader<BossDeathEvent>,
+    player: Single<(Entity, &WeaponEntity)>,
 ) {
+    let (player, weapon) = player.into_inner();
     for event in reader.read() {
         commands.spawn((
             Sprite {
@@ -449,5 +414,41 @@ fn boss_death_effects(
             AnimationController::from_seconds(AnimationIndices::once_despawn(0..=13), 0.1),
             Transform::from_translation(event.0.extend(1.)),
         ));
+
+        commands.entity(weapon.0).despawn();
+        commands.entity(player).remove::<WeaponEntity>();
+
+        run_after(
+            Duration::from_secs_f32(2.),
+            |mut commands: Commands, player: Single<(Entity, &Transform), With<Player>>| {
+                let (player, position) = player.into_inner();
+                commands
+                    .entity(player)
+                    .insert((BlockControls, ColliderDisabled));
+
+                let start = position.translation;
+                let end = position.translation.with_y(crate::HEIGHT / 2. + 16.);
+                let dist = end.y - position.translation.y;
+
+                let on_end = OnEnd::new(&mut commands, end::show_win_screen);
+                commands
+                    .animation()
+                    .insert_tween_here(
+                        Duration::from_secs_f32(dist / crate::HEIGHT * 2.),
+                        EaseKind::ExponentialIn,
+                        player.into_target().with(translation(start, end)),
+                    )
+                    .insert(on_end);
+                // keep the velocity above 0 so that we get blasters
+                commands.animation().insert_tween_here(
+                    Duration::from_secs_f32(dist / crate::HEIGHT * 2. + 1.),
+                    EaseKind::Linear,
+                    player
+                        .into_target()
+                        .with(linear_velocity(Vec2::Y, Vec2::ZERO)),
+                );
+            },
+            &mut commands,
+        );
     }
 }

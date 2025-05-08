@@ -32,93 +32,46 @@ impl Plugin for OpeningPlugin {
 #[derive(Component)]
 struct OpeningEntity;
 
+#[derive(Component)]
+struct Mask;
+
 fn begin(mut commands: Commands, server: Res<AssetServer>) {
     commands.post_process::<OuterCamera>(GlitchSettings::from_intensity(0.3));
 
-    let mask = commands
-        .spawn((
-            OpeningEntity,
-            Sprite::from_color(
-                Color::linear_rgba(0., 0., 0., 1.),
-                Vec2::new(RES_WIDTH * RESOLUTION_SCALE, RES_HEIGHT * RESOLUTION_SCALE),
-            ),
-            Transform::from_xyz(0., 0., -2.),
-        ))
-        .id();
-    commands
-        .animation()
-        .repeat(Repeat::infinitely())
-        .insert(sequence((
-            tween(
-                Duration::from_secs_f32(0.1),
-                EaseKind::BackInOut,
-                mask.into_target().with(sprite_color(
-                    Color::linear_rgba(0., 0., 0., 1.),
-                    Color::linear_rgba(0., 0., 0., 0.),
-                )),
-            ),
-            tween(
-                Duration::from_secs_f32(0.2),
-                EaseKind::BackInOut,
-                mask.into_target().with(sprite_color(
-                    Color::linear_rgba(0., 0., 0., 0.),
-                    Color::linear_rgba(0., 0., 0., 1.),
-                )),
-            ),
-            tween(
-                Duration::from_secs_f32(0.8),
-                EaseKind::Linear,
-                mask.into_target().with(sprite_color(
-                    Color::linear_rgba(0., 0., 0., 1.),
-                    Color::linear_rgba(0., 0., 0., 1.),
-                )),
-            ),
-            tween(
-                Duration::from_secs_f32(1.2),
-                EaseKind::BackInOut,
-                mask.into_target().with(sprite_color(
-                    Color::linear_rgba(0., 0., 0., 1.),
-                    Color::linear_rgba(0., 0., 0., 0.),
-                )),
-            ),
-            tween(
-                Duration::from_secs_f32(1.),
-                EaseKind::Linear,
-                mask.into_target().with(sprite_color(
-                    Color::linear_rgba(0., 0., 0., 1.),
-                    Color::linear_rgba(0., 0., 0., 1.),
-                )),
-            ),
-        )))
-        .insert(OpeningEntity);
+    commands.spawn((
+        OpeningEntity,
+        Mask,
+        Sprite::from_color(
+            Color::linear_rgba(0., 0., 0., 1.),
+            Vec2::new(RES_WIDTH * RESOLUTION_SCALE, RES_HEIGHT * RESOLUTION_SCALE),
+        ),
+        Transform::from_xyz(0., 0., -2.),
+    ));
 
-    // cutting the next two calls short makes this disappear after text appears????
     commands.spawn((
         OpeningEntity,
         SamplePlayer::new(server.load("audio/drone.wav")),
-        PlaybackSettings::LOOP,
-        sample_effects![VolumeNode {
-            volume: Volume::Linear(0.5),
-        }],
+        PlaybackSettings {
+            volume: Volume::Linear(0.4),
+            ..PlaybackSettings::LOOP
+        },
     ));
 
-    // 3.
     run_after(
-        Duration::from_secs_f32(0.),
+        Duration::from_secs_f32(3.),
         |mut commands: Commands, server: Res<AssetServer>| {
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/note2.wav")),
-                PlaybackSettings::ONCE,
-                sample_effects![VolumeNode {
-                    volume: Volume::Linear(0.5),
-                }],
+                PlaybackSettings {
+                    volume: Volume::Linear(0.3),
+                    ..PlaybackSettings::ONCE
+                },
             ));
         },
         &mut commands,
     );
-    // 4.
     run_after(
-        Duration::from_secs_f32(0.),
+        Duration::from_secs_f32(4.),
         corrupted_message,
         &mut commands,
     );
@@ -150,7 +103,7 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
                     SamplePlayer::new(server.load("audio/sfx/beep.wav")),
                     PitchRange(0.99..1.01),
                     PlaybackSettings {
-                        volume: Volume::Linear(0.2),
+                        volume: Volume::Linear(0.15),
                         ..PlaybackSettings::ONCE
                     },
                 ),
@@ -176,7 +129,7 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
                 (
                     SamplePlayer::new(server.load("audio/sfx/glitch.wav")),
                     PlaybackSettings {
-                        volume: Volume::Linear(0.4),
+                        volume: Volume::Linear(0.3),
                         ..PlaybackSettings::LOOP
                     }
                 )
@@ -192,16 +145,15 @@ fn corrupted_message(mut commands: Commands, server: Res<AssetServer>) {
         },
     ));
 
-    // 1.
     run_after(
-        Duration::from_secs_f32(0.),
+        Duration::from_secs_f32(1.),
         message_contents(textbox),
         &mut commands,
     );
 }
 
-fn message_contents(entity: Entity) -> impl Fn(Commands) {
-    move |mut commands: Commands| {
+fn message_contents(entity: Entity) -> impl Fn(Commands, Single<Entity, With<Mask>>) {
+    move |mut commands: Commands, mask: Single<Entity, With<Mask>>| {
         let frag = (
             "01001110 01000101 01010111 00100000 01000100 01001001 01001101",
             "01000101 01001110 01010011 01001001 01001111 01001110",
@@ -212,6 +164,53 @@ fn message_contents(entity: Entity) -> impl Fn(Commands) {
             .once()
             .on_end(end);
         spawn_root_with(frag, &mut commands, TextBoxEntity::new(entity));
+
+        commands
+            .animation()
+            .repeat(Repeat::times(1))
+            .insert(sequence((
+                tween(
+                    Duration::from_secs_f32(0.1),
+                    EaseKind::BackInOut,
+                    mask.into_target().with(sprite_color(
+                        Color::linear_rgba(0., 0., 0., 1.),
+                        Color::linear_rgba(0., 0., 0., 0.),
+                    )),
+                ),
+                tween(
+                    Duration::from_secs_f32(0.2),
+                    EaseKind::BackInOut,
+                    mask.into_target().with(sprite_color(
+                        Color::linear_rgba(0., 0., 0., 0.),
+                        Color::linear_rgba(0., 0., 0., 1.),
+                    )),
+                ),
+                tween(
+                    Duration::from_secs_f32(0.8),
+                    EaseKind::Linear,
+                    mask.into_target().with(sprite_color(
+                        Color::linear_rgba(0., 0., 0., 1.),
+                        Color::linear_rgba(0., 0., 0., 1.),
+                    )),
+                ),
+                tween(
+                    Duration::from_secs_f32(0.2),
+                    EaseKind::BackInOut,
+                    mask.into_target().with(sprite_color(
+                        Color::linear_rgba(0., 0., 0., 1.),
+                        Color::linear_rgba(0., 0., 0., 0.),
+                    )),
+                ),
+                tween(
+                    Duration::from_secs_f32(0.1),
+                    EaseKind::Linear,
+                    mask.into_target().with(sprite_color(
+                        Color::linear_rgba(0., 0., 0., 1.),
+                        Color::linear_rgba(0., 0., 0., 1.),
+                    )),
+                ),
+            )))
+            .insert(OpeningEntity);
     }
 }
 
@@ -220,7 +219,7 @@ fn end(mut commands: Commands, opening_entities: Query<Entity, With<OpeningEntit
     for entity in opening_entities.iter() {
         commands.entity(entity).despawn();
     }
-    commands.set_state(GameState::Game);
+    commands.set_state(GameState::StartGame);
 }
 
 pub struct MandelbrotPlugin;

@@ -73,7 +73,7 @@ fn scrolling_background(
             uv_offset: 0.,
         })),
         Speed(SCROLL_SPEED2),
-        Transform::from_xyz(0., 0., -998.),
+        Transform::from_xyz(0., 0., -1.5),
     ));
 }
 

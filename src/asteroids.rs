@@ -17,13 +17,27 @@ pub struct AsteroidPlugin;
 
 impl Plugin for AsteroidPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(AsteroidSpawner(true))
+        app.add_event::<SpawnCluster>()
+            .insert_resource(AsteroidSpawner(true))
+            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 Update,
-                (spawn_asteroids, handle_death, despawn_asteroids)
-                    .run_if(in_state(GameState::Game)),
+                (handle_death, despawn_asteroids, spawn_clusters).run_if(in_state(GameState::Game)),
             )
-            .add_systems(FixedUpdate, move_clusters.run_if(in_state(GameState::Game)));
+            .add_systems(
+                FixedUpdate,
+                (spawn_asteroids, move_clusters).run_if(in_state(GameState::Game)),
+            );
+    }
+}
+
+fn restart(
+    mut commands: Commands,
+    asteroids: Query<Entity, With<Asteroid>>,
+    clusters: Query<Entity, With<MaterialCluster>>,
+) {
+    for entity in asteroids.iter().chain(clusters.iter()) {
+        commands.entity(entity).despawn();
     }
 }
 
@@ -87,38 +101,50 @@ fn spawn_asteroids(
     big_cooldown.tick(time.delta());
     small_cooldown.tick(time.delta());
 
-    if big_cooldown.finished() && rand::rng().random_bool(0.005) {
+    if big_cooldown.finished() && rand::rng().random_bool(0.001) {
         let x = rand::rng().random_range(-X..X);
         commands.spawn((Asteroid::Big, Transform::from_xyz(x, Y, -10.)));
         big_cooldown.reset();
     }
 
-    if small_cooldown.finished() && rand::rng().random_bool(0.01) {
+    if small_cooldown.finished() && rand::rng().random_bool(0.005) {
         let x = rand::rng().random_range(-X..X);
         commands.spawn((Asteroid::Small, Transform::from_xyz(x, Y, -10.)));
         small_cooldown.reset();
     }
 }
 
+#[derive(Event)]
+pub struct SpawnCluster {
+    pub materials: usize,
+    pub position: Vec2,
+}
+
 #[derive(Component)]
 #[require(Visibility)]
 pub struct MaterialCluster;
 
-const MATERIAL_SPEED: f32 = 20.; // 20 meters per second
+const MATERIAL_SPEED: f32 = 20.;
 
 fn handle_death(
-    asteroids: Query<(Entity, &GlobalTransform, &Asteroid), With<Dead>>,
     mut commands: Commands,
+    mut writer: EventWriter<SpawnCluster>,
+    asteroids: Query<(Entity, &GlobalTransform, &Asteroid), With<Dead>>,
 ) {
     for (entity, transform, asteroid) in asteroids.iter() {
         commands.entity(entity).despawn();
+        writer.write(SpawnCluster {
+            materials: match asteroid {
+                Asteroid::Big => 10,
+                Asteroid::Small => 5,
+            },
+            position: transform.compute_transform().translation.xy(),
+        });
+    }
+}
 
-        let children = match asteroid {
-            Asteroid::Big => 10,
-            Asteroid::Small => 5,
-        };
-        let transform = transform.compute_transform();
-
+fn spawn_clusters(mut commands: Commands, mut reader: EventReader<SpawnCluster>) {
+    for event in reader.read() {
         let material_speed = 50.;
         let dur_variation = 0.75;
 
@@ -128,9 +154,15 @@ fn handle_death(
             .collect::<Vec<_>>();
         let sampler = Sampler::linear(&speeds, 0.0, 1.0);
 
-        let cluster = commands.spawn((MaterialCluster, transform)).id();
-        for angle in 0..children {
-            let angle = (angle as f32 / children as f32) * 2. * std::f32::consts::PI;
+        let cluster = commands
+            .spawn((
+                MaterialCluster,
+                Transform::from_translation(event.position.extend(0.)),
+            ))
+            .id();
+        for angle in 0..event.materials {
+            let angle = (angle as f32 / event.materials as f32) * 2. * std::f32::consts::PI
+                + rng.random_range(-0.5..0.5);
             let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
 
             let material = commands.spawn((Material, LinearVelocity::ZERO)).id();

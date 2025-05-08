@@ -1,23 +1,34 @@
+use self::homing::HomingRotate;
 use crate::{
-    Layer,
+    GameState, Layer,
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bounds::WallDespawn,
     health::{Damage, Health},
     player::Player,
+    tween::{OnEnd, physics_time_mult},
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{BLUE, LIGHT_BLUE, LIGHT_GREEN, RED, SKY_BLUE},
+    color::palettes::css::{RED, SKY_BLUE},
     ecs::{component::HookContext, world::DeferredWorld},
     platform::collections::HashSet,
     prelude::*,
 };
-use bevy_optix::shake::TraumaCommands;
+use bevy_optix::{
+    glitch::{GlitchIntensity, GlitchSettings, glitch_intensity},
+    pixel_perfect::OuterCamera,
+    post_process::PostProcessCommand,
+    shake::TraumaCommands,
+};
 use bevy_seedling::{
     prelude::Volume,
     sample::{PitchRange, PlaybackSettings, SamplePlayer},
+};
+use bevy_tween::{
+    prelude::{AnimationBuilderExt, EaseKind},
+    tween::{IntoTarget, TargetResource},
 };
 use std::time::Duration;
 use strum_macros::EnumIter;
@@ -38,6 +49,7 @@ impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
             .add_event::<BulletCollisionEvent>()
+            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 PostUpdate,
                 (handle_destructable_collision, handle_player_collision)
@@ -54,6 +66,12 @@ impl Plugin for BulletPlugin {
                 PostUpdate,
                 init_bullet_sprite.in_set(BulletSystems::Sprite).chain(),
             );
+    }
+}
+
+fn restart(mut commands: Commands, bullets: Query<Entity, With<Bullet>>) {
+    for entity in bullets.iter() {
+        commands.entity(entity).despawn();
     }
 }
 
@@ -100,42 +118,28 @@ impl Direction {
         }
     }
 }
-/// The rate at which bullets should fire.
-///
-/// This doesn't have any particular unit;
-/// emitters can interpret this however they like.
-#[derive(Component, Clone, Copy)]
-pub struct BulletRate(pub f32);
-
-impl Default for BulletRate {
-    fn default() -> Self {
-        Self(1.0)
-    }
-}
-
-/// The speed at which bullets should travel.
-///
-/// This doesn't have any particular unit;
-/// emitters can interpret this however they like.
-#[derive(Component, Clone, Copy)]
-pub struct BulletSpeed(pub f32);
-
-impl Default for BulletSpeed {
-    fn default() -> Self {
-        Self(1.0)
-    }
-}
 
 fn init_bullet_sprite(
     mut commands: Commands,
-    bullets: Query<(Entity, &BulletSprite, &ColorMod, Option<&LinearVelocity>), Without<Sprite>>,
+    bullets: Query<
+        (
+            Entity,
+            &BulletSprite,
+            &ColorMod,
+            Option<&LinearVelocity>,
+            Option<&HomingRotate>,
+        ),
+        Without<Sprite>,
+    >,
     server: Res<AssetServer>,
 ) {
-    for (entity, sprite, color, velocity) in bullets.iter() {
+    for (entity, sprite, color, velocity, rotation) in bullets.iter() {
         let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
-        if let Some(velocity) = velocity {
-            sprite.flip_y = velocity.0.y < 0.;
-            sprite.flip_x = velocity.0.x < 0.;
+        if rotation.is_none() {
+            if let Some(velocity) = velocity {
+                sprite.flip_y = velocity.0.y < 0.;
+                sprite.flip_x = velocity.0.x < 0.;
+            }
         }
         match color {
             ColorMod::Enemy => {
@@ -163,7 +167,11 @@ impl Default for Lifetime {
     }
 }
 
-fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time<Physics>>, mut commands: Commands) {
+fn manage_lifetime(
+    mut q: Query<(Entity, &mut Lifetime)>,
+    time: Res<Time<Physics>>,
+    mut commands: Commands,
+) {
     let delta = time.delta();
 
     for (entity, mut lifetime) in q.iter_mut() {
@@ -176,7 +184,7 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time<Physics
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Polarity, BulletSpeed, Sensor, RigidBody::Kinematic, WallDespawn)]
+#[require(Polarity, Sensor, RigidBody::Kinematic, WallDespawn)]
 #[component(on_add = Self::add_color_mod)]
 pub struct Bullet;
 
@@ -342,6 +350,7 @@ fn bullet_collision_effects(
     mut reader: EventReader<BulletCollisionEvent>,
     server: Res<AssetServer>,
     misc_layout: Res<MiscLayout>,
+    camera: Single<Entity, With<OuterCamera>>,
 ) {
     for event in reader.read() {
         commands.spawn((
@@ -366,8 +375,31 @@ fn bullet_collision_effects(
         ));
 
         match event.source {
-            BulletSource::Enemy => commands.add_trauma(0.15),
-            BulletSource::Player => commands.add_trauma(0.04),
+            BulletSource::Player => {}
+            BulletSource::Enemy => {
+                let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
+                    commands.remove_post_process::<GlitchSettings, OuterCamera>();
+                    commands.remove_post_process::<GlitchIntensity, OuterCamera>();
+                });
+
+                commands.post_process::<OuterCamera>(GlitchSettings::default());
+                commands.post_process::<OuterCamera>(GlitchIntensity::default());
+                commands
+                    .animation()
+                    .insert_tween_here(
+                        Duration::from_secs_f32(0.4),
+                        EaseKind::Linear,
+                        camera.into_target().with(glitch_intensity(0.3, 0.0)),
+                    )
+                    .insert(on_end);
+
+                commands.add_trauma(0.15);
+                commands.animation().insert_tween_here(
+                    Duration::from_secs_f32(0.25),
+                    EaseKind::Linear,
+                    TargetResource.with(physics_time_mult(0.25, 1.)),
+                );
+            }
         }
     }
 }

@@ -14,7 +14,9 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
+use bevy::time::Stopwatch;
 use bevy_optix::debug::DebugRect;
+use bevy_seedling::prelude::*;
 use bevy_sequence::prelude::*;
 use bevy_tween::combinator::tween;
 use bevy_tween::interpolate::translation;
@@ -29,17 +31,19 @@ impl Plugin for MinionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            ((
-                test,
+            (
                 update_gunner_formation,
                 (miner_collect, update_miners).chain(),
             )
-                .run_if(in_state(GameState::Game)),),
+                .run_if(in_state(GameState::Game)),
         );
+
+        #[cfg(debug_assertions)]
+        app.add_systems(Update, test_spawn);
     }
 }
 
-fn test(
+fn test_spawn(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
     player: Single<Entity, With<Player>>,
@@ -131,10 +135,15 @@ fn update_miners(
 
 fn miner_collect(
     mut commands: Commands,
+    server: Res<AssetServer>,
     miners: Query<&CollidingEntities, With<Miner>>,
     materials: Query<&Material>,
     mut writer: EventWriter<PickupEvent>,
+    time: Res<Time>,
+    mut timer: Local<(Stopwatch, usize)>,
 ) {
+    timer.0.tick(time.delta());
+
     let mut despawned = HashSet::new();
     for miner in miners.iter() {
         for entity in miner
@@ -143,8 +152,29 @@ fn miner_collect(
             .filter(|entity| materials.get(*entity).is_ok())
         {
             if despawned.insert(entity) {
+                let speed = if timer.0.elapsed_secs() < 1. {
+                    timer.1 += 1;
+                    let speed = 1.0 + timer.1 as f64 * 0.05;
+                    speed
+                } else {
+                    timer.1 = 0;
+                    1.0
+                };
+                timer.0.reset();
+
                 commands.entity(entity).despawn();
                 writer.write(PickupEvent::Material);
+                commands.spawn((
+                    SamplePlayer::new(server.load("audio/sfx/click.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.2),
+                        ..Default::default()
+                    },
+                    PlaybackParams {
+                        speed,
+                        ..Default::default()
+                    },
+                ));
             }
         }
     }
@@ -200,10 +230,10 @@ fn update_gunner_formation(
 
 #[derive(Component)]
 #[relationship(relationship_target = Miners)]
-pub struct MinerLeader(Entity);
+pub struct MinerLeader(pub Entity);
 
 #[derive(Component)]
-#[relationship_target(relationship = MinerLeader)]
+#[relationship_target(relationship = MinerLeader, linked_spawn)]
 pub struct Miners(Vec<Entity>);
 
 const MINER_SPEED: f32 = 40.;
@@ -222,7 +252,7 @@ const MINER_SPEED: f32 = 40.;
     },
     TurnSpeed,
     HomingRotate,
-    CollisionLayers::new(Layer::Player, [Layer::Collectable]),
+    CollisionLayers::new(Layer::Miners, [Layer::Collectable]),
 )]
 pub struct Miner;
 
@@ -231,11 +261,10 @@ pub struct Miner;
 pub struct GunnerLeader(Entity);
 
 #[derive(Component)]
-#[relationship_target(relationship = GunnerLeader)]
+#[relationship_target(relationship = GunnerLeader, linked_spawn)]
 pub struct Gunners(Vec<Entity>);
 
 const GUNNER_SPEED: f32 = 40.;
-const GUNNER_Y: f32 = -20.;
 
 #[derive(Component)]
 #[require(

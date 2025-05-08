@@ -1,13 +1,13 @@
 use super::{
-    Bullet, BulletCollisionEvent, BulletRate, BulletSource, BulletSpeed, BulletSprite, BulletTimer,
-    BulletType, Polarity,
+    Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, BulletType, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
     HEIGHT, Layer,
     auto_collider::ImageCollider,
-    enemy::EnemyType,
+    enemy::Enemy,
     health::{Damage, Health},
+    player::Player,
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -17,33 +17,74 @@ use bevy::{
 use bevy_seedling::prelude::*;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
+const BULLET_SPEED: f32 = 150.;
+const MISSILE_SPEED: f32 = 130.;
+const LASER_SPEED: f32 = 30.;
+
+const BULLET_RATE: f32 = 0.25;
+const MISSILE_RATE: f32 = 0.33;
+
+const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+pub struct EmitterSet;
+
 pub struct EmitterPlugin;
 
 impl Plugin for EmitterPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            PreUpdate,
             (
                 SoloEmitter::shoot_bullets,
                 DualEmitter::shoot_bullets,
                 LaserEmitter::laser,
-                HomingEmitter::<EnemyType>::shoot_bullets,
-                HomingEmitter::<crate::player::Player>::shoot_bullets,
-            ),
+                HomingEmitter::<Enemy>::shoot_bullets,
+                HomingEmitter::<Player>::shoot_bullets,
+            )
+                .in_set(EmitterSet),
         );
     }
 }
 
-/// Determines the base speed of fired bullets. This value is multiplied by the parent's
-/// [`BulletSpeed`].
-#[derive(Component)]
-pub struct BaseSpeed(pub f32);
+/// Multipliers applied to the properties of bullet emitters.
+///
+/// Emitters will apply parent modifiers on top of their own with [`BulletModifiers::join`].
+///
+/// The base values for speed, damage, and rate are `[BULLET/MISSILE/LASER]_SPEED`, `1.0`, and
+/// `[BULLET/MISSILE]_RATE` (laser has no rate). Rate is calculated as `[BULLET/MISSILE]_RATE / rate`.
+#[derive(Clone, Copy, Component)]
+pub struct BulletModifiers {
+    pub speed: f32,
+    pub damage: f32,
+    pub rate: f32,
+}
+
+impl Default for BulletModifiers {
+    fn default() -> Self {
+        Self {
+            speed: 1.,
+            damage: 1.,
+            rate: 1.,
+        }
+    }
+}
+
+impl BulletModifiers {
+    pub fn join(&self, other: &Self) -> Self {
+        Self {
+            speed: self.speed * other.speed,
+            damage: self.damage * other.damage,
+            rate: self.rate * other.rate,
+        }
+    }
+}
 
 #[derive(Component)]
 #[require(
     Transform,
-    BaseSpeed(150.),
     BulletSprite::from_cell(0, 0),
+    BulletModifiers,
     Polarity,
     Visibility::Hidden
 )]
@@ -59,36 +100,31 @@ impl SoloEmitter {
     }
 }
 
-const BULLET_RANGE: core::ops::Range<f64> = 0.9..1.1;
-
 impl SoloEmitter {
     fn shoot_bullets(
         mut emitters: Query<(
             Entity,
             &SoloEmitter,
             Option<&mut BulletTimer>,
-            &BaseSpeed,
+            &BulletModifiers,
             &Polarity,
             &ChildOf,
             &GlobalTransform,
         )>,
-        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, base_speed, polarity, child_of, transform) in
-            emitters.iter_mut()
-        {
-            let Ok((rate, speed)) = parents.get(child_of.parent()) else {
+        for (entity, emitter, timer, mods, polarity, child_of, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
-            let rate = rate.copied().unwrap_or_default();
-            let speed = speed.copied().unwrap_or_default();
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(0.25 / rate.0);
+            let duration = Duration::from_secs_f32(BULLET_RATE / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -106,15 +142,15 @@ impl SoloEmitter {
 
             commands.spawn((
                 BulletType::Basic,
-                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 new_transform,
                 Bullet::target_layer(emitter.0),
-                Damage::new(1.0),
+                Damage::new(1.0 * mods.damage),
             ));
 
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                PitchRange(BULLET_RANGE),
+                PitchRange(BULLET_PITCH_RANGE),
                 PlaybackSettings {
                     volume: Volume::Decibels(-12.0),
                     ..PlaybackSettings::ONCE
@@ -128,8 +164,8 @@ impl SoloEmitter {
 #[derive(Component, Default)]
 #[require(
     Transform,
-    BaseSpeed(150.),
     BulletSprite::from_cell(0, 0),
+    BulletModifiers,
     Polarity,
     Visibility::Hidden
 )]
@@ -160,28 +196,25 @@ impl DualEmitter {
             Entity,
             &DualEmitter,
             Option<&mut BulletTimer>,
-            &BaseSpeed,
+            &BulletModifiers,
             &Polarity,
             &ChildOf,
             &GlobalTransform,
         )>,
-        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, base_speed, polarity, parent, transform) in emitters.iter_mut()
-        {
-            let Ok((rate, speed)) = parents.get(parent.parent()) else {
+        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
             };
-            let rate = rate.copied().unwrap_or_default();
-            let speed = speed.copied().unwrap_or_default();
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(0.25 / rate.0);
-
+            let duration = Duration::from_secs_f32(BULLET_RATE / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -199,30 +232,30 @@ impl DualEmitter {
 
             commands.spawn((
                 BulletType::Basic,
-                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 {
                     let mut t = new_transform;
                     t.translation.x -= emitter.width;
                     t
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0),
+                Damage::new(1.0 * mods.damage),
             ));
 
             commands.spawn((
                 BulletType::Basic,
-                LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
+                LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
                 {
                     new_transform.translation.x += emitter.width;
                     new_transform
                 },
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0),
+                Damage::new(1.0 * mods.damage),
             ));
 
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                PitchRange(BULLET_RANGE),
+                PitchRange(BULLET_PITCH_RANGE),
                 PlaybackSettings {
                     volume: Volume::Decibels(-12.0),
                     ..PlaybackSettings::ONCE
@@ -234,7 +267,7 @@ impl DualEmitter {
 }
 
 #[derive(Component, Default)]
-#[require(Transform, BaseSpeed(125.), TurnSpeed, Polarity)]
+#[require(Transform, BulletModifiers, TurnSpeed, Polarity)]
 pub struct HomingEmitter<T> {
     target: Layer,
     _filter: PhantomData<fn() -> T>,
@@ -262,34 +295,28 @@ impl<T: Component> HomingEmitter<T> {
             Entity,
             &HomingEmitter<T>,
             Option<&mut BulletTimer>,
-            Option<&BulletRate>,
-            &BaseSpeed,
+            &BulletModifiers,
             &TurnSpeed,
             &Polarity,
             &ChildOf,
             &GlobalTransform,
         )>,
-        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, rate, base_speed, turn_speed, polarity, child_of, transform) in
+        for (entity, emitter, timer, mods, turn_speed, polarity, child_of, transform) in
             emitters.iter_mut()
         {
-            let Ok((parent_rate, speed)) = parents.get(child_of.parent()) else {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
-            let parent_rate = parent_rate.copied().unwrap_or_default();
-            let rate = rate
-                .map(|rate| BulletRate(rate.0 * parent_rate.0))
-                .unwrap_or(parent_rate);
-            let speed = speed.copied().unwrap_or_default();
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(0.33 / rate.0);
-
+            let duration = Duration::from_secs_f32(MISSILE_RATE / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -318,17 +345,17 @@ impl<T: Component> HomingEmitter<T> {
                 HomingRotate,
                 *turn_speed,
                 Heading {
-                    speed: base_speed.0 * speed.0,
+                    speed: MISSILE_SPEED * mods.speed,
                     direction,
                 },
                 new_transform,
                 Bullet::target_layer(emitter.target),
-                Damage::new(1.0),
+                Damage::new(1.0 * mods.damage),
             ));
 
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-                PitchRange(BULLET_RANGE),
+                PitchRange(BULLET_PITCH_RANGE),
                 PlaybackSettings {
                     volume: Volume::Decibels(-12.0),
                     ..PlaybackSettings::ONCE
@@ -340,7 +367,7 @@ impl<T: Component> HomingEmitter<T> {
 }
 
 #[derive(Component)]
-#[require(Transform, Visibility, BaseSpeed(30.), Polarity)]
+#[require(Transform, BulletModifiers, Visibility, Polarity)]
 #[component(on_insert = Self::on_insert_hook)]
 pub struct LaserEmitter(Layer);
 
@@ -356,8 +383,6 @@ impl LaserEmitter {
 
 impl LaserEmitter {
     fn on_insert_hook(mut world: DeferredWorld, context: HookContext) {
-        // world.commands().run_system(||)
-
         let server = world.resource();
         let sprite = BulletSprite::from_cell(1, 8);
         let sprite = super::assets::sprite_rect8(server, sprite.path, sprite.cell);
@@ -380,30 +405,28 @@ impl LaserEmitter {
             Entity,
             &LaserEmitter,
             Option<&mut BulletTimer>,
-            &BaseSpeed,
+            &BulletModifiers,
             &Polarity,
             &ChildOf,
             &GlobalTransform,
             &Children,
         )>,
         mut child: Query<&mut Transform>,
-        parents: Query<(Option<&BulletRate>, Option<&BulletSpeed>)>,
+        parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
         mut targets: Query<(&mut Health, &GlobalTransform)>,
         mut writer: EventWriter<BulletCollisionEvent>,
-        server: Res<AssetServer>,
         mut commands: Commands,
     ) -> Result {
         let delta = time.delta();
 
-        for (entity, emitter, timer, base_speed, polarity, child_of, transform, children) in
+        for (entity, emitter, timer, mods, polarity, child_of, transform, children) in
             emitters.iter_mut()
         {
-            let Ok((rate, speed)) = parents.get(child_of.parent()) else {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
-            let rate = rate.copied().unwrap_or_default();
-            let speed = speed.copied().unwrap_or_default();
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
             let duration = Duration::from_secs_f32(0.25);
             if timer.is_none() {
@@ -439,14 +462,14 @@ impl LaserEmitter {
                 if difference < 0.0 {
                     child.scale.x = target_scale;
                 } else {
-                    child.scale.x += difference.max(base_speed.0) * delta.as_secs_f32() * speed.0;
+                    child.scale.x += difference.max(LASER_SPEED) * delta.as_secs_f32() * mods.speed;
                 }
 
                 child.translation.y = direction.y * (4.0 + child.scale.x * 8.0 / 2.0);
 
                 if let Ok((mut target, target_transform)) = targets.get_mut(hit_data.entity) {
                     if (child.scale.x * 8.0 - hit_data.distance).abs() <= 16.0 {
-                        target.damage(15.0 * delta.as_secs_f32());
+                        target.damage(15.0 * mods.damage * delta.as_secs_f32());
                     }
 
                     if let Some(mut timer) = timer {
@@ -464,29 +487,6 @@ impl LaserEmitter {
                     }
                 }
             }
-
-            // if !timer.timer.tick(delta).just_finished() {
-            //     continue;
-            // }
-            // timer.timer.set_duration(duration);
-
-            // commands.spawn((
-            //     BulletType::Basic,
-            //     LinearVelocity(polarity.to_vec2() * base_speed.0 * speed.0),
-            //     new_transform,
-            //     Bullet::target_layer(emitter.0),
-            //     Damage::new(1.0),
-            // ));
-
-            // commands.spawn((
-            //     SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
-            //     PitchRange(BULLET_RANGE),
-            //     PlaybackSettings {
-            //         volume: Volume::Decibels(-12.0),
-            //         ..PlaybackSettings::ONCE
-            //     },
-            //     sample_effects![BandPassNode::new(1000.0, 4.0)],
-            // ));
         }
 
         Ok(())

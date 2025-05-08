@@ -1,62 +1,112 @@
+use crate::input::{self, MenuContext};
 use crate::pickups::{Pickup, PickupEvent};
 use crate::player::{BlockControls, Materials, Player};
 use crate::{GameState, assets, pickups};
 use avian2d::prelude::{LinearVelocity, Physics, PhysicsTime};
 use bevy::prelude::*;
+use bevy::sprite::Anchor;
+use bevy_enhanced_input::events::Fired;
+use bevy_enhanced_input::prelude::{ActionState, Actions};
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
 use bevy_optix::shake::Shake;
+use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::AfterSystem;
 use bevy_tween::bevy_time_runner::TimeRunner;
+
+const MIN_MATERIALS: usize = 10;
+const DISP_MSG: &str = "Remaining to \nUpgrade: ";
 
 pub struct SelectionPlugin;
 
 impl Plugin for SelectionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                enter_game_state.run_if(in_state(GameState::Game)),
-                (update_selection, exit_game_state).run_if(in_state(GameState::Selection)),
-            ),
-        )
-        .add_systems(OnEnter(GameState::Selection), enter_selection)
-        .add_systems(OnExit(GameState::Selection), exit_selection);
+        app.add_observer(exit_selection)
+            .add_systems(OnEnter(GameState::Restart), restart)
+            .add_systems(OnEnter(GameState::StartGame), spawn_display)
+            .add_systems(
+                Update,
+                (
+                    (enter_selection, display_remaining).run_if(in_state(GameState::Game)),
+                    update_selection.run_if(in_state(GameState::Selection)),
+                ),
+            )
+            .add_systems(OnEnter(GameState::Selection), init_selection)
+            .add_systems(OnExit(GameState::Selection), deinit_selection);
+
+        #[cfg(debug_assertions)]
+        app.add_systems(Update, selection_test);
     }
 }
 
-const MIN_MATERIALS: usize = 20;
+fn restart(mut commands: Commands, display: Single<Entity, With<Display>>) {
+    commands.entity(*display).despawn();
+}
 
-fn enter_game_state(
-    mut commands: Commands,
-    input: Res<ButtonInput<KeyCode>>,
-    mut player: Single<&mut Materials, With<Player>>,
-) {
+fn selection_test(mut commands: Commands, input: Res<ButtonInput<KeyCode>>) {
     if input.just_pressed(KeyCode::KeyM) {
         commands.set_state(GameState::Selection);
     }
+}
 
+fn enter_selection(mut commands: Commands, mut player: Single<&mut Materials, With<Player>>) {
     if player.get() >= MIN_MATERIALS {
         player.sub(MIN_MATERIALS);
         commands.set_state(GameState::Selection);
     }
 }
 
-fn exit_game_state(
+#[derive(Component)]
+struct Display;
+
+fn spawn_display(mut commands: Commands, server: Res<AssetServer>) {
+    commands.spawn((
+        Display,
+        HIGH_RES_LAYER,
+        Text2d(format!("{}{}", DISP_MSG, MIN_MATERIALS)),
+        TextFont {
+            font_size: 20.,
+            font: server.load("fonts/joystix.otf"),
+            ..Default::default()
+        },
+        Transform::from_xyz(
+            -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
+            -crate::HEIGHT / 2. * crate::RESOLUTION_SCALE,
+            500.,
+        ),
+        Anchor::BottomLeft,
+    ));
+}
+
+fn display_remaining(
+    player: Single<&Materials, (With<Player>, Changed<Materials>)>,
+    mut display: Single<&mut Text2d, With<Display>>,
+) {
+    display.0 = format!("{}{}", DISP_MSG, MIN_MATERIALS.saturating_sub(player.get()));
+}
+
+fn exit_selection(
+    _: Trigger<Fired<input::Interact>>,
     mut commands: Commands,
-    input: Res<ButtonInput<KeyCode>>,
+    server: Res<AssetServer>,
     selection: Single<&Selection>,
     upgrades: Query<(&Pickup, &Upgrade)>,
     mut writer: EventWriter<PickupEvent>,
 ) {
-    if input.just_pressed(KeyCode::Enter) || input.just_pressed(KeyCode::Space) {
-        let selection = selection.0;
-        let (pickup, _) = upgrades
-            .iter()
-            .find(|(_, upgrade)| upgrade.0 == selection)
-            .unwrap();
-        writer.write(pickup.into());
-        commands.set_state(GameState::Game);
-    }
+    let selection = selection.0;
+    let (pickup, _) = upgrades
+        .iter()
+        .find(|(_, upgrade)| upgrade.0 == selection)
+        .unwrap();
+    writer.write(pickup.into());
+    commands.set_state(GameState::Game);
+
+    commands.spawn((
+        SamplePlayer::new(server.load("audio/sfx/chimes.wav")),
+        PlaybackSettings {
+            volume: Volume::Linear(0.2),
+            ..Default::default()
+        },
+    ));
 }
 
 #[derive(Component)]
@@ -68,7 +118,10 @@ struct Upgrade(usize);
 #[derive(Component)]
 struct Frame(usize);
 
-fn enter_selection(
+#[derive(Component)]
+struct InfoText;
+
+fn init_selection(
     mut commands: Commands,
     mut time: ResMut<Time<Physics>>,
     server: Res<AssetServer>,
@@ -113,7 +166,7 @@ fn enter_selection(
         Transform::from_xyz(0., 0., 499.),
     ));
 
-    commands.spawn((SelectionEntity, Selection(0)));
+    commands.spawn((SelectionEntity, Selection(1)));
     let pickups = pickups::unique_pickups(3);
     info!("unique pickups: {pickups:?}");
     let positions = [
@@ -149,17 +202,49 @@ fn enter_selection(
             }
         }
     }
+
+    commands.spawn((
+        SelectionEntity,
+        InfoText,
+        HIGH_RES_LAYER,
+        Text2d::default(),
+        TextFont {
+            font_size: 20.,
+            font: server.load("fonts/joystix.otf"),
+            ..Default::default()
+        },
+        Transform::from_xyz(0., -crate::HEIGHT / 5. * crate::RESOLUTION_SCALE, 500.),
+        Anchor::TopCenter,
+    ));
+
+    //commands.spawn((
+    //    SelectionEntity,
+    //    HIGH_RES_LAYER,
+    //    Text2d("Press C to Select".into()),
+    //    TextFont {
+    //        font_size: 20.,
+    //        font: server.load("fonts/joystix.otf"),
+    //        ..Default::default()
+    //    },
+    //    Transform::from_xyz(
+    //        0.,
+    //        crate::HEIGHT / 2. * crate::RESOLUTION_SCALE - 120.,
+    //        500.,
+    //    ),
+    //));
 }
 
 #[derive(Component)]
 struct Selection(usize);
 
 fn update_selection(
-    input: Res<ButtonInput<KeyCode>>,
+    input: Single<&Actions<MenuContext>>,
     mut selection: Single<&mut Selection>,
     mut frames: Query<(&mut Sprite, &Frame)>,
+    options: Query<(&Upgrade, &Pickup)>,
+    mut info: Single<&mut Text2d, With<InfoText>>,
 ) {
-    if input.just_pressed(KeyCode::KeyA) {
+    if input.action::<input::Left>().state() == ActionState::Fired {
         if selection.0 == 0 {
             selection.0 = 2;
         } else {
@@ -167,7 +252,7 @@ fn update_selection(
         }
     }
 
-    if input.just_pressed(KeyCode::KeyD) {
+    if input.action::<input::Right>().state() == ActionState::Fired {
         if selection.0 == 2 {
             selection.0 = 0;
         } else {
@@ -187,9 +272,34 @@ fn update_selection(
             }
         }
     }
+
+    if selection.is_changed() {
+        let (_, pickup) = options.iter().find(|(u, _)| u.0 == selection.0).unwrap();
+        match pickup {
+            Pickup::Weapon(weapon) => match weapon {
+                pickups::Weapon::Bullet => {
+                    info.0 = "Dual machine guns".into();
+                }
+                pickups::Weapon::Missile => {
+                    info.0 = "Homing missiles".into();
+                }
+                pickups::Weapon::Laser => {
+                    info.0 = "BIG LASER".into();
+                }
+            },
+            Pickup::Upgrade(upgrade) => match upgrade {
+                pickups::Upgrade::Speed(s) => {
+                    info.0 = format!("Increase shooting\nspeed by {:.2}%", s);
+                }
+                pickups::Upgrade::Juice(j) => {
+                    info.0 = format!("Increase damage \nby {:.2}%", j);
+                }
+            },
+        }
+    }
 }
 
-fn exit_selection(
+fn deinit_selection(
     mut commands: Commands,
     mut time: ResMut<Time<Physics>>,
     mut tweens: Query<&mut TimeRunner>,

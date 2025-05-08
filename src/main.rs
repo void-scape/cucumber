@@ -1,7 +1,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
-use avian2d::prelude::{Gravity, PhysicsDebugPlugin, PhysicsLayer};
+use avian2d::prelude::{Gravity, PhysicsLayer};
 use bevy::app::FixedMainScheduleOrder;
 use bevy::ecs::schedule::ScheduleLabel;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
@@ -19,9 +19,11 @@ mod background;
 mod bounds;
 mod bullet;
 mod characters;
+mod end;
 mod enemy;
 mod fire;
 mod health;
+mod input;
 mod miniboss;
 mod minions;
 mod music;
@@ -30,6 +32,7 @@ mod pickups;
 mod player;
 mod sampler;
 mod selection;
+mod stats;
 mod textbox;
 mod tween;
 mod ui;
@@ -62,18 +65,19 @@ fn main() {
                 }),
                 ..Default::default()
             }),
-        bevy_enhanced_input::EnhancedInputPlugin,
         bevy_tween::DefaultTweenPlugins,
         bevy_seedling::SeedlingPlugin {
             ..Default::default()
         },
+        bevy_enhanced_input::EnhancedInputPlugin,
         // the average object (bullet) is 8 ppx.
         avian2d::PhysicsPlugins::new(Avian).with_length_unit(METER),
         // PhysicsDebugPlugin::new(Avian),
-        bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions::new(
-            WIDTH as u32,
-            HEIGHT as u32,
-        )),
+        bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions {
+            width: WIDTH as u32,
+            height: HEIGHT as u32,
+            pixel_scale: RESOLUTION_SCALE,
+        }),
         bevy_optix::shake::ScreenShakePlugin,
         bevy_optix::debug::DebugPlugin,
         physics::PhysicsPlugin,
@@ -99,14 +103,23 @@ fn main() {
         miniboss::MinibossPlugin,
         asteroids::AsteroidPlugin,
         minions::MinionPlugin,
-        tween::SequenceTweenPlugin,
+        tween::TweenPlugin,
         selection::SelectionPlugin,
+        stats::StatPlugin,
+        end::EndPlugin,
+        input::InputPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
-    .add_systems(Startup, set_state.run_if(in_state(GameState::Startup)))
-    .add_systems(Update, enter_game.run_if(in_state(GameState::StartGame)))
+    .add_systems(Startup, finish_startup.run_if(in_state(GameState::Startup)))
+    .add_systems(
+        Update,
+        (
+            enter_game.run_if(in_state(GameState::StartGame)),
+            enter_start_game.run_if(in_state(GameState::Restart)),
+        ),
+    )
     .add_systems(Startup, configure_screen_shake)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Scaling::Canvas);
@@ -134,15 +147,20 @@ pub enum Layer {
     Enemy,
     Debris,
     Collectable,
+    Miners,
 }
 
-fn set_state(mut commands: Commands) {
-    //commands.set_state(GameState::Opening);
-    commands.set_state(GameState::StartGame);
+fn finish_startup(mut commands: Commands) {
+    commands.set_state(GameState::Opening);
+    //commands.set_state(GameState::StartGame);
 }
 
 fn enter_game(mut commands: Commands) {
     commands.set_state(GameState::Game)
+}
+
+fn enter_start_game(mut commands: Commands) {
+    commands.set_state(GameState::StartGame)
 }
 
 #[cfg(debug_assertions)]
@@ -157,7 +175,7 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
     commands
         .entity(*main_camera)
-        .insert(Shake::from_trauma_limit(1.));
+        .insert(Shake::from_trauma_limit(0.7));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
@@ -166,6 +184,7 @@ enum GameState {
     Startup,
     Opening,
     StartGame,
+    Restart,
     Game,
     Selection,
 }

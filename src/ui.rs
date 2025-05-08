@@ -10,20 +10,31 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(GameState::StartGame),
-            (frame, health, init_upgrade_ui),
-        )
-        .add_systems(Update, (update_health, update_upgrades));
+        app.add_systems(OnEnter(GameState::Restart), restart)
+            .add_systems(
+                OnEnter(GameState::StartGame),
+                (frame, health, init_upgrade_ui),
+            )
+            .add_systems(Update, (update_health, update_upgrades));
     }
 }
 
+fn restart(mut commands: Commands, ui: Query<Entity, With<UI>>) {
+    for entity in ui.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+#[derive(Component)]
+struct UI;
+
 fn init_upgrade_ui(mut commands: Commands) {
-    commands.spawn(UpgradeUi(0));
+    commands.spawn((UI, UpgradeUi(0)));
 }
 
 fn frame(mut commands: Commands, server: Res<AssetServer>) {
     commands.spawn((
+        UI,
         HIGH_RES_LAYER,
         Sprite::from_image(server.load("frame.png")),
         Transform::from_scale(Vec3::splat(RESOLUTION_SCALE)),
@@ -58,6 +69,7 @@ fn health(
     let mut y = (RES_HEIGHT / 2. - HEART_OFFSET) * RESOLUTION_SCALE;
     for _ in 0..(PLAYER_HEALTH as usize) {
         commands.spawn((
+            UI,
             HeartUi,
             Sprite {
                 image: server.load("heart_ui.png"),
@@ -107,6 +119,7 @@ fn update_upgrades(
                 let mut sprite = upgrade.sprite(&server);
                 sprite.anchor = Anchor::TopRight;
                 commands.spawn((
+                    UI,
                     sprite,
                     Transform::from_xyz(x, y, 0.).with_scale(Vec3::splat(RESOLUTION_SCALE)),
                     HIGH_RES_LAYER,
