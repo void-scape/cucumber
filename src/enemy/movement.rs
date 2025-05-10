@@ -35,7 +35,7 @@ fn update_back_and_forth(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<BackAndForth>, Without<Center>)>,
     mut query: Query<(&BackAndForth, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -69,7 +69,7 @@ fn update_circle(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Circle>, Without<Center>)>,
     mut query: Query<(&Circle, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands
@@ -98,7 +98,7 @@ fn update_figure8(
     mut commands: Commands,
     init_query: Query<(Entity, &Transform), (With<Figure8>, Without<Center>)>,
     mut query: Query<(&mut Figure8, &Center, &mut Angle, &mut Transform)>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
 ) {
     for (entity, transform) in init_query.iter() {
         commands

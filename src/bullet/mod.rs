@@ -10,7 +10,7 @@ use crate::{
     bounds::WallDespawn,
     health::{Damage, Dead, Health},
     player::Player,
-    tween::{OnEnd, physics_time_mult},
+    tween::{OnEnd, time_mult},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -174,11 +174,7 @@ impl Default for Lifetime {
     }
 }
 
-fn manage_lifetime(
-    mut q: Query<(Entity, &mut Lifetime)>,
-    time: Res<Time<Physics>>,
-    mut commands: Commands,
-) {
+fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut commands: Commands) {
     let delta = time.delta();
 
     for (entity, mut lifetime) in q.iter_mut() {
@@ -450,7 +446,7 @@ fn bullet_collision_effects(
                     commands.animation().insert_tween_here(
                         Duration::from_secs_f32(0.25),
                         EaseKind::Linear,
-                        TargetResource.with(physics_time_mult(0.25, 1.)),
+                        TargetResource.with(time_mult(0.25, 1.)),
                     );
                 }
             }

@@ -102,7 +102,7 @@ fn update_boss_state(
     mut commands: Commands,
     solo: Option<Single<Entity, With<InsertSoloDance>>>,
     wave: Option<Single<Entity, With<InsertWaves>>>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     mut timer: Local<Option<Timer>>,
     mut last_wave: Local<(bool, usize)>,
 ) {
@@ -205,7 +205,7 @@ fn update_solo_emitters(
     mut active_solo_set: Single<&mut ActiveSoloSet>,
     solos: Query<Entity, With<SoloSet>>,
     mut solo_timer: Local<Option<Timer>>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     mut phase_b_count: Local<usize>,
 ) {
     let (dance_entity, dance) = dance.into_inner();

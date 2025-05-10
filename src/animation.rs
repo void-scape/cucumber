@@ -94,7 +94,7 @@ fn init_atlas_index(
 
 fn animate_sprites(
     mut commands: Commands,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     mut query: Query<(Entity, &mut AnimationController, &mut Sprite)>,
 ) {
     for (entity, mut controller, mut sprite) in &mut query {

@@ -106,7 +106,7 @@ impl WaveController {
         }
     }
 
-    pub fn tick(&mut self, time: &Time<Physics>, formations_empty: bool) {
+    pub fn tick(&mut self, time: &Time, formations_empty: bool) {
         self.timer.tick(time.delta());
         //if formations_empty {
         //    self.timer.set_elapsed(self.timer.duration());
@@ -140,7 +140,7 @@ fn update_waves(
     mut commands: Commands,
     controller: Option<ResMut<WaveController>>,
     formations: Query<&Formation>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     mut asteroids: ResMut<AsteroidSpawner>,
 ) {
     let Some(mut controller) = controller else {

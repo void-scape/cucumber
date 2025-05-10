@@ -4,7 +4,7 @@ use super::{
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
-    HEIGHT, Layer,
+    Avian, HEIGHT, Layer,
     enemy::Enemy,
     health::{Damage, Health},
     player::Player,
@@ -49,7 +49,7 @@ pub struct EmitterPlugin;
 impl Plugin for EmitterPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            PreUpdate,
+            Avian,
             (
                 SoloEmitter::shoot_bullets,
                 DualEmitter::shoot_bullets,
@@ -123,7 +123,7 @@ impl SoloEmitter {
             &GlobalTransform,
         )>,
         parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -207,7 +207,7 @@ impl DualEmitter {
             &GlobalTransform,
         )>,
         parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -308,7 +308,7 @@ impl<T: Component> HomingEmitter<T> {
             Option<&MaxLifetime>,
         )>,
         parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -421,7 +421,7 @@ impl LaserEmitter {
         )>,
         mut child: Query<&mut Transform>,
         parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         mut targets: Query<(&mut Health, &GlobalTransform, Option<&Player>)>,
         mut writer: EventWriter<BulletCollisionEvent>,
         mut commands: Commands,
@@ -530,7 +530,7 @@ impl MineEmitter {
         )>,
         parents: Query<Option<&BulletModifiers>>,
         player: Single<&Transform, With<Player>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
@@ -608,7 +608,7 @@ impl PulseTimer {
         }
     }
 
-    pub fn just_finished(&mut self, time: &Time<Physics>) -> bool {
+    pub fn just_finished(&mut self, time: &Time) -> bool {
         let delta = time.delta();
 
         match self.state {
@@ -672,7 +672,7 @@ impl OrbEmitter {
             &GlobalTransform,
         )>,
         parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time<Physics>>,
+        time: Res<Time>,
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {

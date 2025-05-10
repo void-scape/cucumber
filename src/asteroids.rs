@@ -82,7 +82,7 @@ pub struct AsteroidSpawner(pub bool);
 
 fn spawn_asteroids(
     mut commands: Commands,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
     mut big_cooldown: Local<Option<Timer>>,
     mut small_cooldown: Local<Option<Timer>>,
     spawner: Res<AsteroidSpawner>,
@@ -183,7 +183,7 @@ fn spawn_clusters(mut commands: Commands, mut reader: EventReader<SpawnCluster>)
 
 fn move_clusters(
     mut clusters: Query<&mut Transform, With<MaterialCluster>>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
 ) {
     for mut transform in clusters.iter_mut() {
         transform.translation.y -= MATERIAL_SPEED * time.delta_secs();

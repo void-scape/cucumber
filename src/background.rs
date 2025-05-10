@@ -80,7 +80,7 @@ fn scrolling_background(
 fn update_scrolling_background(
     query: Query<(&MeshMaterial2d<ScrollingTexture>, &Speed)>,
     mut materials: ResMut<Assets<ScrollingTexture>>,
-    time: Res<Time<Physics>>,
+    time: Res<Time>,
 ) {
     for (handle, speed) in query.iter() {
         let material = materials.get_mut(&handle.0).unwrap();

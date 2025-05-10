@@ -139,7 +139,8 @@ struct InfoText;
 
 fn init_selection(
     mut commands: Commands,
-    mut time: ResMut<Time<Physics>>,
+    mut physics_time: ResMut<Time<Physics>>,
+    mut virtual_time: ResMut<Time<Virtual>>,
     server: Res<AssetServer>,
     mut tweens: Query<&mut TimeRunner>,
     mut shakes: Query<&mut Shake>,
@@ -147,7 +148,8 @@ fn init_selection(
     player: Single<Entity, With<Player>>,
 ) {
     commands.entity(*player).insert(BlockControls);
-    time.pause();
+    physics_time.pause();
+    virtual_time.pause();
     for mut runner in tweens.iter_mut() {
         runner.set_paused(true);
     }
@@ -317,7 +319,8 @@ fn update_selection(
 
 fn deinit_selection(
     mut commands: Commands,
-    mut time: ResMut<Time<Physics>>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+    mut physics_time: ResMut<Time<Physics>>,
     mut tweens: Query<&mut TimeRunner>,
     mut shakes: Query<&mut Shake>,
     mut after_systems: Query<&mut AfterSystem>,
@@ -327,7 +330,8 @@ fn deinit_selection(
     let (player, mut velocity) = player.into_inner();
     velocity.0 = Vec2::ZERO;
     commands.entity(player).remove::<BlockControls>();
-    time.unpause();
+    virtual_time.unpause();
+    physics_time.unpause();
     for mut runner in tweens.iter_mut() {
         runner.set_paused(false);
     }

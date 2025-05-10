@@ -14,7 +14,13 @@ impl Plugin for TweenPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FragmentEvent<TweenAnimation>>()
             .insert_resource(PhysicsTimeMult::default())
-            .add_tween_systems(apply_resource_tween_system::<PhysicsTimeTween>)
+            .insert_resource(VirtualTimeMult::default())
+            .insert_resource(TimeMult::default())
+            .add_tween_systems((
+                apply_resource_tween_system::<PhysicsTimeTween>,
+                apply_resource_tween_system::<VirtualTimeTween>,
+                apply_resource_tween_system::<TimeTween>,
+            ))
             .add_systems(
                 Update,
                 (
@@ -22,8 +28,54 @@ impl Plugin for TweenPlugin {
                     emit_tween_timeouts,
                     run_tween_on_end,
                     update_physics_time,
+                    update_virtual_time,
+                    update_time,
                 ),
             );
+    }
+}
+
+#[derive(Resource)]
+pub struct TimeMult(pub f32);
+
+impl Default for TimeMult {
+    fn default() -> Self {
+        Self(1.)
+    }
+}
+
+pub fn time_mult(start: f32, end: f32) -> TimeTween {
+    TimeTween::new(start, end)
+}
+
+#[derive(Component)]
+pub struct TimeTween {
+    start: f32,
+    end: f32,
+}
+
+impl TimeTween {
+    pub fn new(start: f32, end: f32) -> Self {
+        Self { start, end }
+    }
+}
+
+impl Interpolator for TimeTween {
+    type Item = TimeMult;
+
+    fn interpolate(&self, item: &mut Self::Item, value: f32) {
+        item.0 = self.start.lerp(self.end, value);
+    }
+}
+
+fn update_time(
+    mut virtual_time: ResMut<Time<Virtual>>,
+    mut physics_time: ResMut<Time<Physics>>,
+    mult: Res<TimeMult>,
+) {
+    if mult.is_changed() {
+        virtual_time.set_relative_speed(mult.0);
+        physics_time.set_relative_speed(mult.0);
     }
 }
 
@@ -61,6 +113,45 @@ impl Interpolator for PhysicsTimeTween {
 }
 
 fn update_physics_time(mut time: ResMut<Time<Physics>>, mult: Res<PhysicsTimeMult>) {
+    if mult.is_changed() {
+        time.set_relative_speed(mult.0);
+    }
+}
+
+#[derive(Resource)]
+pub struct VirtualTimeMult(pub f32);
+
+impl Default for VirtualTimeMult {
+    fn default() -> Self {
+        Self(1.)
+    }
+}
+
+pub fn virtual_time_mult(start: f32, end: f32) -> VirtualTimeTween {
+    VirtualTimeTween::new(start, end)
+}
+
+#[derive(Component)]
+pub struct VirtualTimeTween {
+    start: f32,
+    end: f32,
+}
+
+impl VirtualTimeTween {
+    pub fn new(start: f32, end: f32) -> Self {
+        Self { start, end }
+    }
+}
+
+impl Interpolator for VirtualTimeTween {
+    type Item = VirtualTimeMult;
+
+    fn interpolate(&self, item: &mut Self::Item, value: f32) {
+        item.0 = self.start.lerp(self.end, value);
+    }
+}
+
+fn update_virtual_time(mut time: ResMut<Time<Virtual>>, mult: Res<VirtualTimeMult>) {
     if mult.is_changed() {
         time.set_relative_speed(mult.0);
     }
