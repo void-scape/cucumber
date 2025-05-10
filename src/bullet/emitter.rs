@@ -21,7 +21,7 @@ pub const BULLET_SPEED: f32 = 75.;
 pub const MISSILE_SPEED: f32 = 65.;
 pub const LASER_SPEED: f32 = 15.;
 pub const MINE_SPEED: f32 = 50.;
-pub const ORB_SPEED: f32 = 50.;
+pub const ORB_SPEED: f32 = 75.;
 
 pub const BULLET_DAMAGE: f32 = 1.;
 pub const MISSILE_DAMAGE: f32 = 1.;
@@ -33,7 +33,7 @@ const MISSILE_RATE: f32 = 0.5;
 const MINE_RATE: f32 = 1.5;
 
 const ORB_WAIT_RATE: f32 = 2.;
-const ORB_SHOT_RATE: f32 = 0.4;
+const ORB_SHOT_RATE: f32 = 0.2;
 const ORB_WAVES: usize = 8;
 
 pub const MISSILE_HEALTH: f32 = 3.;
@@ -714,9 +714,10 @@ impl OrbEmitter {
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/orb.wav")),
                 PlaybackSettings {
-                    volume: Volume::Decibels(-18.0),
+                    volume: Volume::Decibels(-22.0),
                     ..PlaybackSettings::ONCE
                 },
+                sample_effects![LowPassNode { frequency: 10000.0 }],
             ));
         }
     }

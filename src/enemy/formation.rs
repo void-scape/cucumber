@@ -78,8 +78,14 @@ pub const MINE_THROWER: Formation = Formation(&[(
     MovementPattern::BackAndForth,
 )]);
 
-pub const ORB_SLINGER: Formation =
-    Formation(&[(EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None)]);
+pub const ORB_SLINGER: Formation = Formation(&[
+    (EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None),
+    (
+        EnemyType::OrbSlinger,
+        Vec2::new(40., -40.),
+        MovementPattern::None,
+    ),
+]);
 
 impl Formation {
     pub fn len(&self) -> usize {
