@@ -12,7 +12,9 @@ use crate::{
     atlas_layout,
     bullet::{
         Destructable, Direction, MaxLifetime,
-        emitter::{BulletModifiers, HomingEmitter, MineEmitter, OrbEmitter, SoloEmitter},
+        emitter::{
+            BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter, OrbEmitter, SoloEmitter,
+        },
         homing::TurnSpeed,
     },
     health::{Dead, Health},
@@ -27,6 +29,7 @@ use bevy_seedling::{
     sample::{PlaybackSettings, SamplePlayer},
 };
 use bevy_sequence::combinators::delay::run_after;
+use formation::CRISS_CROSS;
 use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
@@ -87,6 +90,7 @@ fn start_waves(mut commands: Commands) {
                 (ROW, 2.),
                 (MINE_THROWER, 25.),
                 (ORB_SLINGER, 8.),
+                (CRISS_CROSS, 4.),
             ],
         )
         .skip(16.),
@@ -225,6 +229,7 @@ pub enum EnemyType {
     Missile,
     MineThrower,
     OrbSlinger,
+    CrissCross,
 }
 
 impl EnemyType {
@@ -265,6 +270,7 @@ impl EnemyType {
             )),
             Self::MineThrower => commands.with_child(MineEmitter::player()),
             Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
+            Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
         };
     }
 
@@ -285,6 +291,7 @@ impl EnemyType {
             Self::Missile => Health::full(15.0),
             Self::MineThrower => Health::full(15.0),
             Self::OrbSlinger => Health::full(40.0),
+            Self::CrissCross => Health::full(40.0),
         }
     }
 
@@ -296,6 +303,7 @@ impl EnemyType {
                 assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(4, 3))
             }
             Self::OrbSlinger => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 4)),
+            Self::CrissCross => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 4)),
         }
     }
 
@@ -305,6 +313,7 @@ impl EnemyType {
             Self::Missile => 2,
             Self::MineThrower => 3,
             Self::OrbSlinger => 8,
+            Self::CrissCross => 6,
         }
     }
 }

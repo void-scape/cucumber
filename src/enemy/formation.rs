@@ -100,6 +100,19 @@ pub const ORB_SLINGER: Formation = Formation::new(&[
     //),
 ]);
 
+pub const CRISS_CROSS: Formation = Formation(&[
+    (
+        EnemyType::CrissCross,
+        Vec2::new(40., -20.),
+        MovementPattern::Circle,
+    ),
+    (
+        EnemyType::CrissCross,
+        Vec2::new(-40., -20.),
+        MovementPattern::Circle,
+    ),
+]);
+
 impl Formation {
     pub fn len(&self) -> usize {
         self.enemies().len()

@@ -36,6 +36,10 @@ const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
 const ORB_WAVES: usize = 8;
 
+const CRISSCROSS_WAIT_RATE: f32 = 1.25;
+const CRISSCROSS_SHOT_RATE: f32 = 0.15;
+const CRISSCROSS_WAVES: usize = 5;
+
 pub const MISSILE_HEALTH: f32 = 3.;
 pub const MINE_HEALTH: f32 = 5.;
 
@@ -58,6 +62,7 @@ impl Plugin for EmitterPlugin {
                 HomingEmitter::<Player>::shoot_bullets,
                 MineEmitter::shoot_bullets,
                 OrbEmitter::shoot_bullets,
+                CrisscrossEmitter::shoot_bullets,
             )
                 .in_set(EmitterSet),
         );
@@ -702,6 +707,113 @@ impl OrbEmitter {
             for angle in 0..bullets {
                 let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
                     + timer.current_pulse() as f32 * std::f32::consts::PI / 4.;
+                commands.spawn((
+                    Orb,
+                    LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
+                    new_transform,
+                    Bullet::target_layer(emitter.0),
+                    Damage::new(ORB_DAMAGE * mods.damage),
+                ));
+            }
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/orb.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-22.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![LowPassNode { frequency: 10000.0 }],
+            ));
+        }
+    }
+}
+
+#[derive(Component)]
+#[require(
+    Transform,
+    BulletModifiers,
+    Polarity,
+    Visibility::Hidden,
+    CrisscrossState
+)]
+pub struct CrisscrossEmitter(Layer);
+
+impl CrisscrossEmitter {
+    pub fn player() -> Self {
+        Self(Layer::Player)
+    }
+
+    pub fn enemy() -> Self {
+        Self(Layer::Enemy)
+    }
+}
+
+#[derive(Component, Default)]
+enum CrisscrossState {
+    #[default]
+    Plus,
+    Cross,
+}
+
+impl CrisscrossEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<(
+            Entity,
+            &mut CrisscrossEmitter,
+            Option<&mut PulseTimer>,
+            &BulletModifiers,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+            &mut CrisscrossState,
+        )>,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        for (entity, emitter, timer, mods, polarity, parent, transform, mut state) in
+            emitters.iter_mut()
+        {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(PulseTimer::new(
+                    CRISSCROSS_WAIT_RATE * 1. / mods.rate,
+                    CRISSCROSS_SHOT_RATE * 1. / mods.rate,
+                    CRISSCROSS_WAVES,
+                ));
+                continue;
+            };
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.just_finished(&time) {
+                continue;
+            }
+
+            if matches!(timer.state, PulseState::Wait) {
+                match *state {
+                    CrisscrossState::Cross => *state = CrisscrossState::Plus,
+                    CrisscrossState::Plus => *state = CrisscrossState::Cross,
+                }
+                continue;
+            }
+
+            let angle_offset = match *state {
+                CrisscrossState::Cross => std::f32::consts::PI / 4.,
+                CrisscrossState::Plus => 0.,
+            };
+            let bullets = 4;
+            for angle in 0..bullets {
+                let angle = (angle as f32 / bullets as f32) * std::f32::consts::TAU
+                    // + timer.current_pulse() as f32 * std::f32::consts::PI * 0.01
+                    + angle_offset;
+
                 commands.spawn((
                     Orb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
