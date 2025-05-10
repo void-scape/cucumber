@@ -90,10 +90,10 @@ fn start_waves(mut commands: Commands) {
                 (ROW, 2.),
                 (MINE_THROWER, 25.),
                 (ORB_SLINGER, 8.),
-                (CRISS_CROSS, 4.),
+                (CRISS_CROSS, 0.),
             ],
         )
-        .skip(16.),
+        .skip(32.),
     );
 }
 
