@@ -87,7 +87,7 @@ pub enum Polarity {
 }
 
 impl Polarity {
-    pub fn to_vec2(&self) -> Vec2 {
+    pub fn to_vec2(self) -> Vec2 {
         match self {
             Self::North => Vec2::Y,
             Self::South => Vec2::NEG_Y,
@@ -161,6 +161,9 @@ fn init_bullet_sprite(
 pub struct BulletTimer {
     pub timer: Timer,
 }
+
+#[derive(Debug, Component)]
+pub struct MaxLifetime(pub Duration);
 
 #[derive(Debug, Component)]
 pub struct Lifetime(pub Timer);

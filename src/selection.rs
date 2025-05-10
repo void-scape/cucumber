@@ -13,16 +13,22 @@ use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::AfterSystem;
 use bevy_tween::bevy_time_runner::TimeRunner;
 
-const MIN_MATERIALS: usize = 10;
+const INITIAL_MIN_MATERIALS: usize = 5;
 const DISP_MSG: &str = "Remaining to \nUpgrade: ";
 
 pub struct SelectionPlugin;
 
 impl Plugin for SelectionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(exit_selection)
+        app.insert_resource(MinMaterials(INITIAL_MIN_MATERIALS))
+            .add_observer(exit_selection)
             .add_systems(OnEnter(GameState::Restart), restart)
-            .add_systems(OnEnter(GameState::StartGame), spawn_display)
+            .add_systems(
+                OnEnter(GameState::StartGame),
+                (spawn_display, |mut materials: ResMut<MinMaterials>| {
+                    materials.0 = INITIAL_MIN_MATERIALS
+                }),
+            )
             .add_systems(
                 Update,
                 (
@@ -38,6 +44,10 @@ impl Plugin for SelectionPlugin {
     }
 }
 
+/// The minimum resources required for the next upgrade.
+#[derive(Resource)]
+pub struct MinMaterials(pub usize);
+
 fn restart(mut commands: Commands, display: Single<Entity, With<Display>>) {
     commands.entity(*display).despawn();
 }
@@ -48,9 +58,14 @@ fn selection_test(mut commands: Commands, input: Res<ButtonInput<KeyCode>>) {
     }
 }
 
-fn enter_selection(mut commands: Commands, mut player: Single<&mut Materials, With<Player>>) {
-    if player.get() >= MIN_MATERIALS {
-        player.sub(MIN_MATERIALS);
+fn enter_selection(
+    mut commands: Commands,
+    mut player: Single<&mut Materials, With<Player>>,
+    mut mats: ResMut<MinMaterials>,
+) {
+    if player.get() >= mats.0 {
+        player.sub(mats.0);
+        mats.0 *= 2;
         commands.set_state(GameState::Selection);
     }
 }
@@ -58,11 +73,11 @@ fn enter_selection(mut commands: Commands, mut player: Single<&mut Materials, Wi
 #[derive(Component)]
 struct Display;
 
-fn spawn_display(mut commands: Commands, server: Res<AssetServer>) {
+fn spawn_display(mut commands: Commands, server: Res<AssetServer>, mats: Res<MinMaterials>) {
     commands.spawn((
         Display,
         HIGH_RES_LAYER,
-        Text2d(format!("{}{}", DISP_MSG, MIN_MATERIALS)),
+        Text2d(format!("{}{}", DISP_MSG, mats.0)),
         TextFont {
             font_size: 20.,
             font: server.load("fonts/joystix.otf"),
@@ -80,8 +95,9 @@ fn spawn_display(mut commands: Commands, server: Res<AssetServer>) {
 fn display_remaining(
     player: Single<&Materials, (With<Player>, Changed<Materials>)>,
     mut display: Single<&mut Text2d, With<Display>>,
+    mats: Res<MinMaterials>,
 ) {
-    display.0 = format!("{}{}", DISP_MSG, MIN_MATERIALS.saturating_sub(player.get()));
+    display.0 = format!("{}{}", DISP_MSG, mats.0.saturating_sub(player.get()));
 }
 
 fn exit_selection(

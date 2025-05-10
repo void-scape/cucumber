@@ -1,6 +1,6 @@
 use super::{
-    BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, Mine,
-    Missile, Orb, Polarity,
+    BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, Lifetime,
+    MaxLifetime, Mine, Missile, Orb, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
@@ -213,6 +213,8 @@ impl DualEmitter {
     ) {
         let delta = time.delta();
 
+        info!("delta: {delta:?}");
+
         for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
@@ -305,6 +307,7 @@ impl<T: Component> HomingEmitter<T> {
             &Polarity,
             &ChildOf,
             &GlobalTransform,
+            Option<&MaxLifetime>,
         )>,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time<Physics>>,
@@ -313,7 +316,7 @@ impl<T: Component> HomingEmitter<T> {
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, mods, turn_speed, polarity, child_of, transform) in
+        for (entity, emitter, timer, mods, turn_speed, polarity, child_of, transform, lifetime) in
             emitters.iter_mut()
         {
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
@@ -341,7 +344,7 @@ impl<T: Component> HomingEmitter<T> {
                 Polarity::North => PI / 2.0,
                 Polarity::South => -PI / 2.0,
             };
-            commands.spawn((
+            let mut bullet = commands.spawn((
                 Missile,
                 LinearVelocity::default(),
                 Homing::<T>::new(),
@@ -355,6 +358,10 @@ impl<T: Component> HomingEmitter<T> {
                 Bullet::target_layer(emitter.target),
                 Damage::new(MISSILE_DAMAGE * mods.damage),
             ));
+
+            if let Some(lifetime) = lifetime {
+                bullet.insert(Lifetime(Timer::new(lifetime.0, TimerMode::Once)));
+            }
 
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/bullet.wav")),

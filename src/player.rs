@@ -283,7 +283,7 @@ fn handle_pickups(
     for event in events.read() {
         match event {
             PickupEvent::Weapon(weapon) => {
-                commands.entity(weapon_entity.0).despawn();
+                // commands.entity(weapon_entity.0).despawn();
 
                 let emitter = match weapon {
                     Weapon::Bullet => commands.spawn(Player::bullet_emitter()).id(),
@@ -293,6 +293,25 @@ fn handle_pickups(
 
                 weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
+
+                commands.run_system_cached(
+                    |player: Single<&Children, With<Player>>,
+                     mut children: Query<&mut Transform, With<BulletModifiers>>| {
+                        let total = children.iter_many(player.iter()).count() as f32;
+
+                        let padding = Vec3::new(4.0, 0.0, 0.0);
+                        let start = padding * -0.5 * total;
+
+                        let mut children = children.iter_many_mut(player.iter());
+                        let mut i = 0;
+
+                        while let Some(mut transform) = children.fetch_next() {
+                            transform.translation = start + padding * i as f32;
+
+                            i += 1;
+                        }
+                    },
+                );
             }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate += *s,
             PickupEvent::Upgrade(Upgrade::Juice(j)) => mods.damage += *j,

@@ -181,13 +181,11 @@ impl InsertSoloDance {
 
     fn remove_guns(mut world: DeferredWorld, _: HookContext) {
         world.commands().queue(|world: &mut World| {
-            world
-                .run_system_once(
-                    |mut commands: Commands, dance: Single<Entity, With<SoloDance>>| {
-                        commands.entity(*dance).despawn();
-                    },
-                )
-                .unwrap();
+            let _ = world.run_system_once(
+                |mut commands: Commands, dance: Single<Entity, With<SoloDance>>| {
+                    commands.entity(*dance).despawn();
+                },
+            );
         });
     }
 }

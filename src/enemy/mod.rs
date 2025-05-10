@@ -11,7 +11,7 @@ use crate::{
     asteroids::{AsteroidSpawner, SpawnCluster},
     atlas_layout,
     bullet::{
-        Destructable, Direction,
+        Destructable, Direction, MaxLifetime,
         emitter::{BulletModifiers, HomingEmitter, MineEmitter, OrbEmitter, SoloEmitter},
         homing::TurnSpeed,
     },
@@ -77,13 +77,13 @@ fn start_waves(mut commands: Commands) {
     commands.insert_resource(WaveController::new_delayed(
         START_DELAY,
         &[
-            (ORB_SLINGER, 0.),
-            //(TRIANGLE, 16.),
-            //(ROW, 8.),
-            //(MINE_THROWER, 8.),
-            //(TRIANGLE, 16.),
-            //(ROW, 0.),
-            //(MINE_THROWER, 8.),
+            // (ORB_SLINGER, 0.),
+            (TRIANGLE, 16.),
+            (ROW, 8.),
+            (MINE_THROWER, 8.),
+            (TRIANGLE, 16.),
+            (ROW, 0.),
+            (MINE_THROWER, 8.),
         ],
     ));
 }
@@ -203,9 +203,15 @@ impl EnemyType {
     fn insert_emitter(&self, commands: &mut EntityCommands) {
         match self {
             Self::Gunner => commands.with_child(SoloEmitter::player()),
-            Self::Missile => {
-                commands.with_child((HomingEmitter::<Player>::player(), TurnSpeed(60.)))
-            }
+            Self::Missile => commands.with_child((
+                HomingEmitter::<Player>::player(),
+                TurnSpeed(60.),
+                BulletModifiers {
+                    rate: 0.5,
+                    ..Default::default()
+                },
+                MaxLifetime(Duration::from_secs_f32(5.0)),
+            )),
             Self::MineThrower => commands.with_child(MineEmitter::player()),
             Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
         };
