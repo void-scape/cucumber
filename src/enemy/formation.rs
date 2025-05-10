@@ -100,7 +100,7 @@ pub const ORB_SLINGER: Formation = Formation::new(&[
     //),
 ]);
 
-pub const CRISS_CROSS: Formation = Formation(&[
+pub const CRISS_CROSS: Formation = Formation::new(&[
     (
         EnemyType::CrissCross,
         Vec2::new(40., -20.),
