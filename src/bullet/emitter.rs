@@ -4,7 +4,7 @@ use super::{
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
-    Avian, HEIGHT, Layer,
+    HEIGHT, Layer,
     enemy::Enemy,
     health::{Damage, Health},
     player::Player,
@@ -49,7 +49,7 @@ pub struct EmitterPlugin;
 impl Plugin for EmitterPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Avian,
+            PreUpdate,
             (
                 SoloEmitter::shoot_bullets,
                 DualEmitter::shoot_bullets,

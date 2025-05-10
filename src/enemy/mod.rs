@@ -77,13 +77,13 @@ fn start_waves(mut commands: Commands) {
     commands.insert_resource(WaveController::new_delayed(
         START_DELAY,
         &[
-            // (ORB_SLINGER, 0.),
-            (TRIANGLE, 16.),
-            (ROW, 8.),
-            (MINE_THROWER, 8.),
-            (TRIANGLE, 16.),
-            (ROW, 0.),
-            (MINE_THROWER, 8.),
+            (ORB_SLINGER, 0.),
+            //(TRIANGLE, 16.),
+            //(ROW, 8.),
+            //(MINE_THROWER, 8.),
+            //(TRIANGLE, 16.),
+            //(ROW, 0.),
+            //(MINE_THROWER, 8.),
         ],
     ));
 }
