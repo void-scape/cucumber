@@ -317,16 +317,26 @@ fn handle_bullet_collision(
         ),
         With<Bullet>,
     >,
-    mut destructable: Query<(&CollidingEntities, Option<&mut Health>, Option<&Player>)>,
+    mut destructable: Query<(
+        &CollidingEntities,
+        &CollisionLayers,
+        Option<&mut Health>,
+        Option<&Player>,
+    )>,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
 ) {
     let mut despawned = HashSet::new();
-    for (colliding_entities, mut health, player) in destructable.iter_mut() {
+    for (colliding_entities, destructable_layers, mut health, player) in destructable.iter_mut() {
         for (bullet, damage, sprite, transform, layers) in colliding_entities
             .iter()
             .copied()
             .flat_map(|entity| bullets.get(entity))
+            .filter(|(_, _, _, _, l)| {
+                destructable_layers.memberships.has_all(Layer::Enemy)
+                    || l.filters.has_all(Layer::Player)
+                        != destructable_layers.filters.has_all(Layer::Player)
+            })
         {
             if despawned.insert(bullet) {
                 if let Some(health) = health.as_mut() {
