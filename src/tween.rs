@@ -8,6 +8,8 @@ use bevy_tween::prelude::*;
 use bevy_tween::tween::apply_resource_tween_system;
 use rand::Rng;
 
+use crate::enemy::WaveTimeline;
+
 pub struct TweenPlugin;
 
 impl Plugin for TweenPlugin {
@@ -23,16 +25,24 @@ impl Plugin for TweenPlugin {
             ))
             .add_systems(
                 Update,
-                (
-                    insert_timeouts,
-                    emit_tween_timeouts,
-                    run_tween_on_end,
-                    update_physics_time,
-                    update_virtual_time,
-                    update_time,
-                ),
+                (insert_timeouts, emit_tween_timeouts, run_tween_on_end),
             );
+
+        #[cfg(not(debug_assertions))]
+        app.add_systems(
+            Update,
+            (update_physics_time, update_virtual_time, update_time),
+        );
+        #[cfg(debug_assertions)]
+        app.add_systems(
+            Update,
+            (update_physics_time, update_virtual_time, update_time).run_if(no_timeline_skip),
+        );
     }
+}
+
+fn no_timeline_skip(timeline: Option<Res<WaveTimeline>>) -> bool {
+    !timeline.is_some_and(|t| t.is_skipping())
 }
 
 #[derive(Resource)]

@@ -1,16 +1,12 @@
 use super::{EnemyType, movement::MovementPattern};
-use crate::{GameState, HEIGHT};
+use crate::{Avian, GameState, HEIGHT};
+use avian2d::prelude::Physics;
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
 };
-use bevy_tween::{
-    combinator::tween,
-    interpolate::translation,
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::IntoTarget,
-};
-use std::time::Duration;
+
+const DEFAULT_FORMATION_VEL: Vec2 = Vec2::new(0., -8.);
 
 pub struct FormationPlugin;
 
@@ -23,7 +19,8 @@ impl Plugin for FormationPlugin {
                     .in_set(FormationSet)
                     .chain()
                     .run_if(in_state(GameState::Game)),
-            );
+            )
+            .add_systems(Avian, update_formations);
     }
 }
 
@@ -43,9 +40,25 @@ fn restart(mut commands: Commands, formations: Query<Entity, With<Formation>>) {
 
 #[derive(Debug, Clone, Copy, Component)]
 #[require(Transform, Visibility)]
-pub struct Formation(&'static [(EnemyType, Vec2, MovementPattern)]);
+pub struct Formation {
+    enemies: &'static [(EnemyType, Vec2, MovementPattern)],
+    velocity: Vec2,
+}
 
-pub const TRIANGLE: Formation = Formation(&[
+impl Formation {
+    pub const fn new(enemies: &'static [(EnemyType, Vec2, MovementPattern)]) -> Self {
+        Self::with_velocity(DEFAULT_FORMATION_VEL, enemies)
+    }
+
+    pub const fn with_velocity(
+        velocity: Vec2,
+        enemies: &'static [(EnemyType, Vec2, MovementPattern)],
+    ) -> Self {
+        Self { enemies, velocity }
+    }
+}
+
+pub const TRIANGLE: Formation = Formation::new(&[
     (
         EnemyType::Gunner,
         Vec2::new(-40., -40.),
@@ -59,7 +72,7 @@ pub const TRIANGLE: Formation = Formation(&[
     ),
 ]);
 
-pub const ROW: Formation = Formation(&[
+pub const ROW: Formation = Formation::new(&[
     (
         EnemyType::Missile,
         Vec2::new(30., 0.),
@@ -72,19 +85,19 @@ pub const ROW: Formation = Formation(&[
     ),
 ]);
 
-pub const MINE_THROWER: Formation = Formation(&[(
+pub const MINE_THROWER: Formation = Formation::new(&[(
     EnemyType::MineThrower,
     Vec2::ZERO,
     MovementPattern::BackAndForth,
 )]);
 
-pub const ORB_SLINGER: Formation = Formation(&[
+pub const ORB_SLINGER: Formation = Formation::new(&[
     (EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None),
-    (
-        EnemyType::OrbSlinger,
-        Vec2::new(40., -40.),
-        MovementPattern::None,
-    ),
+    //(
+    //    EnemyType::OrbSlinger,
+    //    Vec2::new(40., -40.),
+    //    MovementPattern::None,
+    //),
 ]);
 
 impl Formation {
@@ -93,7 +106,7 @@ impl Formation {
     }
 
     pub fn enemies(&self) -> &'static [(EnemyType, Vec2, MovementPattern)] {
-        self.0
+        self.enemies
     }
 
     pub fn height(&self) -> f32 {
@@ -184,26 +197,26 @@ const FORMATION_EASE_DUR: f32 = 2.;
 fn spawn_formations(
     mut commands: Commands,
     server: Res<AssetServer>,
-    new_formations: Query<(Entity, &Formation), Without<UnitDeaths>>,
-    formations: Query<(Entity, &Transform), (With<Formation>, With<Units>)>,
+    new_formations: Query<(Entity, &Formation), Added<Formation>>,
+    //formations: Query<(Entity, &Transform), (With<Formation>, With<Units>)>,
 ) {
-    let mut additional_height = 0.;
+    //let mut additional_height = 0.;
     for (root, formation) in new_formations.iter() {
         info!("spawn new formation");
 
-        additional_height += formation.height() + PADDING;
+        //additional_height += formation.height() + PADDING;
 
         let start_y = HEIGHT / 2. - formation.bottomy() + LARGEST_SPRITE_SIZE / 2.;
-        let end_y = HEIGHT / 2. + formation.topy() - LARGEST_SPRITE_SIZE / 2.;
+        //let end_y = HEIGHT / 2. + formation.topy() - LARGEST_SPRITE_SIZE / 2.;
 
         let start = Vec3::new(0., start_y, 0.);
-        let end = Vec3::new(0., end_y - 20., 0.);
+        //let end = Vec3::new(0., end_y - 20., 0.);
 
-        commands.entity(root).animation().insert(tween(
-            Duration::from_secs_f32(FORMATION_EASE_DUR),
-            EaseKind::SineOut,
-            root.into_target().with(translation(start, end)),
-        ));
+        //commands.entity(root).animation().insert(tween(
+        //    Duration::from_secs_f32(FORMATION_EASE_DUR),
+        //    EaseKind::SineOut,
+        //    root.into_target().with(translation(start, end)),
+        //));
 
         commands
             .entity(root)
@@ -223,16 +236,40 @@ fn spawn_formations(
         }
     }
 
-    if additional_height > 0. {
-        for (entity, transform) in formations.iter() {
-            commands.animation().insert(tween(
-                Duration::from_secs_f32(FORMATION_EASE_DUR),
-                EaseKind::SineOut,
-                entity.into_target().with(translation(
-                    transform.translation,
-                    Vec3::new(0., additional_height, 0.),
-                )),
-            ));
+    //if additional_height > 0. {
+    //    for (entity, transform) in formations.iter() {
+    //        commands.animation().insert(tween(
+    //            Duration::from_secs_f32(FORMATION_EASE_DUR),
+    //            EaseKind::SineOut,
+    //            entity.into_target().with(translation(
+    //                transform.translation,
+    //                Vec3::new(0., additional_height, 0.),
+    //            )),
+    //        ));
+    //    }
+    //}
+}
+
+fn update_formations(
+    time: Res<Time<Physics>>,
+    mut formations: Query<(&mut Transform, &Formation)>,
+) {
+    for (mut transform, formation) in formations.iter_mut() {
+        transform.translation += formation.velocity.extend(0.) * time.delta_secs();
+    }
+}
+
+fn despawn_off_screen(
+    mut commands: Commands,
+    enemies: Query<(Entity, &GlobalTransform), With<EnemyType>>,
+) {
+    for (entity, transform) in enemies.iter() {
+        let p = transform.compute_transform().translation;
+        let w = crate::WIDTH / 2.;
+        let h = crate::HEIGHT / 2.;
+
+        if p.x < -w || p.y > w || p.y < -h || p.y > h {
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -240,8 +277,10 @@ fn spawn_formations(
 fn despawn_formations(
     mut commands: Commands,
     formations: Query<(Entity, &Formation, &UnitDeaths), Without<Units>>,
+    off_screen: Query<(Entity, &Transform, &Formation)>,
 ) {
     for (entity, _formation, _deaths) in formations.iter() {
+        info!("despawn dead formation");
         commands.entity(entity).despawn();
 
         //if formation.drop_pickup_heuristic() {
@@ -256,5 +295,19 @@ fn despawn_formations(
         //        ),
         //    );
         //}
+    }
+
+    for (entity, transform, formation) in off_screen.iter() {
+        let p = transform.translation;
+        let w = crate::WIDTH / 2.;
+        let h = crate::HEIGHT / 2. + formation.height() + 10.;
+
+        if p.x < -w || p.x > w || p.y < -h || p.y > h {
+            info!("despawn formation off screen");
+            commands
+                .entity(entity)
+                .despawn_related::<Children>()
+                .despawn();
+        }
     }
 }

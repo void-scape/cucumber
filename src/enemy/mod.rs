@@ -64,6 +64,9 @@ impl Plugin for EnemyPlugin {
                     .chain()
                     .run_if(in_state(GameState::Game)),
             );
+
+        #[cfg(debug_assertions)]
+        app.add_systems(Update, timeline_skip);
     }
 }
 
@@ -73,44 +76,54 @@ atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
 
 fn start_waves(mut commands: Commands) {
-    info!("start waves");
-    commands.insert_resource(WaveController::new_delayed(
-        START_DELAY,
-        &[
-            (ORB_SLINGER, 0.),
-            //(TRIANGLE, 16.),
-            //(ROW, 8.),
-            //(MINE_THROWER, 8.),
-            //(TRIANGLE, 16.),
-            //(ROW, 0.),
-            //(MINE_THROWER, 8.),
-        ],
-    ));
+    commands.insert_resource(
+        WaveTimeline::new_delayed(
+            START_DELAY,
+            &[
+                (TRIANGLE, 16.),
+                (ROW, 16.),
+                (MINE_THROWER, 8.),
+                (TRIANGLE, 16.),
+                (ROW, 2.),
+                (MINE_THROWER, 25.),
+                (ORB_SLINGER, 8.),
+            ],
+        )
+        .skip(16.),
+    );
 }
 
 #[derive(Resource)]
-struct WaveController {
+pub struct WaveTimeline {
     seq: &'static [(Formation, f32)],
     timer: Timer,
     index: usize,
     finished: bool,
+    skip: Option<Timer>,
 }
 
-impl WaveController {
+impl WaveTimeline {
     pub fn new_delayed(delay: f32, seq: &'static [(Formation, f32)]) -> Self {
         Self {
             seq,
             timer: Timer::from_seconds(delay, TimerMode::Repeating),
             index: 0,
             finished: false,
+            skip: None,
         }
     }
 
-    pub fn tick(&mut self, time: &Time, formations_empty: bool) {
+    pub fn skip(mut self, secs: f32) -> Self {
+        self.skip = Some(Timer::from_seconds(secs, TimerMode::Once));
+        self
+    }
+
+    pub fn is_skipping(&self) -> bool {
+        self.skip.is_some()
+    }
+
+    pub fn tick(&mut self, time: &Time) {
         self.timer.tick(time.delta());
-        //if formations_empty {
-        //    self.timer.set_elapsed(self.timer.duration());
-        //}
     }
 
     pub fn next(&mut self) -> Option<Formation> {
@@ -136,9 +149,40 @@ impl WaveController {
     }
 }
 
+#[cfg(debug_assertions)]
+fn timeline_skip(
+    mut commands: Commands,
+    controller: Option<ResMut<WaveTimeline>>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+    mut physics_time: ResMut<Time<Physics>>,
+    player: Single<Entity, With<Player>>,
+) {
+    let Some(mut controller) = controller else {
+        return;
+    };
+
+    if controller.is_added() && controller.skip.is_some() {
+        virtual_time.set_relative_speed(2.);
+        physics_time.set_relative_speed(2.);
+        commands.entity(*player).insert(ColliderDisabled);
+    }
+
+    let Some(timer) = controller.skip.as_mut() else {
+        return;
+    };
+
+    timer.tick(virtual_time.delta());
+    if timer.finished() {
+        controller.skip = None;
+        virtual_time.set_relative_speed(1.);
+        physics_time.set_relative_speed(1.);
+        commands.entity(*player).remove::<ColliderDisabled>();
+    }
+}
+
 fn update_waves(
     mut commands: Commands,
-    controller: Option<ResMut<WaveController>>,
+    controller: Option<ResMut<WaveTimeline>>,
     formations: Query<&Formation>,
     time: Res<Time>,
     mut asteroids: ResMut<AsteroidSpawner>,
@@ -147,14 +191,14 @@ fn update_waves(
         return;
     };
 
-    controller.tick(&time, formations.is_empty());
+    controller.tick(&time);
     if let Some(formation) = controller.next() {
         commands.spawn(formation);
     }
 
     if controller.finished() && formations.is_empty() {
         asteroids.0 = false;
-        commands.remove_resource::<WaveController>();
+        commands.remove_resource::<WaveTimeline>();
         info!("ran out of formations, spawning boss");
         run_after(
             Duration::from_secs_f32(5.),
@@ -202,12 +246,19 @@ impl EnemyType {
 
     fn insert_emitter(&self, commands: &mut EntityCommands) {
         match self {
-            Self::Gunner => commands.with_child(SoloEmitter::player()),
+            Self::Gunner => commands.with_child((
+                BulletModifiers {
+                    rate: 0.75,
+                    ..Default::default()
+                },
+                SoloEmitter::player(),
+            )),
             Self::Missile => commands.with_child((
                 HomingEmitter::<Player>::player(),
-                TurnSpeed(60.),
+                TurnSpeed(55.),
                 BulletModifiers {
-                    rate: 0.5,
+                    rate: 0.25,
+                    speed: 0.75,
                     ..Default::default()
                 },
                 MaxLifetime(Duration::from_secs_f32(5.0)),
