@@ -213,8 +213,6 @@ impl DualEmitter {
     ) {
         let delta = time.delta();
 
-        info!("delta: {delta:?}");
-
         for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
