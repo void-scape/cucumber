@@ -1,5 +1,5 @@
 use self::{
-    emitter::{BULLET_DAMAGE, BULLET_SPEED},
+    emitter::{BULLET_DAMAGE, BULLET_SPEED, MINE_HEALTH, MISSILE_HEALTH},
     homing::HomingRotate,
 };
 use crate::{
@@ -243,11 +243,23 @@ impl BulletSprite {
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet, ImageCollider, BulletSprite::from_cell(5, 2))]
+#[require(
+    Bullet,
+    Destructable,
+    Health::full(MISSILE_HEALTH),
+    ImageCollider,
+    BulletSprite::from_cell(5, 2)
+)]
 pub struct Missile;
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet, ImageCollider, BulletSprite::from_cell(4, 3))]
+#[require(
+    Bullet,
+    Destructable,
+    Health::full(MINE_HEALTH),
+    ImageCollider,
+    BulletSprite::from_cell(4, 3)
+)]
 #[component(on_remove = Self::explode)]
 pub struct Mine;
 

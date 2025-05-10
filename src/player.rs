@@ -18,7 +18,6 @@ use bevy::{
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
-use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
 #[cfg(not(debug_assertions))]
 use bevy_tween::{
@@ -111,7 +110,8 @@ impl Player {
             DualEmitter::enemy(3.),
             BulletModifiers {
                 damage: 0.5,
-                ..Default::default()
+                rate: 2.,
+                speed: 1.5,
             },
             Polarity::North,
         )

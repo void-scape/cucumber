@@ -219,17 +219,7 @@ impl EnemyType {
         bundle: impl Bundle,
     ) {
         self.configure_movement(commands, movement);
-        commands.insert((
-            *self,
-            self.health(),
-            self.sprite(server),
-            BulletModifiers {
-                rate: 0.2,
-                speed: 0.5,
-                ..Default::default()
-            },
-            bundle,
-        ));
+        commands.insert((*self, self.health(), self.sprite(server), bundle));
     }
 
     pub fn health(&self) -> Health {

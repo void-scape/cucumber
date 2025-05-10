@@ -1,6 +1,6 @@
 use super::{
-    BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer,
-    Destructable, Mine, Missile, Orb, Polarity,
+    BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer, Mine,
+    Missile, Orb, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
@@ -17,24 +17,27 @@ use bevy::{
 use bevy_seedling::prelude::*;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
-pub const BULLET_SPEED: f32 = 150.;
-pub const MISSILE_SPEED: f32 = 130.;
-pub const LASER_SPEED: f32 = 30.;
-pub const MINE_SPEED: f32 = 100.;
-pub const ORB_SPEED: f32 = 100.;
+pub const BULLET_SPEED: f32 = 75.;
+pub const MISSILE_SPEED: f32 = 65.;
+pub const LASER_SPEED: f32 = 15.;
+pub const MINE_SPEED: f32 = 50.;
+pub const ORB_SPEED: f32 = 50.;
 
 pub const BULLET_DAMAGE: f32 = 1.;
 pub const MISSILE_DAMAGE: f32 = 1.;
 pub const MINE_DAMAGE: f32 = 1.;
 pub const ORB_DAMAGE: f32 = 1.;
 
-const BULLET_RATE: f32 = 0.25;
-const MISSILE_RATE: f32 = 0.33;
-const MINE_RATE: f32 = 0.45;
-const ORB_RATE: f32 = 1.;
-const ORB_SHOT_RATE: f32 = 0.05;
+const BULLET_RATE: f32 = 0.5;
+const MISSILE_RATE: f32 = 0.5;
+const MINE_RATE: f32 = 1.5;
 
-const MINE_HEALTH: f32 = 5.;
+const ORB_WAIT_RATE: f32 = 2.;
+const ORB_SHOT_RATE: f32 = 0.4;
+const ORB_WAVES: usize = 8;
+
+pub const MISSILE_HEALTH: f32 = 3.;
+pub const MINE_HEALTH: f32 = 5.;
 
 const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
 
@@ -132,7 +135,7 @@ impl SoloEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(BULLET_RATE / mods.rate);
+            let duration = Duration::from_secs_f32(BULLET_RATE * 1. / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -216,7 +219,7 @@ impl DualEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(BULLET_RATE / mods.rate);
+            let duration = Duration::from_secs_f32(BULLET_RATE * 1. / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -318,7 +321,7 @@ impl<T: Component> HomingEmitter<T> {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(MISSILE_RATE / mods.rate);
+            let duration = Duration::from_secs_f32(MISSILE_RATE * 1. / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -534,7 +537,7 @@ impl MineEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(MINE_RATE / mods.rate);
+            let duration = Duration::from_secs_f32(MINE_RATE * 1. / mods.rate);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -558,8 +561,6 @@ impl MineEmitter {
                 * mods.speed;
             commands.spawn((
                 Mine,
-                Destructable,
-                Health::full(MINE_HEALTH),
                 LinearVelocity(velocity),
                 new_transform,
                 Bullet::target_layer(emitter.0),
@@ -579,25 +580,78 @@ impl MineEmitter {
 }
 
 #[derive(Component)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
-pub struct OrbEmitter {
-    layer: Layer,
-    shot: usize,
+struct PulseTimer {
+    wait: Timer,
+    bullet: Timer,
+    pulses: usize,
+    state: PulseState,
 }
 
-impl OrbEmitter {
-    pub fn player() -> Self {
+enum PulseState {
+    Wait,
+    Bullet(usize),
+}
+
+impl PulseTimer {
+    pub fn new(wait: f32, bullet: f32, pulses: usize) -> Self {
+        assert!(pulses > 1, "just use a normal bullet timer!");
         Self {
-            layer: Layer::Player,
-            shot: 0,
+            wait: Timer::from_seconds(wait, TimerMode::Repeating),
+            bullet: Timer::from_seconds(bullet, TimerMode::Repeating),
+            state: PulseState::Wait,
+            pulses,
         }
     }
 
-    pub fn enemy() -> Self {
-        Self {
-            layer: Layer::Enemy,
-            shot: 0,
+    pub fn just_finished(&mut self, time: &Time<Physics>) -> bool {
+        let delta = time.delta();
+
+        match self.state {
+            PulseState::Wait => {
+                self.wait.tick(delta);
+
+                let finished = self.wait.just_finished();
+                if finished {
+                    self.state = PulseState::Bullet(1);
+                    self.bullet.reset();
+                }
+                finished
+            }
+            PulseState::Bullet(count) => {
+                self.bullet.tick(delta);
+
+                let finished = self.bullet.just_finished();
+                if finished {
+                    self.state = PulseState::Bullet(count + 1);
+                    if count >= self.pulses {
+                        self.state = PulseState::Wait;
+                        self.wait.reset();
+                    }
+                }
+                finished
+            }
         }
+    }
+
+    pub fn current_pulse(&self) -> usize {
+        match self.state {
+            PulseState::Wait => 0,
+            PulseState::Bullet(pulse) => pulse,
+        }
+    }
+}
+
+#[derive(Component)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+pub struct OrbEmitter(Layer);
+
+impl OrbEmitter {
+    pub fn player() -> Self {
+        Self(Layer::Player)
+    }
+
+    pub fn enemy() -> Self {
+        Self(Layer::Enemy)
     }
 }
 
@@ -606,7 +660,7 @@ impl OrbEmitter {
         mut emitters: Query<(
             Entity,
             &mut OrbEmitter,
-            Option<&mut BulletTimer>,
+            Option<&mut PulseTimer>,
             &BulletModifiers,
             &Polarity,
             &ChildOf,
@@ -617,52 +671,39 @@ impl OrbEmitter {
         server: Res<AssetServer>,
         mut commands: Commands,
     ) {
-        let delta = time.delta();
-
-        for (entity, mut emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(ORB_RATE / mods.rate);
-            let shot_duration = Duration::from_secs_f32(ORB_SHOT_RATE / mods.rate);
             let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                });
+                commands.entity(entity).insert(PulseTimer::new(
+                    ORB_WAIT_RATE * 1. / mods.rate,
+                    ORB_SHOT_RATE * 1. / mods.rate,
+                    ORB_WAVES,
+                ));
                 continue;
             };
 
             let mut new_transform = transform.compute_transform();
             new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
 
-            if !timer.timer.tick(delta).just_finished() {
+            if !timer.just_finished(&time) {
                 continue;
             }
 
             let bullets = 10;
-            let waves = 8;
-
-            let shift = emitter.shot;
             for angle in 0..bullets {
                 let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
-                    + shift as f32 * std::f32::consts::PI / 4.;
+                    + timer.current_pulse() as f32 * std::f32::consts::PI / 4.;
                 commands.spawn((
                     Orb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
-                    Bullet::target_layer(emitter.layer),
+                    Bullet::target_layer(emitter.0),
                     Damage::new(ORB_DAMAGE * mods.damage),
                 ));
-            }
-
-            if emitter.shot >= waves {
-                emitter.shot = 0;
-                timer.timer.set_duration(duration);
-            } else {
-                emitter.shot += 1;
-                timer.timer.set_duration(shot_duration);
             }
 
             commands.spawn((
