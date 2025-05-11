@@ -8,9 +8,8 @@ use crate::{
     },
     end,
     enemy::Enemy,
-    health::{Dead, Health},
-    minions::{Miner, MinerLeader},
-    pickups::{PickupEvent, Upgrade, Weapon},
+    health::{Dead, Health, Shield},
+    pickups::{Material, PickupEvent, Upgrade, Weapon},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -27,7 +26,8 @@ use bevy_tween::{
 };
 use std::{cmp::Ordering, f32, time::Duration};
 
-pub const PLAYER_HEALTH: f32 = 5.0;
+pub const PLAYER_HEALTH: f32 = 2.0;
+pub const PLAYER_SHIELD: f32 = 4.0;
 const PLAYER_EASE_DUR: f32 = 1.;
 
 pub struct PlayerPlugin;
@@ -93,6 +93,7 @@ fn restart(mut commands: Commands, player: Single<Entity, With<Player>>) {
 #[require(
     Transform,
     LinearVelocity,
+    Shield::full(PLAYER_SHIELD),
     Health::full(PLAYER_HEALTH),
     RigidBody::Dynamic,
     Collider::rectangle(6., 6.),
@@ -274,12 +275,13 @@ fn handle_pickups(
             &mut WeaponEntity,
             &mut BulletModifiers,
             &mut Materials,
+            &mut Shield,
         ),
         With<Player>,
     >,
     mut events: EventReader<PickupEvent>,
 ) {
-    let (player, mut weapon_entity, mut mods, mut materials) = q.into_inner();
+    let (player, mut weapon_entity, mut mods, mut materials, mut shield) = q.into_inner();
     for event in events.read() {
         match event {
             PickupEvent::Weapon(weapon) => {
@@ -315,7 +317,10 @@ fn handle_pickups(
             }
             PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate += *s,
             PickupEvent::Upgrade(Upgrade::Juice(j)) => mods.damage += *j,
-            PickupEvent::Material => materials.0 += 1,
+            PickupEvent::Material(mat) => match mat {
+                Material::Parts => materials.0 += 1,
+                Material::Shield => shield.heal(1. / 10.),
+            },
         }
     }
 }

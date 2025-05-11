@@ -329,7 +329,17 @@ impl EnemyType {
         }
     }
 
-    pub fn materials(&self) -> usize {
+    pub fn parts(&self) -> usize {
+        match self {
+            Self::Gunner => 1,
+            Self::Missile => 2,
+            Self::MineThrower => 3,
+            Self::OrbSlinger => 8,
+            Self::CrissCross => 6,
+        }
+    }
+
+    pub fn shield(&self) -> usize {
         match self {
             Self::Gunner => 1,
             Self::Missile => 2,
@@ -363,7 +373,8 @@ fn handle_death(
         let position = transform.compute_transform().translation.xy();
         deaths.write(EnemyDeathEvent { entity, position });
         clusters.write(SpawnCluster {
-            materials: enemy_type.materials(),
+            parts: enemy_type.parts(),
+            shield: enemy_type.shield(),
             position,
         });
         commands.entity(entity).despawn();

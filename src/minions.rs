@@ -148,10 +148,10 @@ fn miner_collect(
 
     let mut despawned = HashSet::new();
     //for miner in miners.iter() {
-    for entity in player
+    for (entity, mat) in player
         .iter()
         .copied()
-        .filter(|entity| materials.get(*entity).is_ok())
+        .flat_map(|entity| materials.get(entity).map(|mat| (entity, mat)))
     {
         if despawned.insert(entity) {
             let speed = if timer.0.elapsed_secs() < 1. {
@@ -165,7 +165,7 @@ fn miner_collect(
             timer.0.reset();
 
             commands.entity(entity).despawn();
-            writer.write(PickupEvent::Material);
+            writer.write(PickupEvent::Material(*mat));
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/click.wav")),
                 PlaybackSettings {

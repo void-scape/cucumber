@@ -5,7 +5,7 @@ use crate::bounds::WallDespawn;
 use crate::player::Player;
 use crate::{Layer, assets};
 use avian2d::prelude::*;
-use bevy::color::palettes::css::YELLOW;
+use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_SKY_BLUE, YELLOW};
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -42,7 +42,7 @@ pub fn velocity() -> LinearVelocity {
 pub enum PickupEvent {
     Weapon(Weapon),
     Upgrade(Upgrade),
-    Material,
+    Material(Material),
 }
 
 impl From<Pickup> for PickupEvent {
@@ -209,9 +209,23 @@ impl Pickup {
     }
 }
 
-#[derive(Component)]
-#[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
-pub struct Material;
+#[derive(Debug, Clone, Copy, Component)]
+#[require(ImageCollider, Collectable)]
+#[component(on_add = Self::insert_visual)]
+pub enum Material {
+    Parts,
+    Shield,
+}
+
+impl Material {
+    fn insert_visual(mut world: DeferredWorld, ctx: HookContext) {
+        let mat = *world.get::<Material>(ctx.entity).unwrap();
+        world.commands().entity(ctx.entity).insert(match mat {
+            Material::Parts => DebugCircle::color(2., YELLOW),
+            Material::Shield => DebugCircle::color(2., LIGHT_BLUE),
+        });
+    }
+}
 
 #[derive(Component)]
 #[require(Collectable, Collider::rectangle(8., 8.), LinearVelocity(Vec2::NEG_Y * 20.))]

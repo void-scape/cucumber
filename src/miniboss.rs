@@ -399,6 +399,8 @@ fn boss_death_effects(
 ) {
     let (player, weapon) = player.into_inner();
     for event in reader.read() {
+        commands.entity(player).despawn_related::<Children>();
+
         commands.spawn((
             Sprite {
                 image: server.load("cruiser_explosion.png"),

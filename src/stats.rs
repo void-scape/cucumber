@@ -1,7 +1,7 @@
 use crate::GameState;
 use crate::enemy::EnemyDeathEvent;
 use crate::miniboss::BossDeathEvent;
-use crate::pickups::PickupEvent;
+use crate::pickups::{Material, PickupEvent};
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
 
@@ -66,6 +66,8 @@ fn track_stats(
     stats.kills += kills.read().count();
     stats.materials += materials
         .read()
-        .filter(|pickup| matches!(pickup, PickupEvent::Material))
+        .filter(
+            |pickup| matches!(pickup, PickupEvent::Material(mat) if matches!(mat, Material::Parts)),
+        )
         .count();
 }

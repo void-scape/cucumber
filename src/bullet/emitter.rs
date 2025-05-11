@@ -6,7 +6,7 @@ use super::{
 use crate::{
     HEIGHT, Layer,
     enemy::Enemy,
-    health::{Damage, Health},
+    health::{Damage, DamageEvent, Health},
     player::Player,
 };
 use avian2d::prelude::*;
@@ -504,9 +504,10 @@ impl LaserEmitter {
         mut child: Query<&mut Transform>,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
-        mut targets: Query<(&mut Health, &GlobalTransform, Option<&Player>)>,
+        targets: Query<(Entity, &GlobalTransform, Option<&Player>), With<Health>>,
         mut writer: EventWriter<BulletCollisionEvent>,
         mut commands: Commands,
+        mut damage_writer: EventWriter<DamageEvent>,
     ) -> Result {
         let delta = time.delta();
 
@@ -557,10 +558,12 @@ impl LaserEmitter {
 
                 child.translation.y = direction.y * (4.0 + child.scale.x * 8.0 / 2.0);
 
-                if let Ok((mut target, target_transform, player)) = targets.get_mut(hit_data.entity)
-                {
+                if let Ok((entity, target_transform, player)) = targets.get(hit_data.entity) {
                     if (child.scale.x * 8.0 - hit_data.distance).abs() <= 16.0 {
-                        target.damage(15.0 * mods.damage * delta.as_secs_f32());
+                        damage_writer.write(DamageEvent {
+                            entity,
+                            damage: 15.0 * mods.damage * delta.as_secs_f32(),
+                        });
                     }
 
                     if let Some(mut timer) = timer {

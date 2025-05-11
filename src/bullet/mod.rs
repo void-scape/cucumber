@@ -8,7 +8,7 @@ use crate::{
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bounds::WallDespawn,
-    health::{Damage, Dead, Health},
+    health::{Damage, DamageEvent, Dead, Health, Shield},
     player::Player,
     tween::{OnEnd, time_mult},
 };
@@ -317,17 +317,21 @@ fn handle_bullet_collision(
         ),
         With<Bullet>,
     >,
-    mut destructable: Query<(
-        &CollidingEntities,
-        &CollisionLayers,
-        Option<&mut Health>,
-        Option<&Player>,
-    )>,
+    destructable: Query<
+        (
+            Entity,
+            &CollidingEntities,
+            &CollisionLayers,
+            Option<&Player>,
+        ),
+        With<Health>,
+    >,
     mut commands: Commands,
     mut writer: EventWriter<BulletCollisionEvent>,
+    mut damage_writer: EventWriter<DamageEvent>,
 ) {
     let mut despawned = HashSet::new();
-    for (colliding_entities, destructable_layers, mut health, player) in destructable.iter_mut() {
+    for (entity, colliding_entities, destructable_layers, player) in destructable.iter() {
         for (bullet, damage, sprite, transform, layers) in colliding_entities
             .iter()
             .copied()
@@ -339,9 +343,10 @@ fn handle_bullet_collision(
             })
         {
             if despawned.insert(bullet) {
-                if let Some(health) = health.as_mut() {
-                    health.damage(**damage);
-                }
+                damage_writer.write(DamageEvent {
+                    damage: damage.damage(),
+                    entity,
+                });
 
                 let source = if layers.filters.has_all(Layer::Player) {
                     BulletSource::Enemy
@@ -409,6 +414,7 @@ fn bullet_collision_effects(
     server: Res<AssetServer>,
     misc_layout: Res<MiscLayout>,
     camera: Single<Entity, With<OuterCamera>>,
+    player: Single<(&Health, &Shield), With<Player>>,
 ) {
     for event in reader.read() {
         commands.spawn((
@@ -426,16 +432,7 @@ fn bullet_collision_effects(
         match event.source {
             BulletSource::Player => {}
             BulletSource::Enemy => {
-                if event.hit_player {
-                    commands.spawn((
-                        SamplePlayer::new(server.load("audio/sfx/melee.wav")),
-                        PitchRange(0.98..1.02),
-                        PlaybackSettings {
-                            volume: Volume::Linear(0.25),
-                            ..PlaybackSettings::ONCE
-                        },
-                    ));
-
+                if event.hit_player && player.0.current() < player.0.max() && player.1.empty() {
                     let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
                         commands.remove_post_process::<GlitchSettings, OuterCamera>();
                         commands.remove_post_process::<GlitchIntensity, OuterCamera>();
@@ -459,6 +456,17 @@ fn bullet_collision_effects(
                         TargetResource.with(time_mult(0.25, 1.)),
                     );
                 }
+
+                if event.hit_player {
+                    commands.spawn((
+                        SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+                        PitchRange(0.98..1.02),
+                        PlaybackSettings {
+                            volume: Volume::Linear(0.25),
+                            ..PlaybackSettings::ONCE
+                        },
+                    ));
+                } 
             }
         }
     }

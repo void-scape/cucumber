@@ -11,6 +11,7 @@ use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
 use bevy_tween::tween::IntoTarget;
 use physics::linear_velocity;
 use rand::Rng;
+use rand::seq::IteratorRandom;
 use std::time::Duration;
 
 pub struct AsteroidPlugin;
@@ -117,7 +118,8 @@ fn spawn_asteroids(
 
 #[derive(Event)]
 pub struct SpawnCluster {
-    pub materials: usize,
+    pub parts: usize,
+    pub shield: usize,
     pub position: Vec2,
 }
 
@@ -135,10 +137,11 @@ fn handle_death(
     for (entity, transform, asteroid) in asteroids.iter() {
         commands.entity(entity).despawn();
         writer.write(SpawnCluster {
-            materials: match asteroid {
+            parts: match asteroid {
                 Asteroid::Big => 10,
                 Asteroid::Small => 5,
             },
+            shield: 0,
             position: transform.compute_transform().translation.xy(),
         });
     }
@@ -161,12 +164,35 @@ fn spawn_clusters(mut commands: Commands, mut reader: EventReader<SpawnCluster>)
                 Transform::from_translation(event.position.extend(0.)),
             ))
             .id();
-        for angle in 0..event.materials {
-            let angle = (angle as f32 / event.materials as f32) * 2. * std::f32::consts::PI
+
+        let materials = event.parts + event.shield;
+        for angle in 0..event.parts {
+            let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
                 + rng.random_range(-0.5..0.5);
             let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
 
-            let material = commands.spawn((Material, LinearVelocity::ZERO)).id();
+            let material = commands.spawn((Material::Parts, LinearVelocity::ZERO)).id();
+            commands.entity(material).animation().insert_tween_here(
+                Duration::from_secs_f32(
+                    (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
+                ),
+                EaseKind::CubicOut,
+                material
+                    .into_target()
+                    .with(linear_velocity(start, Vec2::ZERO)),
+            );
+            commands.entity(cluster).add_child(material);
+        }
+
+        for angle in 0..event.shield {
+            let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
+                + rng.random_range(-0.5..0.5)
+                + std::f32::consts::PI / 4.;
+            let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
+
+            let material = commands
+                .spawn((Material::Shield, LinearVelocity::ZERO))
+                .id();
             commands.entity(material).animation().insert_tween_here(
                 Duration::from_secs_f32(
                     (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
@@ -181,10 +207,7 @@ fn spawn_clusters(mut commands: Commands, mut reader: EventReader<SpawnCluster>)
     }
 }
 
-fn move_clusters(
-    mut clusters: Query<&mut Transform, With<MaterialCluster>>,
-    time: Res<Time>,
-) {
+fn move_clusters(mut clusters: Query<&mut Transform, With<MaterialCluster>>, time: Res<Time>) {
     for mut transform in clusters.iter_mut() {
         transform.translation.y -= MATERIAL_SPEED * time.delta_secs();
     }
