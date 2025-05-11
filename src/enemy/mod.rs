@@ -336,6 +336,13 @@ impl EnemyType {
             Self::MineThrower => 3,
             Self::OrbSlinger => 8,
             Self::CrissCross => 6,
+            Self::Swarm => {
+                if rand::rng().random() {
+                    1
+                } else {
+                    0
+                }
+            }
         }
     }
 
