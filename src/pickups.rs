@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::player::Player;
@@ -8,6 +10,7 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy_optix::debug::DebugCircle;
+use rand::Rng;
 use rand::seq::IteratorRandom;
 
 const PICKUP_SPEED: f32 = 16.;
@@ -18,7 +21,7 @@ impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
             //.add_systems(Startup, debug)
-            .add_systems(Update, pickup_triggered);
+            .add_systems(Update, (pickup_triggered, update_scrolling_pickup));
     }
 }
 
@@ -62,9 +65,9 @@ impl From<&Pickup> for PickupEvent {
 
 #[derive(Default, Component)]
 #[require(
-    Transform, 
-    RigidBody::Kinematic, 
-    Sensor, 
+    Transform,
+    RigidBody::Kinematic,
+    Sensor,
     WallDespawn,
     CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player, Layer::Miners]),
 )]
@@ -96,7 +99,6 @@ fn pickup_triggered(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-//#[require(Collectable, Collider::rectangle(8., 8.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
     Speed(f32),
@@ -119,7 +121,6 @@ impl SpriteHook for Upgrade {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-//#[require(Collectable, Collider::rectangle(16., 16.))]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
     Bullet,
@@ -130,9 +131,15 @@ pub enum Weapon {
 impl Weapon {
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Bullet => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(0, 1)),
-            Self::Laser => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8)),
-            Self::Missile => assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(5, 2)),
+            Self::Bullet => {
+                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(0, 1))
+            }
+            Self::Laser => {
+                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8))
+            }
+            Self::Missile => {
+                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(5, 2))
+            }
         }
     }
 }
@@ -163,7 +170,7 @@ pub fn random_pickups(num: usize) -> Vec<Pickup> {
 pub fn unique_pickups(num: usize) -> Vec<Pickup> {
     let mut pickups = Vec::with_capacity(num);
     while pickups.len() != 3 {
-    let pickup = Pickup::random();
+        let pickup = Pickup::random();
         if !pickups.contains(&pickup) {
             pickups.push(pickup);
         }
@@ -205,3 +212,61 @@ impl Pickup {
 #[derive(Component)]
 #[require(DebugCircle::color(2., YELLOW), ImageCollider, Collectable)]
 pub struct Material;
+
+#[derive(Component)]
+#[require(Collectable, Collider::rectangle(8., 8.), LinearVelocity(Vec2::NEG_Y * 20.))]
+pub struct ScrollingPickup {
+    index: usize,
+    timer: Timer,
+}
+
+impl ScrollingPickup {
+    pub fn new() -> Self {
+        Self {
+            index: rand::rng().random_range(0..5),
+            timer: Timer::from_seconds(2., TimerMode::Repeating),
+        }
+    }
+}
+
+fn update_scrolling_pickup(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut pickup: Query<(Entity, &mut ScrollingPickup)>,
+) {
+    for (entity, mut scroll_pickup) in pickup.iter_mut() {
+        scroll_pickup.timer.tick(time.delta());
+        if scroll_pickup.is_added() {
+            let dur = scroll_pickup.timer.duration();
+            scroll_pickup.timer.set_elapsed(dur);
+        }
+
+        if scroll_pickup.timer.just_finished() {
+            scroll_pickup.index += 1;
+            if scroll_pickup.index > 4 {
+                scroll_pickup.index = 0;
+            }
+
+            let pickup = [
+                Pickup::Upgrade(Upgrade::Speed(0.2)),
+                Pickup::Upgrade(Upgrade::Juice(0.2)),
+                Pickup::Weapon(Weapon::Bullet),
+                Pickup::Weapon(Weapon::Missile),
+                Pickup::Weapon(Weapon::Laser),
+            ]
+            .into_iter()
+            .nth(scroll_pickup.index)
+            .unwrap();
+            commands.entity(entity).remove::<(Weapon, Upgrade)>();
+
+            match pickup {
+                Pickup::Weapon(weapon) => {
+                    commands.entity(entity).insert(weapon);
+                }
+                Pickup::Upgrade(upgrade) => {
+                    commands.entity(entity).insert(upgrade);
+                }
+            }
+        }
+    }
+}

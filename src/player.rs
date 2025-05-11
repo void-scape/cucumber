@@ -45,7 +45,7 @@ impl Plugin for PlayerPlugin {
                     ))
                     .add_child(starting_weapon)
                     .id();
-                commands.spawn((Miner, MinerLeader(player)));
+                //commands.spawn((Miner, MinerLeader(player)));
 
                 let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
                 run_after(

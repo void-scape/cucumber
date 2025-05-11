@@ -33,6 +33,7 @@ impl Plugin for MinionPlugin {
             Update,
             (
                 update_gunner_formation,
+                suck_materials,
                 (miner_collect, update_miners).chain(),
             )
                 .run_if(in_state(GameState::Game)),
@@ -136,7 +137,8 @@ fn update_miners(
 fn miner_collect(
     mut commands: Commands,
     server: Res<AssetServer>,
-    miners: Query<&CollidingEntities, With<Miner>>,
+    //miners: Query<&CollidingEntities, With<Miner>>,
+    player: Single<&CollidingEntities, With<Player>>,
     materials: Query<&Material>,
     mut writer: EventWriter<PickupEvent>,
     time: Res<Time>,
@@ -145,37 +147,55 @@ fn miner_collect(
     timer.0.tick(time.delta());
 
     let mut despawned = HashSet::new();
-    for miner in miners.iter() {
-        for entity in miner
-            .iter()
-            .copied()
-            .filter(|entity| materials.get(*entity).is_ok())
-        {
-            if despawned.insert(entity) {
-                let speed = if timer.0.elapsed_secs() < 1. {
-                    timer.1 += 1;
-                    let speed = 1.0 + timer.1 as f64 * 0.05;
-                    speed
-                } else {
-                    timer.1 = 0;
-                    1.0
-                };
-                timer.0.reset();
+    //for miner in miners.iter() {
+    for entity in player
+        .iter()
+        .copied()
+        .filter(|entity| materials.get(*entity).is_ok())
+    {
+        if despawned.insert(entity) {
+            let speed = if timer.0.elapsed_secs() < 1. {
+                timer.1 += 1;
+                let speed = 1.0 + timer.1 as f64 * 0.05;
+                speed
+            } else {
+                timer.1 = 0;
+                1.0
+            };
+            timer.0.reset();
 
-                commands.entity(entity).despawn();
-                writer.write(PickupEvent::Material);
-                commands.spawn((
-                    SamplePlayer::new(server.load("audio/sfx/click.wav")),
-                    PlaybackSettings {
-                        volume: Volume::Linear(0.2),
-                        ..Default::default()
-                    },
-                    PlaybackParams {
-                        speed,
-                        ..Default::default()
-                    },
-                ));
-            }
+            commands.entity(entity).despawn();
+            writer.write(PickupEvent::Material);
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/click.wav")),
+                PlaybackSettings {
+                    volume: Volume::Linear(0.2),
+                    ..Default::default()
+                },
+                PlaybackParams {
+                    speed,
+                    ..Default::default()
+                },
+            ));
+        }
+    }
+    //}
+}
+
+const SUCK_SPEED: f32 = 4.;
+const SUCK_DIST: f32 = 40.;
+
+fn suck_materials(
+    player: Single<&Transform, With<Player>>,
+    mut materials: Query<(&GlobalTransform, &mut Transform), (With<Material>, Without<Player>)>,
+    time: Res<Time>,
+) {
+    let pp = player.translation.xy();
+    for (gt, mut t) in materials.iter_mut() {
+        let p = gt.compute_transform().translation.xy();
+        let dist = p.distance(pp);
+        if dist < SUCK_DIST {
+            t.translation += (pp - p).extend(0.) * SUCK_SPEED * time.delta_secs() * 20. / dist;
         }
     }
 }

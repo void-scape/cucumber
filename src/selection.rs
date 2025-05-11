@@ -1,5 +1,5 @@
 use crate::input::{self, MenuContext};
-use crate::pickups::{Pickup, PickupEvent};
+use crate::pickups::{Pickup, PickupEvent, ScrollingPickup};
 use crate::player::{BlockControls, Materials, Player};
 use crate::{GameState, assets, pickups};
 use avian2d::prelude::{LinearVelocity, Physics, PhysicsTime};
@@ -13,7 +13,7 @@ use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::AfterSystem;
 use bevy_tween::bevy_time_runner::TimeRunner;
 
-const INITIAL_MIN_MATERIALS: usize = 5;
+const INITIAL_MIN_MATERIALS: usize = 1;
 const DISP_MSG: &str = "Remaining to \nUpgrade: ";
 
 pub struct SelectionPlugin;
@@ -60,13 +60,28 @@ fn selection_test(mut commands: Commands, input: Res<ButtonInput<KeyCode>>) {
 
 fn enter_selection(
     mut commands: Commands,
-    mut player: Single<&mut Materials, With<Player>>,
+    server: Res<AssetServer>,
+    mut player: Single<(&mut Materials, &Transform), With<Player>>,
     mut mats: ResMut<MinMaterials>,
 ) {
-    if player.get() >= mats.0 {
-        player.sub(mats.0);
+    let (mut materials, pp) = player.into_inner();
+
+    if materials.get() >= mats.0 {
+        materials.sub(mats.0);
         mats.0 *= 2;
-        commands.set_state(GameState::Selection);
+        //commands.set_state(GameState::Selection);
+
+        let mut t = *pp;
+        t.translation.y += 50.;
+        commands.spawn((t, ScrollingPickup::new()));
+
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/chimes.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.2),
+                ..Default::default()
+            },
+        ));
     }
 }
 
