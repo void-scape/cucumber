@@ -22,7 +22,7 @@ use crate::{
     player::Player,
 };
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, time::TimeSystem};
 use bevy_optix::shake::TraumaCommands;
 use bevy_seedling::{
     prelude::Volume,
@@ -57,7 +57,7 @@ impl Plugin for EnemyPlugin {
                     init_cruiser_explosion_layout,
                 ),
             )
-            .add_systems(OnEnter(GameState::StartGame), start_waves)
+            .add_systems(OnEnter(GameState::Game), start_waves)
             .add_systems(
                 Update,
                 (
@@ -69,7 +69,7 @@ impl Plugin for EnemyPlugin {
             );
 
         #[cfg(debug_assertions)]
-        app.add_systems(Update, timeline_skip);
+        app.add_systems(First, timeline_skip.after(TimeSystem));
     }
 }
 
@@ -92,9 +92,23 @@ fn start_waves(mut commands: Commands) {
                 (ORB_SLINGER, 8.),
                 (CRISS_CROSS, 0.),
             ],
-        )
-        .skip(32.),
+        ), //.skip(32.),
     );
+
+    //#[cfg(debug_assertions)]
+    //commands.queue(|world: &mut World| {
+    //    loop {
+    //        if !world.resource::<WaveTimeline>().is_skipping() {
+    //            break;
+    //        }
+    //        world.run_schedule(First);
+    //        world.run_schedule(PreUpdate);
+    //        world.run_schedule(RunFixedMainLoop);
+    //        world.run_schedule(Update);
+    //        world.run_schedule(PostUpdate);
+    //        world.run_schedule(Last);
+    //    }
+    //});
 }
 
 #[derive(Resource)]
@@ -157,8 +171,7 @@ impl WaveTimeline {
 fn timeline_skip(
     mut commands: Commands,
     controller: Option<ResMut<WaveTimeline>>,
-    mut virtual_time: ResMut<Time<Virtual>>,
-    mut physics_time: ResMut<Time<Physics>>,
+    mut time: ResMut<Time<Virtual>>,
     player: Single<Entity, With<Player>>,
 ) {
     let Some(mut controller) = controller else {
@@ -166,8 +179,6 @@ fn timeline_skip(
     };
 
     if controller.is_added() && controller.skip.is_some() {
-        virtual_time.set_relative_speed(2.);
-        physics_time.set_relative_speed(2.);
         commands.entity(*player).insert(ColliderDisabled);
     }
 
@@ -175,11 +186,10 @@ fn timeline_skip(
         return;
     };
 
-    timer.tick(virtual_time.delta());
+    time.advance_by(Duration::from_millis(16));
+    timer.tick(time.delta());
     if timer.finished() {
         controller.skip = None;
-        virtual_time.set_relative_speed(1.);
-        physics_time.set_relative_speed(1.);
         commands.entity(*player).remove::<ColliderDisabled>();
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
     bullet::{
-        BulletCollisionEvent, BulletSource, BulletTimer, Polarity,
+        BulletTimer, Polarity,
         emitter::{BulletModifiers, DualEmitter, HomingEmitter, LaserEmitter},
     },
     end,
