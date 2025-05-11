@@ -1,5 +1,5 @@
 use self::{
-    formation::{Formation, FormationPlugin, FormationSet},
+    formation::{Formation, FormationPlugin, FormationSet, double_crisscross, double_orb_slinger},
     movement::*,
 };
 use crate::{
@@ -28,7 +28,7 @@ use bevy_seedling::{
     sample::{PlaybackSettings, SamplePlayer},
 };
 use bevy_sequence::combinators::delay::run_after;
-use formation::{crisscross, mine_thrower, orb_slinger, row, swarm, triangle};
+use formation::{crisscross, mine_thrower, orb_slinger, row, swarm};
 use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
@@ -84,15 +84,15 @@ fn start_waves(mut commands: Commands) {
         WaveTimeline::new_delayed(
             START_DELAY,
             &[
-                (swarm(), 0.),
-                (triangle(), 16.),
-                (row(), 16.),
-                (mine_thrower(), 8.),
-                (triangle(), 16.),
+                (swarm(), 22.),
                 (row(), 2.),
-                (mine_thrower(), 25.),
-                (orb_slinger(), 8.),
-                (crisscross(), 0.),
+                (mine_thrower(), 16.),
+                (swarm(), 16.),
+                (double_crisscross(), 2.),
+                (orb_slinger(), 16.),
+                (crisscross(), 2.),
+                (double_orb_slinger(), 10.),
+                (swarm(), 16.),
             ],
         ), //.skip(32.),
     );
@@ -251,18 +251,18 @@ impl EnemyType {
         entity: Entity,
         commands: &mut Commands,
         server: &AssetServer,
-        movement: MovementPattern,
         bundle: impl Bundle,
     ) -> Entity {
         let mut entity_commands = commands.spawn_empty();
-        self.insert(&mut entity_commands, server, movement, bundle);
-        self.insert_emitter(&mut entity_commands);
+        self.insert(&mut entity_commands, server, bundle);
+        self.configure(&mut entity_commands);
         let id = entity_commands.id();
         commands.entity(entity).add_child(id);
         id
     }
 
-    fn insert_emitter(&self, commands: &mut EntityCommands) {
+    fn configure(&self, commands: &mut EntityCommands) {
+        let mut rng = rand::rng();
         match self {
             Self::Gunner => commands.with_child((
                 BulletModifiers {
@@ -271,17 +271,33 @@ impl EnemyType {
                 },
                 SoloEmitter::player(),
             )),
-            Self::Missile => commands.with_child((
-                HomingEmitter::<Player>::player(),
-                TurnSpeed(55.),
-                BulletModifiers {
-                    rate: 0.25,
-                    speed: 0.75,
-                    ..Default::default()
-                },
-                MaxLifetime(Duration::from_secs_f32(5.0)),
-            )),
-            Self::MineThrower => commands.with_child(MineEmitter::player()),
+            Self::Missile => commands
+                .insert((
+                    BackAndForth {
+                        radius: rng.random_range(9.0..11.0),
+                        speed: rng.random_range(2.2..3.4),
+                    },
+                    Angle(rng.random_range(0.0..2.0)),
+                ))
+                .with_child((
+                    HomingEmitter::<Player>::player(),
+                    TurnSpeed(55.),
+                    BulletModifiers {
+                        rate: 0.25,
+                        speed: 0.75,
+                        ..Default::default()
+                    },
+                    MaxLifetime(Duration::from_secs_f32(5.0)),
+                )),
+            Self::MineThrower => commands
+                .insert((
+                    BackAndForth {
+                        radius: rng.random_range(9.0..11.0),
+                        speed: rng.random_range(2.2..3.4),
+                    },
+                    Angle(rng.random_range(0.0..2.0)),
+                ))
+                .with_child(MineEmitter::player()),
             Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
             Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
             Self::Swarm => commands.insert(swarm::SwarmMovement).with_child((
@@ -294,14 +310,7 @@ impl EnemyType {
         };
     }
 
-    fn insert(
-        &self,
-        commands: &mut EntityCommands,
-        server: &AssetServer,
-        movement: MovementPattern,
-        bundle: impl Bundle,
-    ) {
-        self.configure_movement(commands, movement);
+    fn insert(&self, commands: &mut EntityCommands, server: &AssetServer, bundle: impl Bundle) {
         commands.insert((*self, self.health(), self.sprite(server), bundle));
     }
 
@@ -337,7 +346,7 @@ impl EnemyType {
             Self::OrbSlinger => 8,
             Self::CrissCross => 6,
             Self::Swarm => {
-                if rand::rng().random() {
+                if rand::rng().random_bool(0.2) {
                     1
                 } else {
                     0
@@ -368,6 +377,7 @@ impl EnemyType {
 pub struct EnemyDeathEvent {
     entity: Entity,
     position: Vec2,
+    enemy: EnemyType,
 }
 
 fn handle_death(
@@ -378,7 +388,11 @@ fn handle_death(
 ) {
     for (entity, transform, enemy_type) in q.iter() {
         let position = transform.compute_transform().translation.xy();
-        deaths.write(EnemyDeathEvent { entity, position });
+        deaths.write(EnemyDeathEvent {
+            entity,
+            position,
+            enemy: *enemy_type,
+        });
         clusters.write(SpawnCluster {
             parts: enemy_type.parts(),
             shield: enemy_type.shield(),
@@ -395,7 +409,14 @@ fn death_effects(
     atlas: Res<ExplosionLayout>,
 ) {
     for event in reader.read() {
-        commands.add_trauma(0.18);
+        match event.enemy {
+            EnemyType::Swarm => {
+                commands.add_trauma(0.04);
+            }
+            _ => {
+                commands.add_trauma(0.18);
+            }
+        }
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/melee.wav")),
             PlaybackSettings {

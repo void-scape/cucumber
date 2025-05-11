@@ -1,4 +1,4 @@
-use super::{EnemyType, movement::MovementPattern};
+use super::EnemyType;
 use crate::{Avian, GameState, HEIGHT};
 use avian2d::prelude::Physics;
 use bevy::{
@@ -7,6 +7,8 @@ use bevy::{
 };
 
 const DEFAULT_FORMATION_VEL: Vec2 = Vec2::new(0., -8.);
+
+const NUM_SWARM: usize = 10;
 
 pub struct FormationPlugin;
 
@@ -41,16 +43,16 @@ fn restart(mut commands: Commands, formations: Query<Entity, With<Formation>>) {
 #[derive(Debug, Clone, Component)]
 #[require(Transform, Visibility)]
 pub struct Formation {
-    enemies: Vec<(EnemyType, Vec2, MovementPattern)>,
+    enemies: Vec<(EnemyType, Vec2)>,
     velocity: Vec2,
 }
 
 impl Formation {
-    pub fn new(enemies: &[(EnemyType, Vec2, MovementPattern)]) -> Self {
+    pub fn new(enemies: &[(EnemyType, Vec2)]) -> Self {
         Self::with_velocity(DEFAULT_FORMATION_VEL, enemies)
     }
 
-    pub fn with_velocity(velocity: Vec2, enemies: &[(EnemyType, Vec2, MovementPattern)]) -> Self {
+    pub fn with_velocity(velocity: Vec2, enemies: &[(EnemyType, Vec2)]) -> Self {
         Self {
             enemies: enemies.to_vec(),
             velocity,
@@ -60,76 +62,60 @@ impl Formation {
 
 pub fn triangle() -> Formation {
     Formation::new(&[
-        (
-            EnemyType::Gunner,
-            Vec2::new(-40., -40.),
-            MovementPattern::Circle,
-        ),
-        (EnemyType::Gunner, Vec2::ZERO, MovementPattern::Figure8),
-        (
-            EnemyType::Gunner,
-            Vec2::new(40., -40.),
-            MovementPattern::Circle,
-        ),
+        (EnemyType::Gunner, Vec2::new(-40., -40.)),
+        (EnemyType::Gunner, Vec2::ZERO),
+        (EnemyType::Gunner, Vec2::new(40., -40.)),
     ])
 }
 
 pub fn row() -> Formation {
     Formation::new(&[
-        (
-            EnemyType::Missile,
-            Vec2::new(30., 0.),
-            MovementPattern::BackAndForth,
-        ),
-        (
-            EnemyType::Missile,
-            Vec2::new(-30., 0.),
-            MovementPattern::BackAndForth,
-        ),
+        (EnemyType::Missile, Vec2::new(30., 0.)),
+        (EnemyType::Missile, Vec2::new(-30., 0.)),
     ])
 }
 
 pub fn mine_thrower() -> Formation {
-    Formation::new(&[(
-        EnemyType::MineThrower,
-        Vec2::ZERO,
-        MovementPattern::BackAndForth,
-    )])
+    Formation::new(&[(EnemyType::MineThrower, Vec2::ZERO)])
 }
+
 pub fn orb_slinger() -> Formation {
-    Formation::new(&[
-        (EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None),
-        //(
-        //    EnemyType::OrbSlinger,
-        //    Vec2::new(40., -40.),
-        //    MovementPattern::None,
-        //),
-    ])
+    Formation::new(&[(EnemyType::OrbSlinger, Vec2::ZERO)])
 }
-pub fn crisscross() -> Formation {
+
+pub fn double_orb_slinger() -> Formation {
     Formation::new(&[
-        (
-            EnemyType::CrissCross,
-            Vec2::new(40., 0.),
-            MovementPattern::Circle,
-        ),
-        (
-            EnemyType::CrissCross,
-            Vec2::new(-40., 0.),
-            MovementPattern::Circle,
-        ),
+        (EnemyType::OrbSlinger, Vec2::new(-40., 0.)),
+        (EnemyType::OrbSlinger, Vec2::new(40., 0.)),
     ])
 }
 
+pub fn crisscross() -> Formation {
+    Formation::new(&[(EnemyType::CrissCross, Vec2::new(0., 0.))])
+}
+
+pub fn double_crisscross() -> Formation {
+    Formation::new(&[
+        (EnemyType::CrissCross, Vec2::new(40., 0.)),
+        (EnemyType::CrissCross, Vec2::new(-40., 0.)),
+    ])
+}
+
+const SWARM_OFFSET: f32 = crate::WIDTH / 1.2;
+
 pub fn swarm() -> Formation {
-    let enemies: Vec<_> = (0..10)
+    let mut enemies: Vec<_> = (0..NUM_SWARM)
         .map(|i| {
             let x = (i as f32 - 5.) * 10.;
-            // let y = (i as f32 - 5.) * 5.;
-            let y = 0.;
-            (EnemyType::Swarm, Vec2::new(x, y), MovementPattern::None)
+            (EnemyType::Swarm, Vec2::new(x + SWARM_OFFSET, 0.))
         })
         .collect();
+
+    enemies.extend((0..NUM_SWARM).map(|i| {
+        let x = (i as f32 - 5.) * 10.;
+        let y = 10.;
+        (EnemyType::Swarm, Vec2::new(x + SWARM_OFFSET, y))
+    }));
 
     Formation::new(&enemies)
 }
@@ -139,7 +125,7 @@ impl Formation {
         self.enemies().len()
     }
 
-    pub fn enemies(&self) -> &[(EnemyType, Vec2, MovementPattern)] {
+    pub fn enemies(&self) -> &[(EnemyType, Vec2)] {
         &self.enemies
     }
 
@@ -151,7 +137,7 @@ impl Formation {
         debug_assert!(!self.enemies().is_empty());
         self.enemies()
             .iter()
-            .map(|(_, pos, _)| pos.y)
+            .map(|(_, pos)| pos.y)
             .min_by(|a, b| a.total_cmp(b))
             .unwrap()
     }
@@ -160,7 +146,7 @@ impl Formation {
         debug_assert!(!self.enemies().is_empty());
         self.enemies()
             .iter()
-            .map(|(_, pos, _)| pos.y)
+            .map(|(_, pos)| pos.y)
             .max_by(|a, b| a.total_cmp(b))
             .unwrap()
     }
@@ -256,12 +242,11 @@ fn spawn_formations(
             .entity(root)
             .insert(Transform::from_translation(start));
 
-        for (enemy, position, movement) in formation.enemies().iter() {
+        for (enemy, position) in formation.enemies().iter() {
             enemy.spawn_child_with(
                 root,
                 &mut commands,
                 &server,
-                *movement,
                 (
                     Transform::from_translation(position.extend(0.)),
                     Platoon(root),

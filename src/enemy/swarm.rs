@@ -3,7 +3,7 @@ use avian2d::prelude::LinearVelocity;
 use bevy::prelude::*;
 
 const SWARM_SPEED: f32 = 60.;
-const SWARM_THRESHOLD: f32 = WIDTH * 2.;
+const SWARM_THRESHOLD: f32 = WIDTH * 1.25;
 
 #[derive(Debug, Component)]
 pub struct SwarmMovement;
@@ -21,8 +21,6 @@ pub(super) fn swarm_movement(
         } else if velocity.x == 0. {
             velocity.x = SWARM_SPEED;
         }
-
-        let direction = velocity.x.signum();
 
         if (-WIDTH * 0.5..WIDTH * 0.5).contains(&translation.x) {
             let proportion = (translation.x + WIDTH * 0.5) / WIDTH;

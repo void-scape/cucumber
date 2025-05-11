@@ -44,6 +44,9 @@ fn frame(mut commands: Commands, server: Res<AssetServer>) {
 #[derive(Component)]
 struct HeartUi;
 
+#[derive(Component)]
+struct HeartText;
+
 const HEART_OFFSET: f32 = 2.;
 const HEART_SIZE: f32 = 10.;
 
@@ -52,9 +55,22 @@ fn health(
     server: Res<AssetServer>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    if PLAYER_HEALTH == f32::MAX {
-        return;
-    }
+    commands.spawn((
+        HeartText,
+        HIGH_RES_LAYER,
+        Text2d::default(),
+        TextFont {
+            font_size: 20.,
+            font: server.load("fonts/joystix.otf"),
+            ..Default::default()
+        },
+        Transform::from_xyz(
+            -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
+            -crate::HEIGHT / 4. * crate::RESOLUTION_SCALE,
+            500.,
+        ),
+        Anchor::BottomLeft,
+    ));
 
     let layout = layouts.add(TextureAtlasLayout::from_grid(
         UVec2::splat(10),
@@ -87,6 +103,8 @@ fn health(
 fn update_health(
     mut q: Query<(&mut Sprite, &Transform), With<HeartUi>>,
     health: Single<&Health, With<Player>>,
+    changed_health: Option<Single<&Health, (With<Player>, Changed<Health>)>>,
+    mut text: Single<&mut Text2d, With<HeartText>>,
 ) {
     let current_health = health.current();
     for (i, (mut sprite, _)) in q
@@ -96,19 +114,39 @@ fn update_health(
     {
         sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_health as usize) as usize;
     }
+
+    if changed_health.is_some() {
+        text.0 = format!("H: {:.1}", current_health);
+    }
 }
 
 #[derive(Component)]
 struct ShieldUi;
+
+#[derive(Component)]
+struct ShieldText;
 
 fn shield(
     mut commands: Commands,
     server: Res<AssetServer>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    if PLAYER_HEALTH == f32::MAX {
-        return;
-    }
+    commands.spawn((
+        ShieldText,
+        HIGH_RES_LAYER,
+        Text2d::default(),
+        TextFont {
+            font_size: 20.,
+            font: server.load("fonts/joystix.otf"),
+            ..Default::default()
+        },
+        Transform::from_xyz(
+            -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
+            (-crate::HEIGHT / 4. - 10.) * crate::RESOLUTION_SCALE,
+            500.,
+        ),
+        Anchor::BottomLeft,
+    ));
 
     let layout = layouts.add(TextureAtlasLayout::from_grid(
         UVec2::splat(16),
@@ -142,6 +180,8 @@ fn shield(
 fn update_shield(
     mut q: Query<(&mut Sprite, &Transform), With<ShieldUi>>,
     shield: Single<&Shield, With<Player>>,
+    changed_shield: Option<Single<&Health, (With<Player>, Changed<Shield>)>>,
+    mut text: Single<&mut Text2d, With<ShieldText>>,
 ) {
     let current_shield = shield.current();
     for (i, (mut sprite, _)) in q
@@ -150,6 +190,10 @@ fn update_shield(
         .enumerate()
     {
         sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_shield as usize) as usize;
+    }
+
+    if changed_shield.is_some() {
+        text.0 = format!("S: {:.1}", current_shield);
     }
 }
 

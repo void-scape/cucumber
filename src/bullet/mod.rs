@@ -323,6 +323,7 @@ fn handle_bullet_collision(
             &CollidingEntities,
             &CollisionLayers,
             Option<&Player>,
+            Option<&Bullet>,
         ),
         With<Health>,
     >,
@@ -331,15 +332,20 @@ fn handle_bullet_collision(
     mut damage_writer: EventWriter<DamageEvent>,
 ) {
     let mut despawned = HashSet::new();
-    for (entity, colliding_entities, destructable_layers, player) in destructable.iter() {
+    for (entity, colliding_entities, destructable_layers, player, destructable_bullet) in
+        destructable.iter()
+    {
         for (bullet, damage, sprite, transform, layers) in colliding_entities
             .iter()
             .copied()
             .flat_map(|entity| bullets.get(entity))
-            .filter(|(_, _, _, _, l)| {
-                destructable_layers.memberships.has_all(Layer::Enemy)
-                    || l.filters.has_all(Layer::Player)
-                        != destructable_layers.filters.has_all(Layer::Player)
+            .filter(|(_, _, _, _, layers)| {
+                if destructable_bullet.is_some() {
+                    destructable_layers.filters.has_all(Layer::Player)
+                        && layers.filters.has_all(Layer::Enemy)
+                } else {
+                    true
+                }
             })
         {
             if despawned.insert(bullet) {
@@ -466,7 +472,7 @@ fn bullet_collision_effects(
                             ..PlaybackSettings::ONCE
                         },
                     ));
-                } 
+                }
             }
         }
     }

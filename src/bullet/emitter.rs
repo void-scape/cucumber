@@ -41,8 +41,8 @@ const CRISSCROSS_WAIT_RATE: f32 = 1.25;
 const CRISSCROSS_SHOT_RATE: f32 = 0.15;
 const CRISSCROSS_WAVES: usize = 5;
 
-pub const MISSILE_HEALTH: f32 = 3.;
-pub const MINE_HEALTH: f32 = 5.;
+pub const MISSILE_HEALTH: f32 = 2.;
+pub const MINE_HEALTH: f32 = 3.;
 
 const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
 

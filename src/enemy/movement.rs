@@ -1,8 +1,5 @@
-use super::EnemyType;
 use crate::GameState;
-use avian2d::prelude::Physics;
 use bevy::prelude::*;
-use rand::Rng;
 
 pub struct MovementPlugin;
 
@@ -14,14 +11,6 @@ impl Plugin for MovementPlugin {
                 .run_if(in_state(GameState::Game)),
         );
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum MovementPattern {
-    None,
-    BackAndForth,
-    Circle,
-    Figure8,
 }
 
 #[derive(Component)]
@@ -114,42 +103,6 @@ fn update_figure8(
         angle.0 += figure8.speed * time.delta_secs();
         if angle.0 >= std::f32::consts::TAU {
             angle.0 = 0.;
-        }
-    }
-}
-
-impl EnemyType {
-    pub fn configure_movement(&self, commands: &mut EntityCommands, movement: MovementPattern) {
-        let mut rng = rand::rng();
-        match movement {
-            MovementPattern::None => {}
-            MovementPattern::BackAndForth => {
-                commands.insert((
-                    BackAndForth {
-                        radius: rng.random_range(9.0..11.0),
-                        speed: rng.random_range(2.2..3.4),
-                    },
-                    Angle(rng.random_range(0.0..2.0)),
-                ));
-            }
-            MovementPattern::Circle => {
-                commands.insert((
-                    Circle {
-                        radius: rng.random_range(9.0..11.0),
-                        speed: rng.random_range(2.4..3.6),
-                    },
-                    Angle(rng.random_range(0.0..2.0)),
-                ));
-            }
-            MovementPattern::Figure8 => {
-                commands.insert((
-                    Figure8 {
-                        radius: rng.random_range(18.0..22.0),
-                        speed: rng.random_range(2.4..3.6),
-                    },
-                    Angle(rng.random_range(0.0..2.0)),
-                ));
-            }
         }
     }
 }
