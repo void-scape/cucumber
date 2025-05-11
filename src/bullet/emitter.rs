@@ -13,6 +13,7 @@ use avian2d::prelude::*;
 use bevy::{
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
+    time::Stopwatch,
 };
 use bevy_seedling::prelude::*;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
@@ -63,6 +64,7 @@ impl Plugin for EmitterPlugin {
                 MineEmitter::shoot_bullets,
                 OrbEmitter::shoot_bullets,
                 CrisscrossEmitter::shoot_bullets,
+                ProximityEmitter::shoot_bullets,
             )
                 .in_set(EmitterSet),
         );
@@ -174,6 +176,81 @@ impl SoloEmitter {
                 sample_effects![BandPassNode::new(1000.0, 4.0)],
             ));
         }
+    }
+}
+
+#[derive(Component)]
+#[require(
+    Transform,
+    BulletModifiers,
+    Polarity,
+    Visibility::Hidden,
+    ProximityTimer
+)]
+pub struct ProximityEmitter;
+
+#[derive(Component, Default)]
+struct ProximityTimer(Stopwatch);
+
+impl ProximityEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<(
+            Entity,
+            &Self,
+            &mut ProximityTimer,
+            &BulletModifiers,
+            &Polarity,
+            &ChildOf,
+            &GlobalTransform,
+        )>,
+        player: Single<&GlobalTransform, With<Player>>,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) -> Result {
+        let delta = time.delta();
+        let player = player.into_inner().compute_transform();
+
+        for (entity, emitter, mut timer, mods, polarity, child_of, transform) in emitters.iter_mut()
+        {
+            let parent_mods = parents.get(child_of.parent())?;
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if timer.0.tick(delta).elapsed() < Duration::from_secs_f32(1.) {
+                continue;
+            }
+
+            let proximity = new_transform.translation.x - player.translation.x;
+            if proximity.abs() > 20. {
+                continue;
+            }
+
+            timer.0.reset();
+
+            commands.spawn((
+                BasicBullet,
+                LinearVelocity(polarity.to_vec2() * BULLET_SPEED * mods.speed),
+                new_transform,
+                Bullet::target_layer(Layer::Player),
+                Damage::new(BULLET_DAMAGE * mods.damage),
+            ));
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/bullet.wav")),
+                PitchRange(BULLET_PITCH_RANGE),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-12.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
+            ));
+        }
+
+        Ok(())
     }
 }
 

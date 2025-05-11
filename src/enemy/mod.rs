@@ -1,11 +1,9 @@
 use self::{
-    formation::{
-        Formation, FormationPlugin, FormationSet, MINE_THROWER, ORB_SLINGER, ROW, TRIANGLE,
-    },
+    formation::{Formation, FormationPlugin, FormationSet},
     movement::*,
 };
 use crate::{
-    GameState, Layer,
+    Avian, GameState, Layer,
     animation::{AnimationController, AnimationIndices},
     assets,
     asteroids::{AsteroidSpawner, SpawnCluster},
@@ -13,7 +11,8 @@ use crate::{
     bullet::{
         Destructable, Direction, MaxLifetime,
         emitter::{
-            BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter, OrbEmitter, SoloEmitter,
+            BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter, OrbEmitter,
+            ProximityEmitter, SoloEmitter,
         },
         homing::TurnSpeed,
     },
@@ -29,13 +28,14 @@ use bevy_seedling::{
     sample::{PlaybackSettings, SamplePlayer},
 };
 use bevy_sequence::combinators::delay::run_after;
-use formation::CRISS_CROSS;
+use formation::{crisscross, mine_thrower, orb_slinger, row, swarm, triangle};
 use rand::{Rng, rngs::ThreadRng, seq::IteratorRandom};
 use std::time::Duration;
 use strum::IntoEnumIterator;
 
 pub mod formation;
 pub mod movement;
+pub mod swarm;
 
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
@@ -58,6 +58,7 @@ impl Plugin for EnemyPlugin {
                 ),
             )
             .add_systems(OnEnter(GameState::Game), start_waves)
+            .add_systems(Avian, swarm::swarm_movement)
             .add_systems(
                 Update,
                 (
@@ -83,14 +84,15 @@ fn start_waves(mut commands: Commands) {
         WaveTimeline::new_delayed(
             START_DELAY,
             &[
-                (TRIANGLE, 16.),
-                (ROW, 16.),
-                (MINE_THROWER, 8.),
-                (TRIANGLE, 16.),
-                (ROW, 2.),
-                (MINE_THROWER, 25.),
-                (ORB_SLINGER, 8.),
-                (CRISS_CROSS, 0.),
+                (swarm(), 0.),
+                (triangle(), 16.),
+                (row(), 16.),
+                (mine_thrower(), 8.),
+                (triangle(), 16.),
+                (row(), 2.),
+                (mine_thrower(), 25.),
+                (orb_slinger(), 8.),
+                (crisscross(), 0.),
             ],
         ), //.skip(32.),
     );
@@ -113,7 +115,7 @@ fn start_waves(mut commands: Commands) {
 
 #[derive(Resource)]
 pub struct WaveTimeline {
-    seq: &'static [(Formation, f32)],
+    seq: Vec<(Formation, f32)>,
     timer: Timer,
     index: usize,
     finished: bool,
@@ -121,9 +123,9 @@ pub struct WaveTimeline {
 }
 
 impl WaveTimeline {
-    pub fn new_delayed(delay: f32, seq: &'static [(Formation, f32)]) -> Self {
+    pub fn new_delayed(delay: f32, seq: &[(Formation, f32)]) -> Self {
         Self {
-            seq,
+            seq: seq.to_vec(),
             timer: Timer::from_seconds(delay, TimerMode::Repeating),
             index: 0,
             finished: false,
@@ -150,7 +152,7 @@ impl WaveTimeline {
                 Some((formation, duration)) => {
                     self.timer.set_duration(Duration::from_secs_f32(*duration));
                     self.index += 1;
-                    Some(*formation)
+                    Some(formation.clone())
                 }
                 None => {
                     self.finished = true;
@@ -240,6 +242,7 @@ pub enum EnemyType {
     MineThrower,
     OrbSlinger,
     CrissCross,
+    Swarm,
 }
 
 impl EnemyType {
@@ -281,6 +284,13 @@ impl EnemyType {
             Self::MineThrower => commands.with_child(MineEmitter::player()),
             Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
             Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
+            Self::Swarm => commands.insert(swarm::SwarmMovement).with_child((
+                BulletModifiers {
+                    rate: 0.25,
+                    ..Default::default()
+                },
+                ProximityEmitter,
+            )),
         };
     }
 
@@ -302,6 +312,7 @@ impl EnemyType {
             Self::MineThrower => Health::full(15.0),
             Self::OrbSlinger => Health::full(40.0),
             Self::CrissCross => Health::full(40.0),
+            Self::Swarm => Health::full(1.),
         }
     }
 
@@ -314,6 +325,7 @@ impl EnemyType {
             }
             Self::OrbSlinger => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 4)),
             Self::CrissCross => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 4)),
+            Self::Swarm => assets::sprite_rect8(server, assets::SHIPS_PATH, UVec2::new(4, 0)),
         }
     }
 
@@ -324,6 +336,13 @@ impl EnemyType {
             Self::MineThrower => 3,
             Self::OrbSlinger => 8,
             Self::CrissCross => 6,
+            Self::Swarm => {
+                if rand::rng().random() {
+                    1
+                } else {
+                    0
+                }
+            }
         }
     }
 }

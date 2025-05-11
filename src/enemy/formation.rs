@@ -38,88 +38,109 @@ fn restart(mut commands: Commands, formations: Query<Entity, With<Formation>>) {
     }
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Component)]
 #[require(Transform, Visibility)]
 pub struct Formation {
-    enemies: &'static [(EnemyType, Vec2, MovementPattern)],
+    enemies: Vec<(EnemyType, Vec2, MovementPattern)>,
     velocity: Vec2,
 }
 
 impl Formation {
-    pub const fn new(enemies: &'static [(EnemyType, Vec2, MovementPattern)]) -> Self {
+    pub fn new(enemies: &[(EnemyType, Vec2, MovementPattern)]) -> Self {
         Self::with_velocity(DEFAULT_FORMATION_VEL, enemies)
     }
 
-    pub const fn with_velocity(
-        velocity: Vec2,
-        enemies: &'static [(EnemyType, Vec2, MovementPattern)],
-    ) -> Self {
-        Self { enemies, velocity }
+    pub fn with_velocity(velocity: Vec2, enemies: &[(EnemyType, Vec2, MovementPattern)]) -> Self {
+        Self {
+            enemies: enemies.to_vec(),
+            velocity,
+        }
     }
 }
 
-pub const TRIANGLE: Formation = Formation::new(&[
-    (
-        EnemyType::Gunner,
-        Vec2::new(-40., -40.),
-        MovementPattern::Circle,
-    ),
-    (EnemyType::Gunner, Vec2::ZERO, MovementPattern::Figure8),
-    (
-        EnemyType::Gunner,
-        Vec2::new(40., -40.),
-        MovementPattern::Circle,
-    ),
-]);
+pub fn triangle() -> Formation {
+    Formation::new(&[
+        (
+            EnemyType::Gunner,
+            Vec2::new(-40., -40.),
+            MovementPattern::Circle,
+        ),
+        (EnemyType::Gunner, Vec2::ZERO, MovementPattern::Figure8),
+        (
+            EnemyType::Gunner,
+            Vec2::new(40., -40.),
+            MovementPattern::Circle,
+        ),
+    ])
+}
 
-pub const ROW: Formation = Formation::new(&[
-    (
-        EnemyType::Missile,
-        Vec2::new(30., 0.),
+pub fn row() -> Formation {
+    Formation::new(&[
+        (
+            EnemyType::Missile,
+            Vec2::new(30., 0.),
+            MovementPattern::BackAndForth,
+        ),
+        (
+            EnemyType::Missile,
+            Vec2::new(-30., 0.),
+            MovementPattern::BackAndForth,
+        ),
+    ])
+}
+
+pub fn mine_thrower() -> Formation {
+    Formation::new(&[(
+        EnemyType::MineThrower,
+        Vec2::ZERO,
         MovementPattern::BackAndForth,
-    ),
-    (
-        EnemyType::Missile,
-        Vec2::new(-30., 0.),
-        MovementPattern::BackAndForth,
-    ),
-]);
+    )])
+}
+pub fn orb_slinger() -> Formation {
+    Formation::new(&[
+        (EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None),
+        //(
+        //    EnemyType::OrbSlinger,
+        //    Vec2::new(40., -40.),
+        //    MovementPattern::None,
+        //),
+    ])
+}
+pub fn crisscross() -> Formation {
+    Formation::new(&[
+        (
+            EnemyType::CrissCross,
+            Vec2::new(40., 0.),
+            MovementPattern::Circle,
+        ),
+        (
+            EnemyType::CrissCross,
+            Vec2::new(-40., 0.),
+            MovementPattern::Circle,
+        ),
+    ])
+}
 
-pub const MINE_THROWER: Formation = Formation::new(&[(
-    EnemyType::MineThrower,
-    Vec2::ZERO,
-    MovementPattern::BackAndForth,
-)]);
+pub fn swarm() -> Formation {
+    let enemies: Vec<_> = (0..10)
+        .map(|i| {
+            let x = (i as f32 - 5.) * 10.;
+            // let y = (i as f32 - 5.) * 5.;
+            let y = 0.;
+            (EnemyType::Swarm, Vec2::new(x, y), MovementPattern::None)
+        })
+        .collect();
 
-pub const ORB_SLINGER: Formation = Formation::new(&[
-    (EnemyType::OrbSlinger, Vec2::ZERO, MovementPattern::None),
-    //(
-    //    EnemyType::OrbSlinger,
-    //    Vec2::new(40., -40.),
-    //    MovementPattern::None,
-    //),
-]);
-
-pub const CRISS_CROSS: Formation = Formation::new(&[
-    (
-        EnemyType::CrissCross,
-        Vec2::new(40., 0.),
-        MovementPattern::Circle,
-    ),
-    (
-        EnemyType::CrissCross,
-        Vec2::new(-40., 0.),
-        MovementPattern::Circle,
-    ),
-]);
+    Formation::new(&enemies)
+}
 
 impl Formation {
     pub fn len(&self) -> usize {
         self.enemies().len()
     }
 
-    pub fn enemies(&self) -> &'static [(EnemyType, Vec2, MovementPattern)] {
-        self.enemies
+    pub fn enemies(&self) -> &[(EnemyType, Vec2, MovementPattern)] {
+        &self.enemies
     }
 
     pub fn height(&self) -> f32 {
