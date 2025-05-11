@@ -1,5 +1,5 @@
 use crate::enemy::formation::Formation;
-use crate::{GameState, miniboss};
+use crate::{GameState, boss};
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
 
@@ -91,8 +91,8 @@ fn update_layers(
     all_boss: Query<&SampleEffects, With<BossLayer>>,
     mut nodes: Query<&mut VolumeNode>,
     formations: Query<&Formation>,
-    boss: Option<Single<&miniboss::Boss>>,
-    boss_b: Option<Single<&miniboss::Waves>>,
+    boss: Option<Single<&boss::gradius::Gradius>>,
+    boss_b: Option<Single<&boss::gradius::Gradius>>,
 ) -> Result {
     if boss.is_none() {
         nodes.get_effect_mut(*wave_base)?.volume = Volume::Linear(MUSIC_VOLUME);

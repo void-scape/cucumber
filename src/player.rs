@@ -1,15 +1,16 @@
 use crate::{
-    GameState, HEIGHT, Layer,
+    DespawnRestart, GameState, HEIGHT, Layer,
     animation::{AnimationController, AnimationIndices},
     assets::{self, MISC_PATH, MiscLayout},
     bullet::{
         BulletTimer, Polarity,
-        emitter::{BulletModifiers, DualEmitter, HomingEmitter, LaserEmitter},
+        emitter::{BulletModifiers, DualEmitter, HomingEmitter, LaserEmitter, Rate},
     },
     end,
     enemy::Enemy,
     health::{Dead, Health, Shield},
     pickups::{Material, PickupEvent, Upgrade, Weapon},
+    selection::MinMaterials,
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -34,42 +35,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Restart), restart)
-            .add_systems(OnEnter(GameState::StartGame), |mut commands: Commands| {
-                let starting_weapon = commands.spawn(Player::bullet_emitter()).id();
-                let player = commands
-                    .spawn((
-                        Player,
-                        WeaponEntity(starting_weapon),
-                        Transform::from_xyz(0., -HEIGHT / 6., 0.),
-                    ))
-                    .add_child(starting_weapon)
-                    .id();
-                //commands.spawn((Miner, MinerLeader(player)));
-
-                let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
-                run_after(
-                    dur,
-                    move |mut commands: Commands| {
-                        commands.entity(player).remove::<BlockControls>();
-                    },
-                    &mut commands,
-                );
-
-                #[cfg(not(debug_assertions))]
-                commands
-                    .entity(player)
-                    .insert(BlockControls)
-                    .animation()
-                    .insert_tween_here(
-                        dur,
-                        EaseKind::SineOut,
-                        player.into_target().with(translation(
-                            Vec3::new(0., -HEIGHT / 2. + 16., 0.),
-                            Vec3::new(0., -HEIGHT / 6., 0.),
-                        )),
-                    );
-            })
+        app.add_systems(OnEnter(GameState::StartGame), spawn_player)
             .add_systems(
                 Update,
                 (
@@ -85,8 +51,55 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-fn restart(mut commands: Commands, player: Single<Entity, With<Player>>) {
-    commands.entity(*player).despawn();
+fn spawn_player(
+    mut commands: Commands,
+    mut writer: EventWriter<PickupEvent>,
+    mut mats: ResMut<MinMaterials>,
+) {
+    let starting_weapon = commands.spawn(Player::bullet_emitter()).id();
+    let player = commands
+        .spawn((
+            Player,
+            WeaponEntity(starting_weapon),
+            Transform::from_xyz(0., -HEIGHT / 6., 0.),
+        ))
+        .add_child(starting_weapon)
+        .id();
+    //commands.spawn((Miner, MinerLeader(player)));
+
+    let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
+    run_after(
+        dur,
+        move |mut commands: Commands| {
+            commands.entity(player).remove::<BlockControls>();
+        },
+        &mut commands,
+    );
+
+    if crate::SKIP_WAVES {
+        writer.write(PickupEvent::Weapon(Weapon::Bullet));
+        writer.write(PickupEvent::Weapon(Weapon::Bullet));
+        writer.write(PickupEvent::Weapon(Weapon::Missile));
+        writer.write(PickupEvent::Upgrade(Upgrade::Speed(0.2)));
+        writer.write(PickupEvent::Upgrade(Upgrade::Juice(0.2)));
+        for _ in 0..5 {
+            mats.0 *= 2;
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    commands
+        .entity(player)
+        .insert(BlockControls)
+        .animation()
+        .insert_tween_here(
+            dur,
+            EaseKind::SineOut,
+            player.into_target().with(translation(
+                Vec3::new(0., -HEIGHT / 2. + 16., 0.),
+                Vec3::new(0., -HEIGHT / 6., 0.),
+            )),
+        );
 }
 
 #[derive(Component)]
@@ -101,6 +114,7 @@ fn restart(mut commands: Commands, player: Single<Entity, With<Player>>) {
     CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletModifiers,
     Materials,
+    DespawnRestart,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
@@ -111,7 +125,7 @@ impl Player {
             DualEmitter::enemy(3.),
             BulletModifiers {
                 damage: 0.5,
-                rate: 2.,
+                rate: Rate::Factor(2.),
                 speed: 1.5,
             },
             Polarity::North,
@@ -315,7 +329,7 @@ fn handle_pickups(
                     },
                 );
             }
-            PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate += *s,
+            PickupEvent::Upgrade(Upgrade::Speed(s)) => mods.rate.add_factor(*s),
             PickupEvent::Upgrade(Upgrade::Juice(j)) => mods.damage += *j,
             PickupEvent::Material(mat) => match mat {
                 Material::Parts => materials.0 += 1,

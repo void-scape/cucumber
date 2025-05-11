@@ -37,6 +37,10 @@ const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
 const ORB_WAVES: usize = 8;
 
+const BUCKSHOT_WAIT_RATE: f32 = 2.;
+const BUCKSHOT_SHOT_RATE: f32 = 0.2;
+const BUCKSHOT_WAVES: usize = 4;
+
 const CRISSCROSS_WAIT_RATE: f32 = 1.25;
 const CRISSCROSS_SHOT_RATE: f32 = 0.15;
 const CRISSCROSS_WAVES: usize = 5;
@@ -56,18 +60,45 @@ impl Plugin for EmitterPlugin {
         app.add_systems(
             PreUpdate,
             (
-                SoloEmitter::shoot_bullets,
-                DualEmitter::shoot_bullets,
-                LaserEmitter::laser,
-                HomingEmitter::<Enemy>::shoot_bullets,
-                HomingEmitter::<Player>::shoot_bullets,
-                MineEmitter::shoot_bullets,
-                OrbEmitter::shoot_bullets,
-                CrisscrossEmitter::shoot_bullets,
-                ProximityEmitter::shoot_bullets,
+                tick_emitter_delay,
+                (
+                    SoloEmitter::shoot_bullets,
+                    DualEmitter::shoot_bullets,
+                    LaserEmitter::laser,
+                    HomingEmitter::<Enemy>::shoot_bullets,
+                    HomingEmitter::<Player>::shoot_bullets,
+                    MineEmitter::shoot_bullets,
+                    OrbEmitter::shoot_bullets,
+                    CrisscrossEmitter::shoot_bullets,
+                    ProximityEmitter::shoot_bullets,
+                    BuckShotEmitter::shoot_bullets,
+                ),
             )
+                .chain()
                 .in_set(EmitterSet),
         );
+    }
+}
+
+#[derive(Component)]
+pub struct EmitterDelay(Timer);
+
+impl EmitterDelay {
+    pub fn new(secs: f32) -> Self {
+        Self(Timer::from_seconds(secs, TimerMode::Once))
+    }
+}
+
+pub fn tick_emitter_delay(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut entities: Query<(Entity, &mut EmitterDelay)>,
+) {
+    for (entity, mut delay) in entities.iter_mut() {
+        delay.0.tick(time.delta());
+        if delay.0.finished() {
+            commands.entity(entity).remove::<EmitterDelay>();
+        }
     }
 }
 
@@ -81,7 +112,7 @@ impl Plugin for EmitterPlugin {
 pub struct BulletModifiers {
     pub speed: f32,
     pub damage: f32,
-    pub rate: f32,
+    pub rate: Rate,
 }
 
 impl Default for BulletModifiers {
@@ -89,17 +120,52 @@ impl Default for BulletModifiers {
         Self {
             speed: 1.,
             damage: 1.,
-            rate: 1.,
+            rate: Rate::Factor(1.),
         }
     }
 }
 
 impl BulletModifiers {
     pub fn join(&self, other: &Self) -> Self {
+        let rate = match self.rate {
+            Rate::Secs(secs) => match other.rate {
+                Rate::Secs(_) => {
+                    panic!("tried to join two second rate modifiers");
+                }
+                Rate::Factor(factor) => Rate::Secs(secs * factor),
+            },
+            Rate::Factor(factor) => match other.rate {
+                Rate::Secs(secs) => Rate::Secs(secs * factor),
+                Rate::Factor(f) => Rate::Factor(factor * f),
+            },
+        };
+
         Self {
             speed: self.speed * other.speed,
             damage: self.damage * other.damage,
-            rate: self.rate * other.rate,
+            rate,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Rate {
+    Factor(f32),
+    Secs(f32),
+}
+
+impl Rate {
+    pub fn add_factor(&mut self, factor: f32) {
+        match self {
+            Self::Factor(f) => *f += factor,
+            Self::Secs(secs) => *secs += *secs * factor,
+        }
+    }
+
+    pub fn duration(self, base: f32) -> Duration {
+        match self {
+            Rate::Factor(factor) => Duration::from_secs_f32(base * 1. / factor),
+            Rate::Secs(secs) => Duration::from_secs_f32(secs),
         }
     }
 }
@@ -120,15 +186,18 @@ impl SoloEmitter {
 
 impl SoloEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &SoloEmitter,
-            Option<&mut BulletTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &SoloEmitter,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -142,7 +211,7 @@ impl SoloEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(BULLET_RATE * 1. / mods.rate);
+            let duration = mods.rate.duration(BULLET_RATE);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -194,15 +263,18 @@ struct ProximityTimer(Stopwatch);
 
 impl ProximityEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &Self,
-            &mut ProximityTimer,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &Self,
+                &mut ProximityTimer,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
         player: Single<&GlobalTransform, With<Player>>,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
@@ -279,15 +351,18 @@ impl DualEmitter {
 
 impl DualEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &DualEmitter,
-            Option<&mut BulletTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &DualEmitter,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -301,7 +376,7 @@ impl DualEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(BULLET_RATE * 1. / mods.rate);
+            let duration = mods.rate.duration(BULLET_RATE);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -378,17 +453,20 @@ impl<T: Component> HomingEmitter<T> {
 
 impl<T: Component> HomingEmitter<T> {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &HomingEmitter<T>,
-            Option<&mut BulletTimer>,
-            &BulletModifiers,
-            &TurnSpeed,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-            Option<&MaxLifetime>,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &HomingEmitter<T>,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &TurnSpeed,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+                Option<&MaxLifetime>,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -404,7 +482,7 @@ impl<T: Component> HomingEmitter<T> {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(MISSILE_RATE * 1. / mods.rate);
+            let duration = mods.rate.duration(MISSILE_RATE);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -491,16 +569,19 @@ impl LaserEmitter {
 
     fn laser(
         spatial_query: SpatialQuery,
-        mut emitters: Query<(
-            Entity,
-            &LaserEmitter,
-            Option<&mut BulletTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-            &Children,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &LaserEmitter,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+                &Children,
+            ),
+            Without<EmitterDelay>,
+        >,
         mut child: Query<&mut Transform>,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
@@ -604,15 +685,18 @@ impl MineEmitter {
 
 impl MineEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &MineEmitter,
-            Option<&mut BulletTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &MineEmitter,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         player: Single<&Transform, With<Player>>,
         time: Res<Time>,
@@ -627,7 +711,7 @@ impl MineEmitter {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = Duration::from_secs_f32(MINE_RATE * 1. / mods.rate);
+            let duration = mods.rate.duration(MINE_RATE);
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
@@ -683,8 +767,17 @@ enum PulseState {
 }
 
 impl PulseTimer {
-    pub fn new(wait: f32, bullet: f32, pulses: usize) -> Self {
+    pub fn new(rate: Rate, wait: f32, bullet: f32, pulses: usize) -> Self {
         assert!(pulses > 1, "just use a normal bullet timer!");
+
+        let (wait, bullet) = match rate {
+            Rate::Factor(factor) => (wait * factor, bullet * factor),
+            Rate::Secs(secs) => {
+                let ratio = wait / (wait + bullet);
+                (secs * ratio, secs - secs * ratio)
+            }
+        };
+
         Self {
             wait: Timer::from_seconds(wait, TimerMode::Repeating),
             bullet: Timer::from_seconds(bullet, TimerMode::Repeating),
@@ -713,7 +806,7 @@ impl PulseTimer {
                 let finished = self.bullet.just_finished();
                 if finished {
                     self.state = PulseState::Bullet(count + 1);
-                    if count >= self.pulses {
+                    if count + 1 >= self.pulses {
                         self.state = PulseState::Wait;
                         self.wait.reset();
                     }
@@ -731,31 +824,67 @@ impl PulseTimer {
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 #[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
-pub struct OrbEmitter(Layer);
+pub struct OrbEmitter {
+    layer: Layer,
+    waves: usize,
+    shot_dur: f32,
+    wait_dur: f32,
+}
+
+impl Default for OrbEmitter {
+    fn default() -> Self {
+        Self {
+            layer: Layer::Player,
+            waves: ORB_WAVES,
+            shot_dur: ORB_SHOT_RATE,
+            wait_dur: ORB_WAIT_RATE,
+        }
+    }
+}
 
 impl OrbEmitter {
     pub fn player() -> Self {
-        Self(Layer::Player)
+        Self {
+            layer: Layer::Player,
+            ..Default::default()
+        }
     }
 
     pub fn enemy() -> Self {
-        Self(Layer::Enemy)
+        Self {
+            layer: Layer::Enemy,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_all(mut self, waves: usize, wait_fur: f32, shot_dur: f32) -> Self {
+        self.waves = waves;
+        self.shot_dur = shot_dur;
+        self.wait_dur = wait_fur;
+        self
+    }
+
+    pub fn total_time(&self) -> f32 {
+        self.waves as f32 * self.shot_dur + self.wait_dur
     }
 }
 
 impl OrbEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &mut OrbEmitter,
-            Option<&mut PulseTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &mut OrbEmitter,
+                Option<&mut PulseTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -769,9 +898,10 @@ impl OrbEmitter {
 
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(PulseTimer::new(
-                    ORB_WAIT_RATE * 1. / mods.rate,
-                    ORB_SHOT_RATE * 1. / mods.rate,
-                    ORB_WAVES,
+                    mods.rate,
+                    emitter.wait_dur,
+                    emitter.shot_dur,
+                    emitter.waves,
                 ));
                 continue;
             };
@@ -791,7 +921,7 @@ impl OrbEmitter {
                     Orb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
-                    Bullet::target_layer(emitter.0),
+                    Bullet::target_layer(emitter.layer),
                     Damage::new(ORB_DAMAGE * mods.damage),
                 ));
             }
@@ -837,16 +967,19 @@ enum CrisscrossState {
 
 impl CrisscrossEmitter {
     fn shoot_bullets(
-        mut emitters: Query<(
-            Entity,
-            &mut CrisscrossEmitter,
-            Option<&mut PulseTimer>,
-            &BulletModifiers,
-            &Polarity,
-            &ChildOf,
-            &GlobalTransform,
-            &mut CrisscrossState,
-        )>,
+        mut emitters: Query<
+            (
+                Entity,
+                &mut CrisscrossEmitter,
+                Option<&mut PulseTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+                &mut CrisscrossState,
+            ),
+            Without<EmitterDelay>,
+        >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
         server: Res<AssetServer>,
@@ -862,8 +995,9 @@ impl CrisscrossEmitter {
 
             let Some(mut timer) = timer else {
                 commands.entity(entity).insert(PulseTimer::new(
-                    CRISSCROSS_WAIT_RATE * 1. / mods.rate,
-                    CRISSCROSS_SHOT_RATE * 1. / mods.rate,
+                    mods.rate,
+                    CRISSCROSS_WAIT_RATE,
+                    CRISSCROSS_SHOT_RATE,
                     CRISSCROSS_WAVES,
                 ));
                 continue;
@@ -902,6 +1036,139 @@ impl CrisscrossEmitter {
                     Damage::new(ORB_DAMAGE * mods.damage),
                 ));
             }
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/orb.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-22.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![LowPassNode { frequency: 10000.0 }],
+            ));
+        }
+    }
+}
+
+#[derive(Clone, Copy, Component)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+pub struct BuckShotEmitter {
+    layer: Layer,
+    waves: usize,
+    shot_dur: f32,
+    wait_dur: f32,
+}
+
+impl Default for BuckShotEmitter {
+    fn default() -> Self {
+        Self {
+            layer: Layer::Player,
+            waves: BUCKSHOT_WAVES,
+            shot_dur: BUCKSHOT_SHOT_RATE,
+            wait_dur: BUCKSHOT_WAIT_RATE,
+        }
+    }
+}
+
+impl BuckShotEmitter {
+    pub fn player() -> Self {
+        Self {
+            layer: Layer::Player,
+            ..Default::default()
+        }
+    }
+
+    pub fn enemy() -> Self {
+        Self {
+            layer: Layer::Enemy,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_all(mut self, waves: usize, wait_fur: f32, shot_dur: f32) -> Self {
+        self.waves = waves;
+        self.shot_dur = shot_dur;
+        self.wait_dur = wait_fur;
+        self
+    }
+
+    pub fn total_time(&self) -> f32 {
+        self.waves as f32 * self.shot_dur + self.wait_dur
+    }
+}
+
+impl BuckShotEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (
+                Entity,
+                &mut BuckShotEmitter,
+                Option<&mut PulseTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
+        parents: Query<Option<&BulletModifiers>>,
+        player: Single<&Transform, With<Player>>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(PulseTimer::new(
+                    mods.rate,
+                    emitter.wait_dur,
+                    emitter.shot_dur,
+                    emitter.waves,
+                ));
+                continue;
+            };
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.just_finished(&time) {
+                continue;
+            }
+
+            let to_player =
+                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
+
+            let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
+            for angle in angles.into_iter() {
+                commands.spawn((
+                    Orb,
+                    LinearVelocity(
+                        (Vec2::from_angle(angle - std::f32::consts::PI / 2.) + to_player)
+                            * ORB_SPEED
+                            * mods.speed,
+                    ),
+                    new_transform,
+                    Bullet::target_layer(emitter.layer),
+                    Damage::new(ORB_DAMAGE * mods.damage),
+                ));
+            }
+
+            //let bullets = 10;
+            //for angle in 0..bullets {
+            //    let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
+            //        + timer.current_pulse() as f32 * std::f32::consts::PI / 4.;
+            //    commands.spawn((
+            //        Orb,
+            //        LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
+            //        new_transform,
+            //        Bullet::target_layer(emitter.layer),
+            //        Damage::new(ORB_DAMAGE * mods.damage),
+            //    ));
+            //}
 
             commands.spawn((
                 SamplePlayer::new(server.load("audio/sfx/orb.wav")),

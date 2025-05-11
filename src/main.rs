@@ -16,6 +16,7 @@ mod assets;
 mod asteroids;
 mod auto_collider;
 mod background;
+mod boss;
 mod bounds;
 mod bullet;
 mod characters;
@@ -45,6 +46,8 @@ pub const RES_WIDTH: f32 = WIDTH * 1.25;
 pub const RES_HEIGHT: f32 = HEIGHT;
 
 pub const METER: f32 = 8.;
+
+pub const SKIP_WAVES: bool = true;
 
 fn main() {
     let mut app = App::new();
@@ -100,7 +103,7 @@ fn main() {
         opening::OpeningPlugin,
     ))
     .add_plugins((
-        miniboss::MinibossPlugin,
+        //miniboss::MinibossPlugin,
         asteroids::AsteroidPlugin,
         minions::MinionPlugin,
         tween::TweenPlugin,
@@ -108,11 +111,13 @@ fn main() {
         stats::StatPlugin,
         end::EndPlugin,
         input::InputPlugin,
+        boss::BossPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
     .add_systems(Startup, finish_startup.run_if(in_state(GameState::Startup)))
+    .add_systems(OnEnter(GameState::Restart), despawn_on_restart)
     .add_systems(
         Update,
         (
@@ -189,4 +194,16 @@ enum GameState {
     Restart,
     Game,
     Selection,
+}
+
+#[derive(Default, Component)]
+pub struct DespawnRestart;
+
+fn despawn_on_restart(mut commands: Commands, entities: Query<Entity, With<DespawnRestart>>) {
+    for entity in entities.iter() {
+        commands
+            .entity(entity)
+            .despawn_related::<Children>()
+            .despawn();
+    }
 }

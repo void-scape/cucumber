@@ -7,12 +7,12 @@ use crate::{
     animation::{AnimationController, AnimationIndices},
     assets,
     asteroids::{AsteroidSpawner, SpawnCluster},
-    atlas_layout,
+    atlas_layout, boss,
     bullet::{
         Destructable, Direction, MaxLifetime,
         emitter::{
             BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter, OrbEmitter,
-            ProximityEmitter, SoloEmitter,
+            ProximityEmitter, Rate, SoloEmitter,
         },
         homing::TurnSpeed,
     },
@@ -21,7 +21,7 @@ use crate::{
     player::Player,
 };
 use avian2d::prelude::*;
-use bevy::{prelude::*, time::TimeSystem};
+use bevy::{ecs::system::RunSystemOnce, prelude::*, time::TimeSystem};
 use bevy_optix::shake::TraumaCommands;
 use bevy_seedling::{
     prelude::Volume,
@@ -80,22 +80,26 @@ atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
 atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
 
 fn start_waves(mut commands: Commands) {
-    commands.insert_resource(
-        WaveTimeline::new_delayed(
-            START_DELAY,
-            &[
-                (swarm(), 22.),
-                (row(), 2.),
-                (mine_thrower(), 16.),
-                (swarm(), 16.),
-                (double_crisscross(), 2.),
-                (orb_slinger(), 16.),
-                (crisscross(), 2.),
-                (double_orb_slinger(), 10.),
-                (swarm(), 16.),
-            ],
-        ), //.skip(32.),
-    );
+    if crate::SKIP_WAVES {
+        commands.insert_resource(WaveTimeline::new(&[]));
+    } else {
+        commands.insert_resource(
+            WaveTimeline::new_delayed(
+                START_DELAY,
+                &[
+                    (swarm(), 22.),
+                    (row(), 2.),
+                    (mine_thrower(), 16.),
+                    (swarm(), 16.),
+                    (double_crisscross(), 2.),
+                    (orb_slinger(), 16.),
+                    (crisscross(), 2.),
+                    (double_orb_slinger(), 10.),
+                    (swarm(), 16.),
+                ],
+            ), //.skip(32.),
+        );
+    }
 
     //#[cfg(debug_assertions)]
     //commands.queue(|world: &mut World| {
@@ -123,6 +127,10 @@ pub struct WaveTimeline {
 }
 
 impl WaveTimeline {
+    pub fn new(seq: &[(Formation, f32)]) -> Self {
+        Self::new_delayed(0., seq)
+    }
+
     pub fn new_delayed(delay: f32, seq: &[(Formation, f32)]) -> Self {
         Self {
             seq: seq.to_vec(),
@@ -215,12 +223,13 @@ fn update_waves(
     if controller.finished() && formations.is_empty() {
         asteroids.0 = false;
         commands.remove_resource::<WaveTimeline>();
-        info!("ran out of formations, spawning boss");
-        run_after(
-            Duration::from_secs_f32(5.),
-            miniboss::spawn_boss,
-            &mut commands,
-        );
+
+        if crate::SKIP_WAVES {
+            commands.queue(|world: &mut World| world.run_system_once(boss::gradius));
+        } else {
+            info!("ran out of formations, spawning boss");
+            run_after(Duration::from_secs_f32(5.), boss::gradius, &mut commands);
+        }
     }
 }
 
@@ -266,7 +275,7 @@ impl EnemyType {
         match self {
             Self::Gunner => commands.with_child((
                 BulletModifiers {
-                    rate: 0.75,
+                    rate: Rate::Factor(0.75),
                     ..Default::default()
                 },
                 SoloEmitter::player(),
@@ -283,7 +292,7 @@ impl EnemyType {
                     HomingEmitter::<Player>::player(),
                     TurnSpeed(55.),
                     BulletModifiers {
-                        rate: 0.25,
+                        rate: Rate::Factor(0.25),
                         speed: 0.75,
                         ..Default::default()
                     },
@@ -302,7 +311,7 @@ impl EnemyType {
             Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
             Self::Swarm => commands.insert(swarm::SwarmMovement).with_child((
                 BulletModifiers {
-                    rate: 0.25,
+                    rate: Rate::Factor(0.25),
                     ..Default::default()
                 },
                 ProximityEmitter,

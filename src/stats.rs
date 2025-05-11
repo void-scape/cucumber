@@ -1,6 +1,5 @@
 use crate::GameState;
 use crate::enemy::EnemyDeathEvent;
-use crate::miniboss::BossDeathEvent;
 use crate::pickups::{Material, PickupEvent};
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
@@ -28,14 +27,12 @@ pub struct Stats {
 
 pub struct GameTime {
     timer: Stopwatch,
-    should_tick: bool,
 }
 
 impl Default for GameTime {
     fn default() -> Self {
         Self {
             timer: Stopwatch::new(),
-            should_tick: true,
         }
     }
 }
@@ -46,9 +43,7 @@ impl GameTime {
     }
 
     pub fn tick(&mut self, time: &Time) {
-        if self.should_tick {
-            self.timer.tick(time.delta());
-        }
+        self.timer.tick(time.delta());
     }
 }
 
@@ -56,12 +51,8 @@ fn track_stats(
     mut stats: ResMut<Stats>,
     mut kills: EventReader<EnemyDeathEvent>,
     mut materials: EventReader<PickupEvent>,
-    mut boss_death: EventReader<BossDeathEvent>,
     time: Res<Time>,
 ) {
-    if boss_death.read().count() > 0 {
-        stats.time.should_tick = false;
-    }
     stats.time.tick(&time);
     stats.kills += kills.read().count();
     stats.materials += materials

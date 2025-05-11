@@ -3,7 +3,7 @@ use self::{
     homing::HomingRotate,
 };
 use crate::{
-    GameState, Layer,
+    DespawnRestart, GameState, Layer,
     animation::{AnimationController, AnimationIndices, AnimationMode},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
@@ -52,7 +52,6 @@ impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
             .add_event::<BulletCollisionEvent>()
-            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 PostUpdate,
                 (handle_bullet_collision, despawn_dead_bullets)
@@ -70,12 +69,6 @@ impl Plugin for BulletPlugin {
                 PostUpdate,
                 init_bullet_sprite.in_set(BulletSystems::Sprite).chain(),
             );
-    }
-}
-
-fn restart(mut commands: Commands, bullets: Query<Entity, With<Bullet>>) {
-    for entity in bullets.iter() {
-        commands.entity(entity).despawn();
     }
 }
 
@@ -187,7 +180,7 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Polarity, Sensor, RigidBody::Kinematic, WallDespawn)]
+#[require(Polarity, Sensor, RigidBody::Kinematic, WallDespawn, DespawnRestart)]
 #[component(on_add = Self::add_color_mod)]
 pub struct Bullet;
 
