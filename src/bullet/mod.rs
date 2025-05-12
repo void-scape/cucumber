@@ -261,35 +261,37 @@ pub struct Orb;
 
 impl Mine {
     fn explode(mut world: DeferredWorld, ctx: HookContext) {
-        let transform = *world.get::<Transform>(ctx.entity).unwrap();
-        let mine_layers = *world.get::<CollisionLayers>(ctx.entity).unwrap();
+        if *world.resource::<State<GameState>>().get() != GameState::Restart {
+            let transform = *world.get::<Transform>(ctx.entity).unwrap();
+            let mine_layers = *world.get::<CollisionLayers>(ctx.entity).unwrap();
 
-        let layers = if mine_layers.filters.has_all(Layer::Player) {
-            Bullet::target_layer(Layer::Player)
-        } else {
-            Bullet::target_layer(Layer::Enemy)
-        };
+            let layers = if mine_layers.filters.has_all(Layer::Player) {
+                Bullet::target_layer(Layer::Player)
+            } else {
+                Bullet::target_layer(Layer::Enemy)
+            };
 
-        let dirs = [
-            (Direction::NorthEast, -std::f32::consts::PI / 4.),
-            (Direction::NorthWest, std::f32::consts::PI / 4.),
-            (Direction::SouthEast, std::f32::consts::PI / 4.),
-            (Direction::SouthWest, -std::f32::consts::PI / 4.),
-            //
-            (Direction::North, 0.),
-            (Direction::South, 0.),
-            (Direction::East, -std::f32::consts::PI / 2.),
-            (Direction::West, std::f32::consts::PI / 2.),
-        ];
+            let dirs = [
+                (Direction::NorthEast, -std::f32::consts::PI / 4.),
+                (Direction::NorthWest, std::f32::consts::PI / 4.),
+                (Direction::SouthEast, std::f32::consts::PI / 4.),
+                (Direction::SouthWest, -std::f32::consts::PI / 4.),
+                //
+                (Direction::North, 0.),
+                (Direction::South, 0.),
+                (Direction::East, -std::f32::consts::PI / 2.),
+                (Direction::West, std::f32::consts::PI / 2.),
+            ];
 
-        for (dir, rot) in dirs.into_iter() {
-            world.commands().spawn((
-                BasicBullet,
-                LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
-                transform.with_rotation(Quat::from_rotation_z(rot)),
-                layers,
-                Damage::new(BULLET_DAMAGE),
-            ));
+            for (dir, rot) in dirs.into_iter() {
+                world.commands().spawn((
+                    BasicBullet,
+                    LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
+                    transform.with_rotation(Quat::from_rotation_z(rot)),
+                    layers,
+                    Damage::new(BULLET_DAMAGE),
+                ));
+            }
         }
     }
 }

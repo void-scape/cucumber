@@ -47,7 +47,7 @@ pub const RES_HEIGHT: f32 = HEIGHT;
 
 pub const METER: f32 = 8.;
 
-pub const SKIP_WAVES: bool = true;
+pub const SKIP_WAVES: bool = false;
 
 fn main() {
     let mut app = App::new();

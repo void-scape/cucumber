@@ -79,6 +79,22 @@ pub fn mine_thrower() -> Formation {
     Formation::new(&[(EnemyType::MineThrower, Vec2::ZERO)])
 }
 
+pub fn quad_mine_thrower() -> Formation {
+    Formation::new(&[
+        (EnemyType::MineThrower, Vec2::new(-20., 0.)),
+        (EnemyType::MineThrower, Vec2::new(20., 0.)),
+        (EnemyType::MineThrower, Vec2::new(-40., 10.)),
+        (EnemyType::MineThrower, Vec2::new(40., 10.)),
+    ])
+}
+
+pub fn double_buck_shot() -> Formation {
+    Formation::new(&[
+        (EnemyType::BuckShot, Vec2::new(-30., 0.)),
+        (EnemyType::BuckShot, Vec2::new(30., 0.)),
+    ])
+}
+
 pub fn orb_slinger() -> Formation {
     Formation::new(&[(EnemyType::OrbSlinger, Vec2::ZERO)])
 }
@@ -117,7 +133,7 @@ pub fn swarm() -> Formation {
         (EnemyType::Swarm, Vec2::new(x + SWARM_OFFSET, y))
     }));
 
-    Formation::new(&enemies)
+    Formation::with_velocity(DEFAULT_FORMATION_VEL * 1.5, &enemies)
 }
 
 impl Formation {

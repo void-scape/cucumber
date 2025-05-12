@@ -1,5 +1,8 @@
 use self::{
-    formation::{Formation, FormationPlugin, FormationSet, double_crisscross, double_orb_slinger},
+    formation::{
+        Formation, FormationPlugin, FormationSet, double_buck_shot, double_crisscross,
+        double_orb_slinger, quad_mine_thrower,
+    },
     movement::*,
 };
 use crate::{
@@ -11,13 +14,12 @@ use crate::{
     bullet::{
         Destructable, Direction, MaxLifetime,
         emitter::{
-            BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter, OrbEmitter,
-            ProximityEmitter, Rate, SoloEmitter,
+            BuckShotEmitter, BulletModifiers, CrisscrossEmitter, HomingEmitter, MineEmitter,
+            OrbEmitter, ProximityEmitter, Rate, SoloEmitter,
         },
         homing::TurnSpeed,
     },
     health::{Dead, Health},
-    miniboss,
     player::Player,
 };
 use avian2d::prelude::*;
@@ -87,10 +89,12 @@ fn start_waves(mut commands: Commands) {
             WaveTimeline::new_delayed(
                 START_DELAY,
                 &[
-                    (swarm(), 22.),
-                    (row(), 2.),
-                    (mine_thrower(), 16.),
-                    (swarm(), 16.),
+                    (swarm(), 8.),
+                    (swarm(), 12.),
+                    (double_buck_shot(), 14.),
+                    //(row(), 2.),
+                    (quad_mine_thrower(), 16.),
+                    (swarm(), 8.),
                     (double_crisscross(), 2.),
                     (orb_slinger(), 16.),
                     (crisscross(), 2.),
@@ -248,6 +252,7 @@ pub struct Enemy;
 pub enum EnemyType {
     Gunner,
     Missile,
+    BuckShot,
     MineThrower,
     OrbSlinger,
     CrissCross,
@@ -301,17 +306,25 @@ impl EnemyType {
             Self::MineThrower => commands
                 .insert((
                     BackAndForth {
-                        radius: rng.random_range(9.0..11.0),
-                        speed: rng.random_range(2.2..3.4),
+                        radius: rng.random_range(4.0..6.0),
+                        speed: rng.random_range(1.2..2.4),
                     },
                     Angle(rng.random_range(0.0..2.0)),
                 ))
                 .with_child(MineEmitter::player()),
             Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
+            Self::BuckShot => commands.with_child((
+                BuckShotEmitter::player().with_all(4, 1.5, 0.2),
+                BulletModifiers {
+                    speed: 0.4,
+                    ..Default::default()
+                },
+            )),
             Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
             Self::Swarm => commands.insert(swarm::SwarmMovement).with_child((
                 BulletModifiers {
                     rate: Rate::Factor(0.25),
+                    speed: 0.5,
                     ..Default::default()
                 },
                 ProximityEmitter,
@@ -329,6 +342,7 @@ impl EnemyType {
             Self::Missile => Health::full(15.0),
             Self::MineThrower => Health::full(15.0),
             Self::OrbSlinger => Health::full(40.0),
+            Self::BuckShot => Health::full(20.0),
             Self::CrissCross => Health::full(40.0),
             Self::Swarm => Health::full(1.),
         }
@@ -342,6 +356,7 @@ impl EnemyType {
                 assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(4, 3))
             }
             Self::OrbSlinger => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(3, 4)),
+            Self::BuckShot => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(4, 4)),
             Self::CrissCross => assets::sprite_rect16(server, assets::SHIPS_PATH, UVec2::new(2, 4)),
             Self::Swarm => assets::sprite_rect8(server, assets::SHIPS_PATH, UVec2::new(4, 0)),
         }
@@ -353,6 +368,7 @@ impl EnemyType {
             Self::Missile => 2,
             Self::MineThrower => 3,
             Self::OrbSlinger => 8,
+            Self::BuckShot => 8,
             Self::CrissCross => 6,
             Self::Swarm => {
                 if rand::rng().random_bool(0.2) {
@@ -366,11 +382,6 @@ impl EnemyType {
 
     pub fn shield(&self) -> usize {
         match self {
-            Self::Gunner => 1,
-            Self::Missile => 2,
-            Self::MineThrower => 3,
-            Self::OrbSlinger => 8,
-            Self::CrissCross => 6,
             Self::Swarm => {
                 if rand::rng().random() {
                     1
@@ -378,6 +389,7 @@ impl EnemyType {
                     0
                 }
             }
+            _ => self.parts(),
         }
     }
 }

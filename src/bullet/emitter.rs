@@ -46,7 +46,7 @@ const CRISSCROSS_SHOT_RATE: f32 = 0.15;
 const CRISSCROSS_WAVES: usize = 5;
 
 pub const MISSILE_HEALTH: f32 = 2.;
-pub const MINE_HEALTH: f32 = 3.;
+pub const MINE_HEALTH: f32 = 2.;
 
 const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
 
@@ -932,7 +932,6 @@ impl OrbEmitter {
                     volume: Volume::Decibels(-22.0),
                     ..PlaybackSettings::ONCE
                 },
-                sample_effects![LowPassNode { frequency: 10000.0 }],
             ));
         }
     }
@@ -1043,7 +1042,6 @@ impl CrisscrossEmitter {
                     volume: Volume::Decibels(-22.0),
                     ..PlaybackSettings::ONCE
                 },
-                sample_effects![LowPassNode { frequency: 10000.0 }],
             ));
         }
     }
