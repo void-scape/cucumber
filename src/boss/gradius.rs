@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy_optix::debug::DebugRect;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
 
-const HEALTH: f32 = 300.;
+const HEALTH: f32 = 500.;
 
 pub struct GradiusPlugin;
 

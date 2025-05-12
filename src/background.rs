@@ -32,6 +32,8 @@ fn scrolling_background(
     mut meshes: ResMut<Assets<Mesh>>,
     mut custom_materials: ResMut<Assets<ScrollingTexture>>,
 ) {
+    //commands.spawn(Sprite::from_image(server.load("star.png")));
+
     commands.spawn((
         Mesh2d(meshes.add(Rectangle::new(BACKGROUND_WIDTH, BACKGROUND_HEIGHT))),
         MeshMaterial2d(custom_materials.add(ScrollingTexture {

@@ -90,13 +90,16 @@ fn start_waves(mut commands: Commands) {
                 START_DELAY,
                 &[
                     (swarm(), 8.),
-                    (swarm(), 12.),
-                    (double_buck_shot(), 14.),
+                    (crisscross(), 2.),
+                    (double_buck_shot(), 4.),
+                    (swarm(), 6.),
+                    (double_buck_shot(), 8.),
                     //(row(), 2.),
-                    (quad_mine_thrower(), 16.),
-                    (swarm(), 8.),
+                    (quad_mine_thrower(), 4.),
+                    (swarm(), 4.),
+                    (quad_mine_thrower(), 8.),
                     (double_crisscross(), 2.),
-                    (orb_slinger(), 16.),
+                    (orb_slinger(), 8.),
                     (crisscross(), 2.),
                     (double_orb_slinger(), 10.),
                     (swarm(), 16.),
@@ -227,13 +230,7 @@ fn update_waves(
     if controller.finished() && formations.is_empty() {
         asteroids.0 = false;
         commands.remove_resource::<WaveTimeline>();
-
-        if crate::SKIP_WAVES {
-            commands.queue(|world: &mut World| world.run_system_once(boss::gradius));
-        } else {
-            info!("ran out of formations, spawning boss");
-            run_after(Duration::from_secs_f32(5.), boss::gradius, &mut commands);
-        }
+        commands.queue(|world: &mut World| world.run_system_once(boss::gradius));
     }
 }
 

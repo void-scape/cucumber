@@ -30,6 +30,7 @@ use std::{cmp::Ordering, f32, time::Duration};
 pub const PLAYER_HEALTH: f32 = 2.0;
 pub const PLAYER_SHIELD: f32 = 4.0;
 const PLAYER_EASE_DUR: f32 = 1.;
+const PLAYER_SPEED: f32 = 80.;
 
 pub struct PlayerPlugin;
 
@@ -56,14 +57,16 @@ fn spawn_player(
     mut writer: EventWriter<PickupEvent>,
     mut mats: ResMut<MinMaterials>,
 ) {
-    let starting_weapon = commands.spawn(Player::bullet_emitter()).id();
     let player = commands
         .spawn((
             Player,
-            WeaponEntity(starting_weapon),
+            //WeaponEntity(starting_weapon),
             Transform::from_xyz(0., -HEIGHT / 6., 0.),
+            BulletModifiers {
+                speed: 2.,
+                ..Default::default()
+            },
         ))
-        .add_child(starting_weapon)
         .id();
     //commands.spawn((Miner, MinerLeader(player)));
 
@@ -76,10 +79,14 @@ fn spawn_player(
         &mut commands,
     );
 
+    writer.write(PickupEvent::Weapon(Weapon::Bullet));
+    writer.write(PickupEvent::Weapon(Weapon::Bullet));
+
     if crate::SKIP_WAVES {
         writer.write(PickupEvent::Weapon(Weapon::Bullet));
         writer.write(PickupEvent::Weapon(Weapon::Bullet));
         writer.write(PickupEvent::Weapon(Weapon::Missile));
+        writer.write(PickupEvent::Upgrade(Upgrade::Speed(0.2)));
         writer.write(PickupEvent::Upgrade(Upgrade::Speed(0.2)));
         writer.write(PickupEvent::Upgrade(Upgrade::Juice(0.2)));
         for _ in 0..5 {
@@ -109,7 +116,7 @@ fn spawn_player(
     Shield::full(PLAYER_SHIELD),
     Health::full(PLAYER_HEALTH),
     RigidBody::Dynamic,
-    Collider::rectangle(6., 6.),
+    Collider::rectangle(4., 4.),
     CollidingEntities,
     CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletModifiers,
@@ -224,7 +231,7 @@ fn apply_movement(
     let (mut velocity, blocked) = player.into_inner();
 
     if blocked.is_none() {
-        velocity.0 = trigger.value.normalize_or_zero() * 60.;
+        velocity.0 = trigger.value.clamp_length(0., 1.) * PLAYER_SPEED;
     }
 
     if velocity.0.x != 0.0 && velocity.0.x.abs() < f32::EPSILON {
@@ -286,7 +293,7 @@ fn handle_pickups(
     q: Single<
         (
             Entity,
-            &mut WeaponEntity,
+            //&mut WeaponEntity,
             &mut BulletModifiers,
             &mut Materials,
             &mut Shield,
@@ -295,7 +302,7 @@ fn handle_pickups(
     >,
     mut events: EventReader<PickupEvent>,
 ) {
-    let (player, mut weapon_entity, mut mods, mut materials, mut shield) = q.into_inner();
+    let (player, mut mods, mut materials, mut shield) = q.into_inner();
     for event in events.read() {
         match event {
             PickupEvent::Weapon(weapon) => {
@@ -307,7 +314,7 @@ fn handle_pickups(
                     Weapon::Laser => commands.spawn(Player::laser_emitter()).id(),
                 };
 
-                weapon_entity.0 = emitter;
+                //weapon_entity.0 = emitter;
                 commands.entity(player).add_child(emitter);
 
                 commands.run_system_cached(
