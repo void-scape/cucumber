@@ -3,10 +3,11 @@ name: Build
 on: push
 
 jobs:
-  release-linux:
+  release-build:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
