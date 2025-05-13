@@ -39,13 +39,9 @@ impl Plugin for PlayerPlugin {
         app.add_systems(OnEnter(GameState::StartGame), spawn_player)
             .add_systems(
                 Update,
-                (
-                    handle_pickups,
-                    handle_death,
-                    zero_rotation,
-                    update_player_sprites,
-                ),
+                (handle_pickups, zero_rotation, update_player_sprites),
             )
+            .add_systems(First, handle_death)
             .add_input_context::<AliveContext>()
             .add_observer(apply_movement)
             .add_observer(stop_movement);
@@ -281,7 +277,7 @@ fn zero_rotation(mut player: Single<&mut Transform, With<Player>>) {
 struct MoveAction;
 
 #[derive(InputContext)]
-struct AliveContext;
+pub struct AliveContext;
 
 fn handle_death(mut commands: Commands, player: Single<Entity, (With<Player>, With<Dead>)>) {
     commands.entity(*player).despawn();

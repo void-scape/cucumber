@@ -32,6 +32,7 @@ pub const ORB_DAMAGE: f32 = 1.;
 const BULLET_RATE: f32 = 0.5;
 const MISSILE_RATE: f32 = 0.5;
 const MINE_RATE: f32 = 1.5;
+const WALL_RATE: f32 = 1.5;
 
 const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
@@ -72,6 +73,7 @@ impl Plugin for EmitterPlugin {
                     CrisscrossEmitter::shoot_bullets,
                     ProximityEmitter::shoot_bullets,
                     BuckShotEmitter::shoot_bullets,
+                    WallEmitter::shoot_bullets,
                 ),
             )
                 .chain()
@@ -677,10 +679,6 @@ impl MineEmitter {
     pub fn player() -> Self {
         Self(Layer::Player)
     }
-
-    pub fn enemy() -> Self {
-        Self(Layer::Enemy)
-    }
 }
 
 impl MineEmitter {
@@ -852,13 +850,6 @@ impl OrbEmitter {
         }
     }
 
-    pub fn enemy() -> Self {
-        Self {
-            layer: Layer::Enemy,
-            ..Default::default()
-        }
-    }
-
     pub fn with_all(mut self, waves: usize, wait_fur: f32, shot_dur: f32) -> Self {
         self.waves = waves;
         self.shot_dur = shot_dur;
@@ -950,10 +941,6 @@ pub struct CrisscrossEmitter(Layer);
 impl CrisscrossEmitter {
     pub fn player() -> Self {
         Self(Layer::Player)
-    }
-
-    pub fn enemy() -> Self {
-        Self(Layer::Enemy)
     }
 }
 
@@ -1075,13 +1062,6 @@ impl BuckShotEmitter {
         }
     }
 
-    pub fn enemy() -> Self {
-        Self {
-            layer: Layer::Enemy,
-            ..Default::default()
-        }
-    }
-
     pub fn with_all(mut self, waves: usize, wait_fur: f32, shot_dur: f32) -> Self {
         self.waves = waves;
         self.shot_dur = shot_dur;
@@ -1175,6 +1155,123 @@ impl BuckShotEmitter {
                     ..PlaybackSettings::ONCE
                 },
                 sample_effects![LowPassNode { frequency: 10000.0 }],
+            ));
+        }
+    }
+}
+
+#[derive(Component, Default)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+pub struct WallEmitter {
+    layer: Layer,
+    bullets: usize,
+    dir: Vec2,
+}
+
+impl WallEmitter {
+    pub fn player() -> Self {
+        Self::from_dir(Vec2::NEG_Y)
+    }
+
+    pub fn from_dir(dir: Vec2) -> Self {
+        assert!(dir != Vec2::ZERO);
+        Self {
+            layer: Layer::Player,
+            bullets: 5,
+            dir: dir.normalize(),
+        }
+    }
+}
+
+fn rotate_around(vec: Vec2, center: Vec2, angle: f32) -> Vec2 {
+    let translated_x = vec.x - center.x;
+    let translated_y = vec.y - center.y;
+
+    let rotated_x = translated_x * angle.cos() - translated_y * angle.sin();
+    let rotated_y = translated_x * angle.sin() + translated_y * angle.cos();
+
+    Vec2 {
+        x: rotated_x + center.x,
+        y: rotated_y + center.y,
+    }
+}
+
+impl WallEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (
+                Entity,
+                &WallEmitter,
+                Option<&mut BulletTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        server: Res<AssetServer>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let duration = mods.rate.duration(WALL_RATE);
+            let Some(mut timer) = timer else {
+                commands.entity(entity).insert(BulletTimer {
+                    timer: Timer::new(duration, TimerMode::Repeating),
+                });
+                continue;
+            };
+
+            let mut new_transform = transform.compute_transform();
+            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+            timer.timer.set_duration(duration);
+
+            let x_gap = 10.;
+            let center_x = (emitter.bullets - 1) as f32 * x_gap / 2.0;
+
+            let bowl_depth = 5.;
+            for i in 0..emitter.bullets {
+                let x = i as f32 * x_gap - center_x;
+                let y = bowl_depth * (x / center_x).powi(2);
+
+                let mut t = new_transform;
+                let p = rotate_around(
+                    t.translation.xy() + Vec2::new(x, y),
+                    t.translation.xy(),
+                    emitter.dir.to_angle() + std::f32::consts::PI / 2.,
+                )
+                .extend(0.);
+                t.translation = p;
+
+                commands.spawn((
+                    Orb,
+                    t,
+                    LinearVelocity(emitter.dir * ORB_SPEED * mods.speed),
+                    Bullet::target_layer(emitter.layer),
+                    Damage::new(MINE_DAMAGE * mods.damage),
+                ));
+            }
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/orb.wav")),
+                PlaybackSettings {
+                    volume: Volume::Decibels(-18.0),
+                    ..PlaybackSettings::ONCE
+                },
+                sample_effects![BandPassNode::new(1000.0, 4.0)],
             ));
         }
     }

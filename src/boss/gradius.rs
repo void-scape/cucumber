@@ -1,6 +1,8 @@
 use crate::asteroids::SpawnCluster;
-use crate::bullet::Destructable;
-use crate::bullet::emitter::{BuckShotEmitter, BulletModifiers, EmitterDelay, OrbEmitter};
+use crate::bullet::emitter::{
+    BuckShotEmitter, BulletModifiers, EmitterDelay, OrbEmitter, Rate, WallEmitter,
+};
+use crate::bullet::{Bullet, Destructable};
 use crate::enemy::Enemy;
 use crate::health::{Dead, Health};
 use crate::{DespawnRestart, Layer};
@@ -65,9 +67,10 @@ impl FlipOrbEmitters {
 
 fn enter_phasea(trigger: Trigger<OnAdd, PhaseA>, mut commands: Commands) {
     let orb = OrbEmitter::player().with_all(8, 2.0, 0.2);
+    let total_time = orb.total_time();
     let buck_waves = 4;
     let buck_shot_dur = 0.2;
-    let buck_wait = orb.total_time() - buck_shot_dur * buck_waves as f32;
+    let buck_wait = total_time - buck_shot_dur * buck_waves as f32;
 
     commands
         .entity(trigger.target())
@@ -75,14 +78,45 @@ fn enter_phasea(trigger: Trigger<OnAdd, PhaseA>, mut commands: Commands) {
         .with_children(|root| {
             root.spawn((orb.clone(), Transform::from_xyz(-40., 0., 0.)));
             root.spawn((orb, Transform::from_xyz(40., 40., 0.)));
+
             root.spawn((
                 BuckShotEmitter::player().with_all(buck_waves, buck_wait, buck_shot_dur),
-                EmitterDelay::new(orb.total_time() / 2.),
                 BulletModifiers {
                     speed: 0.5,
                     ..Default::default()
                 },
+                EmitterDelay::new(total_time / 2.),
             ));
+
+            root.spawn((
+                WallEmitter::from_dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.80)),
+                BulletModifiers {
+                    speed: 1.25,
+                    rate: Rate::Secs(total_time),
+                    ..Default::default()
+                },
+                EmitterDelay::new(total_time / 2.),
+                Transform::from_xyz(-40., 30., 0.),
+            ));
+            root.spawn((
+                WallEmitter::from_dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.70)),
+                BulletModifiers {
+                    speed: 1.25,
+                    rate: Rate::Secs(total_time),
+                    ..Default::default()
+                },
+                EmitterDelay::new(total_time / 2.),
+                Transform::from_xyz(40., 30., 0.),
+            ));
+
+            //root.spawn((
+            //    WallEmitter::player(),
+            //    BulletModifiers {
+            //        speed: 0.8,
+            //        ..Default::default()
+            //    },
+            //    Transform::from_xyz(0., 30., 0.),
+            //));
         });
 }
 

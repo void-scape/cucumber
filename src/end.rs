@@ -1,5 +1,5 @@
 use crate::stats::Stats;
-use crate::{GameState, input};
+use crate::{DespawnRestart, GameState, input};
 use bevy::prelude::*;
 use bevy_enhanced_input::events::Fired;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
@@ -15,14 +15,11 @@ impl Plugin for EndPlugin {
 #[derive(Component)]
 struct EndScreen;
 
-#[derive(Component)]
-struct EndScreenEntity;
-
 pub fn show_win_screen(mut commands: Commands, server: Res<AssetServer>, stats: Res<Stats>) {
-    commands.spawn((EndScreen, EndScreenEntity));
+    commands.spawn((EndScreen, DespawnRestart));
 
     commands.spawn((
-        EndScreenEntity,
+        DespawnRestart,
         HIGH_RES_LAYER,
         Text2d("You Won!".into()),
         TextFont {
@@ -42,7 +39,7 @@ pub fn show_win_screen(mut commands: Commands, server: Res<AssetServer>, stats: 
 
     for (y, text) in stats.into_iter() {
         commands.spawn((
-            EndScreenEntity,
+            DespawnRestart,
             HIGH_RES_LAYER,
             Text2d(text),
             TextFont {
@@ -55,7 +52,7 @@ pub fn show_win_screen(mut commands: Commands, server: Res<AssetServer>, stats: 
     }
 
     commands.spawn((
-        EndScreenEntity,
+        DespawnRestart,
         Sprite {
             rect: Some(Rect::from_center_size(
                 Vec2::ZERO,
@@ -69,10 +66,10 @@ pub fn show_win_screen(mut commands: Commands, server: Res<AssetServer>, stats: 
 }
 
 pub fn show_loose_screen(mut commands: Commands, server: Res<AssetServer>, stats: Res<Stats>) {
-    commands.spawn((EndScreen, EndScreenEntity));
+    commands.spawn((EndScreen, DespawnRestart));
 
     commands.spawn((
-        EndScreenEntity,
+        DespawnRestart,
         HIGH_RES_LAYER,
         Text2d("You Died...".into()),
         TextFont {
@@ -92,7 +89,7 @@ pub fn show_loose_screen(mut commands: Commands, server: Res<AssetServer>, stats
 
     for (y, text) in stats.into_iter() {
         commands.spawn((
-            EndScreenEntity,
+            DespawnRestart,
             HIGH_RES_LAYER,
             Text2d(text),
             TextFont {
@@ -105,7 +102,7 @@ pub fn show_loose_screen(mut commands: Commands, server: Res<AssetServer>, stats
     }
 
     commands.spawn((
-        EndScreenEntity,
+        DespawnRestart,
         Sprite {
             rect: Some(Rect::from_center_size(
                 Vec2::ZERO,
@@ -122,10 +119,6 @@ fn restart(
     _: Trigger<Fired<input::Interact>>,
     _enable: Single<&EndScreen>,
     mut commands: Commands,
-    entities: Query<Entity, With<EndScreenEntity>>,
 ) {
-    for entity in entities.iter() {
-        commands.entity(entity).despawn();
-    }
     commands.set_state(GameState::Restart);
 }

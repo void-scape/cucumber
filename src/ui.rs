@@ -1,7 +1,7 @@
 use crate::health::{Health, Shield};
 use crate::pickups::PickupEvent;
 use crate::player::{PLAYER_HEALTH, PLAYER_SHIELD, Player};
-use crate::{GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
+use crate::{DespawnRestart, GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
@@ -10,31 +10,21 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Restart), restart)
-            .add_systems(
-                OnEnter(GameState::StartGame),
-                (frame, health, shield, init_upgrade_ui),
-            )
-            .add_systems(Update, (update_health, update_upgrades, update_shield));
+        app.add_systems(
+            OnEnter(GameState::StartGame),
+            (frame, health, shield, init_upgrade_ui),
+        )
+        .add_systems(Update, (update_health, update_upgrades, update_shield));
     }
 }
-
-fn restart(mut commands: Commands, ui: Query<Entity, With<UI>>) {
-    for entity in ui.iter() {
-        commands.entity(entity).despawn();
-    }
-}
-
-#[derive(Component)]
-struct UI;
 
 fn init_upgrade_ui(mut commands: Commands) {
-    commands.spawn((UI, UpgradeUi(0)));
+    commands.spawn((DespawnRestart, UpgradeUi(0)));
 }
 
 fn frame(mut commands: Commands, server: Res<AssetServer>) {
     commands.spawn((
-        UI,
+        DespawnRestart,
         HIGH_RES_LAYER,
         Sprite::from_image(server.load("frame.png")),
         Transform::from_scale(Vec3::splat(RESOLUTION_SCALE)),
@@ -56,6 +46,7 @@ fn health(
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
     commands.spawn((
+        DespawnRestart,
         HeartText,
         HIGH_RES_LAYER,
         Text2d::default(),
@@ -85,7 +76,7 @@ fn health(
     let mut y = (RES_HEIGHT / 2. - HEART_OFFSET) * RESOLUTION_SCALE;
     for _ in 0..(PLAYER_HEALTH as usize) {
         commands.spawn((
-            UI,
+            DespawnRestart,
             HeartUi,
             Sprite {
                 image: server.load("heart_ui.png"),
@@ -132,6 +123,7 @@ fn shield(
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
     commands.spawn((
+        DespawnRestart,
         ShieldText,
         HIGH_RES_LAYER,
         Text2d::default(),
@@ -162,7 +154,7 @@ fn shield(
         - (HEART_SIZE + HEART_OFFSET) * RESOLUTION_SCALE * PLAYER_HEALTH;
     for _ in 0..(PLAYER_SHIELD as usize) {
         commands.spawn((
-            UI,
+            DespawnRestart,
             ShieldUi,
             Sprite {
                 image: server.load("shield_ui.png"),
@@ -218,7 +210,7 @@ fn update_upgrades(
                 let mut sprite = upgrade.sprite(&server);
                 sprite.anchor = Anchor::TopRight;
                 commands.spawn((
-                    UI,
+                    DespawnRestart,
                     sprite,
                     Transform::from_xyz(x, y, 0.).with_scale(Vec3::splat(RESOLUTION_SCALE)),
                     HIGH_RES_LAYER,

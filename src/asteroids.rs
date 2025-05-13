@@ -11,7 +11,6 @@ use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
 use bevy_tween::tween::IntoTarget;
 use physics::linear_velocity;
 use rand::Rng;
-use rand::seq::IteratorRandom;
 use std::time::Duration;
 
 pub struct AsteroidPlugin;
@@ -127,7 +126,7 @@ pub struct SpawnCluster {
 #[require(Visibility)]
 pub struct MaterialCluster;
 
-const MATERIAL_SPEED: f32 = 20.;
+pub const MATERIAL_SPEED: f32 = 20.;
 
 fn handle_death(
     mut commands: Commands,

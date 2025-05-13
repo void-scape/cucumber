@@ -1,11 +1,9 @@
-use std::time::Duration;
-
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::player::Player;
-use crate::{Layer, assets};
+use crate::{DespawnRestart, Layer, assets};
 use avian2d::prelude::*;
-use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_SKY_BLUE, YELLOW};
+use bevy::color::palettes::css::{LIGHT_BLUE, YELLOW};
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -228,7 +226,7 @@ impl Material {
 }
 
 #[derive(Component)]
-#[require(Collectable, Collider::rectangle(8., 8.), LinearVelocity(Vec2::NEG_Y * 20.))]
+#[require(Collectable, Collider::rectangle(8., 8.), LinearVelocity(Vec2::NEG_Y * 20.), DespawnRestart)]
 pub struct ScrollingPickup {
     index: usize,
     timer: Timer,

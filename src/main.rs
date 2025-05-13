@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![windows_subsystem = "windows"]
 
 use avian2d::prelude::{Gravity, PhysicsLayer};
 use bevy::app::FixedMainScheduleOrder;
@@ -16,6 +17,7 @@ mod assets;
 mod asteroids;
 mod auto_collider;
 mod background;
+mod bomb;
 mod boss;
 mod bounds;
 mod bullet;
@@ -112,12 +114,16 @@ fn main() {
         end::EndPlugin,
         input::InputPlugin,
         boss::BossPlugin,
+        bomb::BombPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
     .init_state::<GameState>()
     .add_systems(Startup, finish_startup.run_if(in_state(GameState::Startup)))
-    .add_systems(OnEnter(GameState::Restart), despawn_on_restart)
+    .add_systems(
+        Update,
+        despawn_on_restart.run_if(in_state(GameState::Restart)),
+    )
     .add_systems(
         Update,
         (
@@ -200,6 +206,7 @@ enum GameState {
 pub struct DespawnRestart;
 
 fn despawn_on_restart(mut commands: Commands, entities: Query<Entity, With<DespawnRestart>>) {
+    info!("Despawn on restart");
     for entity in entities.iter() {
         commands
             .entity(entity)
