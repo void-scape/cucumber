@@ -16,7 +16,7 @@ pub struct BombPlugin;
 impl Plugin for BombPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::StartGame), insert_bombs)
-            .add_systems(Update, update_text)
+            .add_systems(Update, update_text.run_if(in_state(GameState::Game)))
             .add_observer(bind)
             .add_observer(detonate);
     }
@@ -55,9 +55,11 @@ fn insert_bombs(mut commands: Commands, server: Res<AssetServer>) {
     ));
 }
 
-fn update_text(bombs: Res<Bombs>, mut text: Single<&mut Text2d, With<BombDisplay>>) {
-    if bombs.is_changed() {
-        text.0 = format!("Bombs: {}", bombs.0);
+fn update_text(bombs: Option<Res<Bombs>>, mut text: Single<&mut Text2d, With<BombDisplay>>) {
+    if let Some(bombs) = bombs {
+        if bombs.is_changed() {
+            text.0 = format!("Bombs: {}", bombs.0);
+        }
     }
 }
 
