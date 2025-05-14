@@ -123,7 +123,7 @@ fn insert_image_collider(
         }
 
         let bounds = Rect::from_corners(min, max);
-        let size = bounds.size() + 1.;
+        let size = bounds.size();
         commands
             .entity(entity)
             .insert(Collider::rectangle(size.x, size.y))

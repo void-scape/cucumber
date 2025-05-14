@@ -5,7 +5,7 @@ use bevy::prelude::*;
 const SWARM_SPEED: f32 = 60.;
 const SWARM_THRESHOLD: f32 = WIDTH * 1.25;
 
-#[derive(Debug, Component)]
+#[derive(Debug, Default, Component)]
 pub struct SwarmMovement;
 
 pub(super) fn swarm_movement(

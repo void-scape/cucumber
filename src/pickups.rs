@@ -67,6 +67,7 @@ impl From<&Pickup> for PickupEvent {
     RigidBody::Kinematic,
     Sensor,
     WallDespawn,
+    DespawnRestart,
     CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player, Layer::Miners]),
 )]
 pub struct Collectable;
@@ -118,9 +119,10 @@ impl SpriteHook for Upgrade {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Component)]
 #[component(on_add = Self::sprite_hook)]
 pub enum Weapon {
+    #[default]
     Bullet,
     Laser,
     Missile,
@@ -253,22 +255,21 @@ fn update_scrolling_pickup(
             scroll_pickup.timer.set_elapsed(dur);
         }
 
+        const CHOICES: [Pickup; 4] = [
+            Pickup::Upgrade(Upgrade::Speed(0.2)),
+            Pickup::Upgrade(Upgrade::Juice(0.2)),
+            Pickup::Weapon(Weapon::Bullet),
+            Pickup::Weapon(Weapon::Missile),
+            //Pickup::Weapon(Weapon::Laser),
+        ];
+
         if scroll_pickup.timer.just_finished() {
             scroll_pickup.index += 1;
-            if scroll_pickup.index > 4 {
+            if scroll_pickup.index >= CHOICES.len() {
                 scroll_pickup.index = 0;
             }
 
-            let pickup = [
-                Pickup::Upgrade(Upgrade::Speed(0.2)),
-                Pickup::Upgrade(Upgrade::Juice(0.2)),
-                Pickup::Weapon(Weapon::Bullet),
-                Pickup::Weapon(Weapon::Missile),
-                Pickup::Weapon(Weapon::Laser),
-            ]
-            .into_iter()
-            .nth(scroll_pickup.index)
-            .unwrap();
+            let pickup = CHOICES.into_iter().nth(scroll_pickup.index).unwrap();
             commands.entity(entity).remove::<(Weapon, Upgrade)>();
 
             match pickup {

@@ -1,13 +1,13 @@
-use crate::asteroids::MATERIAL_SPEED;
-use crate::bullet::Bullet;
-use crate::pickups::Material;
+use crate::bullet::{Bullet, PlayerBullet};
+use crate::effects::{Size, SpawnExplosion};
 use crate::player::AliveContext;
+use crate::points::PointEvent;
 use crate::{DespawnRestart, GameState};
-use avian2d::prelude::LinearVelocity;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_enhanced_input::prelude::*;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
+use bevy_seedling::prelude::*;
 
 const STARTING_BOMBS: usize = 3;
 
@@ -64,32 +64,63 @@ fn update_text(bombs: Option<Res<Bombs>>, mut text: Single<&mut Text2d, With<Bom
 }
 
 #[derive(Debug, InputAction)]
-#[input_action(output = bool)]
+#[input_action(output = bool, consume_input = false)]
 pub struct BombAction;
 
 fn bind(trigger: Trigger<Binding<AliveContext>>, mut actions: Query<&mut Actions<AliveContext>>) {
     let mut actions = actions.get_mut(trigger.target()).unwrap();
     actions
         .bind::<BombAction>()
-        .to((KeyCode::KeyC, GamepadButton::North))
+        .to((KeyCode::KeyC, GamepadButton::East))
         .with_conditions(JustPress::default());
 }
 
 fn detonate(
     _: Trigger<Fired<BombAction>>,
     mut commands: Commands,
+    server: Res<AssetServer>,
     mut bombs: ResMut<Bombs>,
-    bullets: Query<(Entity, &Transform), With<Bullet>>,
+    mut points: EventWriter<PointEvent>,
+    mut explosions: EventWriter<SpawnExplosion>,
+    bullets: Query<(Entity, &Transform), (With<Bullet>, Without<PlayerBullet>)>,
 ) {
     if bombs.0 != 0 {
         bombs.0 -= 1;
+
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/bfxr/Random8 (2).wav")),
+            PlaybackParams {
+                speed: 0.75,
+                ..Default::default()
+            },
+            PlaybackSettings {
+                volume: Volume::Linear(0.65),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/note2.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.5),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+
         for (entity, transform) in bullets.iter() {
             commands.entity(entity).despawn();
-            commands.spawn((
-                Material::Parts,
-                LinearVelocity(Vec2::NEG_Y * MATERIAL_SPEED),
-                *transform,
-            ));
+            points.write(PointEvent {
+                position: transform.translation.xy(),
+                points: 2,
+            });
+            explosions.write(SpawnExplosion {
+                position: transform.translation.xy(),
+                size: Size::Small,
+            });
+            //commands.spawn((
+            //    Material::Parts,
+            //    LinearVelocity(Vec2::NEG_Y * MATERIAL_SPEED),
+            //    *transform,
+            //));
         }
     }
 }

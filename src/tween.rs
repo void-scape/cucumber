@@ -1,3 +1,5 @@
+use crate::enemy::timeline::WaveTimeline;
+use crate::float_tween;
 use avian2d::prelude::{Physics, PhysicsTime};
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
@@ -7,8 +9,6 @@ use bevy_tween::combinator::AnimationCommands;
 use bevy_tween::prelude::*;
 use bevy_tween::tween::apply_resource_tween_system;
 use rand::Rng;
-
-use crate::enemy::WaveTimeline;
 
 pub struct TweenPlugin;
 
@@ -45,38 +45,7 @@ fn no_timeline_skip(timeline: Option<Res<WaveTimeline>>) -> bool {
     !timeline.is_some_and(|t| t.is_skipping())
 }
 
-#[derive(Resource)]
-pub struct TimeMult(pub f32);
-
-impl Default for TimeMult {
-    fn default() -> Self {
-        Self(1.)
-    }
-}
-
-pub fn time_mult(start: f32, end: f32) -> TimeTween {
-    TimeTween::new(start, end)
-}
-
-#[derive(Component)]
-pub struct TimeTween {
-    start: f32,
-    end: f32,
-}
-
-impl TimeTween {
-    pub fn new(start: f32, end: f32) -> Self {
-        Self { start, end }
-    }
-}
-
-impl Interpolator for TimeTween {
-    type Item = TimeMult;
-
-    fn interpolate(&self, item: &mut Self::Item, value: f32) {
-        item.0 = self.start.lerp(self.end, value);
-    }
-}
+float_tween!(Resource, TimeMult, 1., time_mult, TimeTween);
 
 fn update_time(
     mut virtual_time: ResMut<Time<Virtual>>,
@@ -89,38 +58,13 @@ fn update_time(
     }
 }
 
-#[derive(Resource)]
-pub struct PhysicsTimeMult(pub f32);
-
-impl Default for PhysicsTimeMult {
-    fn default() -> Self {
-        Self(1.)
-    }
-}
-
-pub fn physics_time_mult(start: f32, end: f32) -> PhysicsTimeTween {
-    PhysicsTimeTween::new(start, end)
-}
-
-#[derive(Component)]
-pub struct PhysicsTimeTween {
-    start: f32,
-    end: f32,
-}
-
-impl PhysicsTimeTween {
-    pub fn new(start: f32, end: f32) -> Self {
-        Self { start, end }
-    }
-}
-
-impl Interpolator for PhysicsTimeTween {
-    type Item = PhysicsTimeMult;
-
-    fn interpolate(&self, item: &mut Self::Item, value: f32) {
-        item.0 = self.start.lerp(self.end, value);
-    }
-}
+float_tween!(
+    Resource,
+    PhysicsTimeMult,
+    1.,
+    physics_time_mult,
+    PhysicsTimeTween
+);
 
 fn update_physics_time(mut time: ResMut<Time<Physics>>, mult: Res<PhysicsTimeMult>) {
     if mult.is_changed() {
@@ -128,38 +72,13 @@ fn update_physics_time(mut time: ResMut<Time<Physics>>, mult: Res<PhysicsTimeMul
     }
 }
 
-#[derive(Resource)]
-pub struct VirtualTimeMult(pub f32);
-
-impl Default for VirtualTimeMult {
-    fn default() -> Self {
-        Self(1.)
-    }
-}
-
-pub fn virtual_time_mult(start: f32, end: f32) -> VirtualTimeTween {
-    VirtualTimeTween::new(start, end)
-}
-
-#[derive(Component)]
-pub struct VirtualTimeTween {
-    start: f32,
-    end: f32,
-}
-
-impl VirtualTimeTween {
-    pub fn new(start: f32, end: f32) -> Self {
-        Self { start, end }
-    }
-}
-
-impl Interpolator for VirtualTimeTween {
-    type Item = VirtualTimeMult;
-
-    fn interpolate(&self, item: &mut Self::Item, value: f32) {
-        item.0 = self.start.lerp(self.end, value);
-    }
-}
+float_tween!(
+    Resource,
+    VirtualTimeMult,
+    1.,
+    virtual_time_mult,
+    VirtualTimeTween
+);
 
 fn update_virtual_time(mut time: ResMut<Time<Virtual>>, mult: Res<VirtualTimeMult>) {
     if mult.is_changed() {
@@ -269,3 +188,41 @@ fn run_tween_on_end(mut commands: Commands, tweens: Query<(Entity, &TimeRunner, 
 //
 //#[derive(Clone, Copy)]
 //pub struct Unit;
+
+#[macro_export]
+macro_rules! float_tween {
+    ($kind:ident, $name:ident, $default:expr, $func:ident, $tween:ident) => {
+        #[derive($kind)]
+        pub struct $name(pub f32);
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self($default)
+            }
+        }
+
+        pub fn $func(start: f32, end: f32) -> $tween {
+            $tween::new(start, end)
+        }
+
+        #[derive(Component)]
+        pub struct $tween {
+            start: f32,
+            end: f32,
+        }
+
+        impl $tween {
+            pub fn new(start: f32, end: f32) -> Self {
+                Self { start, end }
+            }
+        }
+
+        impl Interpolator for $tween {
+            type Item = $name;
+
+            fn interpolate(&self, item: &mut Self::Item, value: f32) {
+                item.0 = self.start.lerp(self.end, value);
+            }
+        }
+    };
+}

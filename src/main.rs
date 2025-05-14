@@ -22,6 +22,7 @@ mod boss;
 mod bounds;
 mod bullet;
 mod characters;
+mod effects;
 mod end;
 mod enemy;
 mod fire;
@@ -33,6 +34,7 @@ mod music;
 mod opening;
 mod pickups;
 mod player;
+mod points;
 mod sampler;
 mod selection;
 mod stats;
@@ -41,9 +43,9 @@ mod tween;
 mod ui;
 
 pub const WIDTH: f32 = 128.;
-pub const HEIGHT: f32 = 256.;
+pub const HEIGHT: f32 = 192.;
 
-pub const RESOLUTION_SCALE: f32 = 3.;
+pub const RESOLUTION_SCALE: f32 = 4.;
 pub const RES_WIDTH: f32 = WIDTH * 1.25;
 pub const RES_HEIGHT: f32 = HEIGHT;
 
@@ -77,7 +79,7 @@ fn main() {
         bevy_enhanced_input::EnhancedInputPlugin,
         // the average object (bullet) is 8 ppx.
         avian2d::PhysicsPlugins::new(Avian).with_length_unit(METER),
-        // PhysicsDebugPlugin::new(Avian),
+        //avian2d::debug_render::PhysicsDebugPlugin::new(Avian),
         bevy_optix::pixel_perfect::PixelPerfectPlugin(CanvasDimensions {
             width: WIDTH as u32,
             height: HEIGHT as u32,
@@ -115,6 +117,8 @@ fn main() {
         input::InputPlugin,
         boss::BossPlugin,
         bomb::BombPlugin,
+        points::PointPlugin,
+        effects::EffectsPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))

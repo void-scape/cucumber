@@ -1,4 +1,3 @@
-use avian2d::prelude::Physics;
 use bevy::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
@@ -20,7 +19,7 @@ const BACKGROUND_WIDTH: f32 = 128.;
 const BACKGROUND_HEIGHT: f32 = 256.;
 const BACKGROUND_PATH1: &'static str = "shooters/background1.png";
 const BACKGROUND_PATH2: &'static str = "shooters/background2.png";
-const SCROLL_SPEED1: f32 = 0.1;
+const SCROLL_SPEED1: f32 = 0.05;
 const SCROLL_SPEED2: f32 = 0.15;
 
 #[derive(Component)]
@@ -53,7 +52,7 @@ fn scrolling_background(
             uv_offset: 0.,
         })),
         Speed(SCROLL_SPEED1),
-        Transform::from_xyz(0., 0., -1.),
+        Transform::from_xyz(0., 0., -2.),
     ));
 
     commands.spawn((

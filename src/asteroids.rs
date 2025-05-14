@@ -148,61 +148,61 @@ fn handle_death(
 
 fn spawn_clusters(mut commands: Commands, mut reader: EventReader<SpawnCluster>) {
     for event in reader.read() {
-        let material_speed = 50.;
-        let dur_variation = 0.75;
-
-        let mut rng = rand::rng();
-        let speeds = (0..material_speed as usize)
-            .map(|speed| speed as f32)
-            .collect::<Vec<_>>();
-        let sampler = Sampler::linear(&speeds, 0.0, 1.0);
-
-        let cluster = commands
-            .spawn((
-                MaterialCluster,
-                Transform::from_translation(event.position.extend(0.)),
-            ))
-            .id();
-
-        let materials = event.parts + event.shield;
-        for angle in 0..event.parts {
-            let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
-                + rng.random_range(-0.5..0.5);
-            let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
-
-            let material = commands.spawn((Material::Parts, LinearVelocity::ZERO)).id();
-            commands.entity(material).animation().insert_tween_here(
-                Duration::from_secs_f32(
-                    (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
-                ),
-                EaseKind::CubicOut,
-                material
-                    .into_target()
-                    .with(linear_velocity(start, Vec2::ZERO)),
-            );
-            commands.entity(cluster).add_child(material);
-        }
-
-        for angle in 0..event.shield {
-            let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
-                + rng.random_range(-0.5..0.5)
-                + std::f32::consts::PI / 4.;
-            let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
-
-            let material = commands
-                .spawn((Material::Shield, LinearVelocity::ZERO))
-                .id();
-            commands.entity(material).animation().insert_tween_here(
-                Duration::from_secs_f32(
-                    (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
-                ),
-                EaseKind::CubicOut,
-                material
-                    .into_target()
-                    .with(linear_velocity(start, Vec2::ZERO)),
-            );
-            commands.entity(cluster).add_child(material);
-        }
+        //let material_speed = 50.;
+        //let dur_variation = 0.75;
+        //
+        //let mut rng = rand::rng();
+        //let speeds = (0..material_speed as usize)
+        //    .map(|speed| speed as f32)
+        //    .collect::<Vec<_>>();
+        //let sampler = Sampler::linear(&speeds, 0.0, 1.0);
+        //
+        //let cluster = commands
+        //    .spawn((
+        //        MaterialCluster,
+        //        Transform::from_translation(event.position.extend(0.)),
+        //    ))
+        //    .id();
+        //
+        //let materials = event.parts + event.shield;
+        //for angle in 0..event.parts {
+        //    let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
+        //        + rng.random_range(-0.5..0.5);
+        //    let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
+        //
+        //    let material = commands.spawn((Material::Parts, LinearVelocity::ZERO)).id();
+        //    commands.entity(material).animation().insert_tween_here(
+        //        Duration::from_secs_f32(
+        //            (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
+        //        ),
+        //        EaseKind::CubicOut,
+        //        material
+        //            .into_target()
+        //            .with(linear_velocity(start, Vec2::ZERO)),
+        //    );
+        //    commands.entity(cluster).add_child(material);
+        //}
+        //
+        //for angle in 0..event.shield {
+        //    let angle = (angle as f32 / materials as f32) * 2. * std::f32::consts::PI
+        //        + rng.random_range(-0.5..0.5)
+        //        + std::f32::consts::PI / 4.;
+        //    let start = Vec2::from_angle(angle) * sampler.sample(&mut rng);
+        //
+        //    let material = commands
+        //        .spawn((Material::Shield, LinearVelocity::ZERO))
+        //        .id();
+        //    commands.entity(material).animation().insert_tween_here(
+        //        Duration::from_secs_f32(
+        //            (1.5 + rng.random_range(-dur_variation..dur_variation)) * 0.75,
+        //        ),
+        //        EaseKind::CubicOut,
+        //        material
+        //            .into_target()
+        //            .with(linear_velocity(start, Vec2::ZERO)),
+        //    );
+        //    commands.entity(cluster).add_child(material);
+        //}
     }
 }
 

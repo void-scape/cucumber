@@ -3,13 +3,14 @@ use self::{
     homing::HomingRotate,
 };
 use crate::{
-    DespawnRestart, GameState, Layer,
-    animation::{AnimationController, AnimationIndices, AnimationMode},
+    DespawnRestart, Layer,
+    animation::{AnimationController, AnimationIndices, AnimationMode, AnimationSprite},
     assets::{self, MISC_PATH, MiscLayout},
     auto_collider::ImageCollider,
     bounds::WallDespawn,
-    health::{Damage, DamageEvent, Dead, Health, Shield},
+    health::{Damage, DamageEvent, Dead, Health},
     player::Player,
+    points::PointEvent,
     tween::{OnEnd, time_mult},
 };
 use avian2d::prelude::*;
@@ -180,7 +181,14 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
 }
 
 #[derive(Clone, Copy, Component, Default)]
-#[require(Polarity, Sensor, RigidBody::Kinematic, WallDespawn, DespawnRestart)]
+#[require(
+    Polarity,
+    Sensor,
+    RigidBody::Kinematic,
+    WallDespawn,
+    DespawnRestart,
+    CollisionLayers = Self::target_layer(Layer::Player)
+)]
 #[component(on_add = Self::add_color_mod)]
 pub struct Bullet;
 
@@ -215,7 +223,6 @@ enum ColorMod {
 }
 
 #[derive(Component)]
-#[require(ImageCollider)]
 pub struct BulletSprite {
     path: &'static str,
     cell: UVec2,
@@ -230,16 +237,28 @@ impl BulletSprite {
     }
 }
 
+#[derive(Component)]
+pub struct PlayerBullet;
+
 #[derive(Clone, Copy, Component)]
-#[require(Bullet, ImageCollider, BulletSprite::from_cell(0, 1))]
+#[require(Bullet, ImageCollider, BulletSprite::from_cell(1, 2))]
 pub struct BasicBullet;
+
+#[derive(Clone, Copy, Component)]
+#[require(
+    Bullet,
+    HomingRotate,
+    Collider::rectangle(2., 2.),
+    BulletSprite::from_cell(2, 7)
+)]
+pub struct Arrow;
 
 #[derive(Clone, Copy, Component)]
 #[require(
     Bullet,
     Destructable,
     Health::full(MISSILE_HEALTH),
-    ImageCollider,
+    Collider::rectangle(2., 2.),
     BulletSprite::from_cell(5, 2)
 )]
 pub struct Missile;
@@ -249,56 +268,18 @@ pub struct Missile;
     Bullet,
     Destructable,
     Health::full(MINE_HEALTH),
-    ImageCollider,
+    Collider::circle(1.5),
     BulletSprite::from_cell(4, 3)
 )]
-#[component(on_remove = Self::explode)]
 pub struct Mine;
 
 #[derive(Clone, Copy, Component)]
-#[require(Bullet, ImageCollider, BulletSprite::from_cell(3, 1))]
+#[require(Bullet, Collider::circle(1.5), BulletSprite::from_cell(3, 1))]
 pub struct Orb;
-
-impl Mine {
-    fn explode(mut world: DeferredWorld, ctx: HookContext) {
-        if *world.resource::<State<GameState>>().get() != GameState::Restart {
-            let transform = *world.get::<Transform>(ctx.entity).unwrap();
-            let mine_layers = *world.get::<CollisionLayers>(ctx.entity).unwrap();
-
-            let layers = if mine_layers.filters.has_all(Layer::Player) {
-                Bullet::target_layer(Layer::Player)
-            } else {
-                Bullet::target_layer(Layer::Enemy)
-            };
-
-            let dirs = [
-                (Direction::NorthEast, -std::f32::consts::PI / 4.),
-                (Direction::NorthWest, std::f32::consts::PI / 4.),
-                (Direction::SouthEast, std::f32::consts::PI / 4.),
-                (Direction::SouthWest, -std::f32::consts::PI / 4.),
-                //
-                (Direction::North, 0.),
-                (Direction::South, 0.),
-                (Direction::East, -std::f32::consts::PI / 2.),
-                (Direction::West, std::f32::consts::PI / 2.),
-            ];
-
-            for (dir, rot) in dirs.into_iter() {
-                world.commands().spawn((
-                    BasicBullet,
-                    LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
-                    transform.with_rotation(Quat::from_rotation_z(rot)),
-                    layers,
-                    Damage::new(BULLET_DAMAGE),
-                ));
-            }
-        }
-    }
-}
 
 /// Marks an enemy as a valid target for bullet collisions.
 #[derive(Default, Component)]
-#[require(CollidingEntities, ImageCollider, RigidBody::Kinematic, Sensor)]
+#[require(CollidingEntities, RigidBody::Kinematic, Sensor)]
 pub struct Destructable;
 
 fn handle_bullet_collision(
@@ -369,10 +350,56 @@ fn handle_bullet_collision(
 
 fn despawn_dead_bullets(
     mut commands: Commands,
-    bullets: Query<Entity, (With<Bullet>, With<Dead>)>,
+    server: Res<AssetServer>,
+    bullets: Query<Entity, (With<Dead>, With<Bullet>, Without<Mine>)>,
+    mines: Query<(Entity, &Transform), (With<Dead>, With<Mine>)>,
+    mut writer: EventWriter<PointEvent>,
 ) {
     for entity in bullets.iter() {
         commands.entity(entity).despawn();
+    }
+
+    for (entity, transform) in mines.iter() {
+        commands.entity(entity).despawn();
+        let dirs = [
+            (Direction::NorthEast, -std::f32::consts::PI / 4.),
+            (Direction::NorthWest, std::f32::consts::PI / 4.),
+            (Direction::SouthEast, std::f32::consts::PI / 4.),
+            (Direction::SouthWest, -std::f32::consts::PI / 4.),
+            //
+            (Direction::North, 0.),
+            (Direction::South, 0.),
+            (Direction::East, -std::f32::consts::PI / 2.),
+            (Direction::West, std::f32::consts::PI / 2.),
+        ];
+
+        for (dir, rot) in dirs.into_iter() {
+            commands.spawn((
+                BasicBullet,
+                LinearVelocity(BULLET_SPEED * dir.to_vec2() * Vec2::splat(0.4)),
+                transform.with_rotation(Quat::from_rotation_z(rot)),
+                Damage::new(BULLET_DAMAGE),
+            ));
+        }
+
+        commands.spawn((
+            Transform::from_translation(transform.translation.xy().extend(-99.))
+                .with_scale(Vec3::splat(0.5)),
+            AnimationSprite::once("explosion3.png", 0.05, 0..=11),
+        ));
+
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/explosion3.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.25),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+
+        writer.write(PointEvent {
+            points: 10,
+            position: transform.translation.xy(),
+        });
     }
 }
 
@@ -415,7 +442,6 @@ fn bullet_collision_effects(
     server: Res<AssetServer>,
     misc_layout: Res<MiscLayout>,
     camera: Single<Entity, With<OuterCamera>>,
-    player: Single<(&Health, &Shield), With<Player>>,
 ) {
     for event in reader.read() {
         commands.spawn((
@@ -433,7 +459,7 @@ fn bullet_collision_effects(
         match event.source {
             BulletSource::Player => {}
             BulletSource::Enemy => {
-                if event.hit_player && player.0.current() < player.0.max() && player.1.empty() {
+                if event.hit_player {
                     let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
                         commands.remove_post_process::<GlitchSettings, OuterCamera>();
                         commands.remove_post_process::<GlitchIntensity, OuterCamera>();
@@ -451,11 +477,14 @@ fn bullet_collision_effects(
                         .insert(on_end);
 
                     commands.add_trauma(0.15);
-                    commands.animation().insert_tween_here(
-                        Duration::from_secs_f32(0.25),
-                        EaseKind::Linear,
-                        TargetResource.with(time_mult(0.25, 1.)),
-                    );
+                    commands
+                        .animation()
+                        .insert_tween_here(
+                            Duration::from_secs_f32(0.25),
+                            EaseKind::Linear,
+                            TargetResource.with(time_mult(0.25, 1.)),
+                        )
+                        .insert(DespawnRestart);
                 }
 
                 if event.hit_player {

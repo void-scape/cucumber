@@ -1,12 +1,11 @@
 use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bullet::Polarity;
-use crate::bullet::emitter::SoloEmitter;
+use crate::bullet::emitter::{BulletModifiers, GattlingEmitter, HomingEmitter, PlayerEmitter};
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
-use crate::enemy::movement::{Angle, Center, Figure8};
-use crate::pickups::{Material, PickupEvent};
-use crate::player::Player;
-use crate::tween::Tween;
+use crate::enemy::Enemy;
+use crate::pickups::{Material, PickupEvent, Weapon};
+use crate::player::{PLAYER_SPEED, Player};
 use crate::{GameState, Layer};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_GREEN};
@@ -17,13 +16,6 @@ use bevy::prelude::*;
 use bevy::time::Stopwatch;
 use bevy_optix::debug::DebugRect;
 use bevy_seedling::prelude::*;
-use bevy_sequence::prelude::*;
-use bevy_tween::combinator::tween;
-use bevy_tween::interpolate::translation;
-use bevy_tween::prelude::EaseKind;
-use bevy_tween::tween::IntoTarget;
-use rand::Rng;
-use std::time::Duration;
 
 pub struct MinionPlugin;
 
@@ -32,7 +24,7 @@ impl Plugin for MinionPlugin {
         app.add_systems(
             Update,
             (
-                update_gunner_formation,
+                update_gunners,
                 suck_materials,
                 (miner_collect, update_miners).chain(),
             )
@@ -200,54 +192,6 @@ fn suck_materials(
     }
 }
 
-fn update_gunner_formation(
-    mut commands: Commands,
-    player_gunners: Single<&Gunners, (With<Player>, Changed<Gunners>)>,
-    gunners: Query<(Entity, &Transform), With<Gunner>>,
-) {
-    let count = player_gunners.len();
-    let width = crate::WIDTH - 32.;
-    let half_width = width / 2.;
-    let step = width / count as f32;
-    let start_x = -half_width + step / 2.;
-
-    let arc_height = 100.0;
-    let formation = (0..count).map(|i| {
-        let x = start_x + i as f32 * step;
-        let normalized_x = x / half_width;
-        let y = -arc_height * (normalized_x * normalized_x);
-        Vec2::new(x, y)
-    });
-
-    for ((gunner, transform), position) in gunners.iter_many(&player_gunners.0).zip(formation) {
-        let start = transform.translation;
-        let end = position.extend(transform.translation.z);
-        let dist = start.distance(end);
-
-        commands.entity(gunner).remove::<(Figure8, Angle, Center)>();
-
-        let frag = Tween(tween(
-            Duration::from_secs_f32(dist / GUNNER_SPEED / 1.25),
-            EaseKind::QuadraticInOut,
-            gunner.into_target().with(translation(start, end)),
-        ))
-        .on_end(move |mut commands: Commands| {
-            let mut rng = rand::rng();
-            commands.entity(gunner).insert((
-                Center(end.xy()),
-                Figure8 {
-                    radius: rng.random_range(18.0..22.0) / (count as f32 * 0.75),
-                    speed: rng.random_range(2.4..3.6),
-                },
-                Angle(0.),
-            ));
-        })
-        .always()
-        .once();
-        spawn_root(frag, &mut commands);
-    }
-}
-
 #[derive(Component)]
 #[relationship(relationship_target = Miners)]
 pub struct MinerLeader(pub Entity);
@@ -278,13 +222,11 @@ pub struct Miner;
 
 #[derive(Component)]
 #[relationship(relationship_target = Gunners)]
-pub struct GunnerLeader(Entity);
+pub struct GunnerLeader(pub Entity);
 
 #[derive(Component)]
 #[relationship_target(relationship = GunnerLeader, linked_spawn)]
 pub struct Gunners(Vec<Entity>);
-
-const GUNNER_SPEED: f32 = 40.;
 
 #[derive(Component)]
 #[require(
@@ -293,14 +235,62 @@ const GUNNER_SPEED: f32 = 40.;
     LinearVelocity,
     DebugRect::from_size_color(Vec2::splat(4.), LIGHT_GREEN)
 )]
-#[component(on_add = Self::add_emitter)]
 pub struct Gunner;
 
-impl Gunner {
-    fn add_emitter(mut world: DeferredWorld, ctx: HookContext) {
-        world
-            .commands()
-            .entity(ctx.entity)
-            .with_child((SoloEmitter::enemy(), Polarity::North));
+#[derive(Component)]
+pub struct GunnerWeapon(pub Weapon);
+
+#[derive(Component)]
+pub enum GunnerAnchor {
+    Left,
+    Right,
+    Bottom,
+}
+
+fn update_gunners(
+    mut commands: Commands,
+    player: Single<&Transform, With<Player>>,
+    mut gunners: Query<(&Transform, &mut LinearVelocity, &GunnerAnchor), With<Gunner>>,
+    weapons: Query<(Entity, &GunnerWeapon), Changed<GunnerWeapon>>,
+) {
+    let pp = player.translation.xy();
+    for (transform, mut velocity, anchor) in gunners.iter_mut() {
+        let p = transform.translation.xy();
+        let anchor = match anchor {
+            GunnerAnchor::Left => Vec2::new(-15., 0.),
+            GunnerAnchor::Right => Vec2::new(15., 0.),
+            GunnerAnchor::Bottom => Vec2::new(0., -15.),
+        };
+
+        const LAG: f32 = 5.;
+        let to_player = (pp + anchor - p).clamp_length(0., LAG) / LAG;
+        velocity.0 = to_player * PLAYER_SPEED;
+    }
+
+    for (entity, weapon) in weapons.iter() {
+        commands.entity(entity).despawn_related::<Children>();
+        match weapon.0 {
+            Weapon::Missile => {
+                commands.entity(entity).with_child((
+                    PlayerEmitter,
+                    Polarity::North,
+                    HomingEmitter::<Enemy>::enemy(),
+                    BulletModifiers {
+                        damage: 0.33,
+                        ..Default::default()
+                    },
+                ));
+            }
+            Weapon::Bullet => {
+                commands.entity(entity).with_child((
+                    GattlingEmitter,
+                    BulletModifiers {
+                        damage: 0.33,
+                        ..Default::default()
+                    },
+                ));
+            }
+            _ => {}
+        }
     }
 }

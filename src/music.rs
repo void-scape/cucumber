@@ -92,7 +92,7 @@ fn update_layers(
     mut nodes: Query<&mut VolumeNode>,
     formations: Query<&Formation>,
     boss: Option<Single<&boss::gradius::Gradius>>,
-    boss_b: Option<Single<&boss::gradius::Gradius>>,
+    boss_b: Option<Single<&boss::gradius::PhaseB>>,
 ) -> Result {
     if boss.is_none() {
         nodes.get_effect_mut(*wave_base)?.volume = Volume::Linear(MUSIC_VOLUME);
