@@ -1,5 +1,5 @@
 use self::{
-    formation::{FormationPlugin, FormationSet},
+    formation::{DEFAULT_FORMATION_VEL, FormationPlugin, FormationSet, Platoon},
     movement::*,
 };
 use crate::{
@@ -7,32 +7,28 @@ use crate::{
     animation::AnimationSprite,
     assets,
     asteroids::SpawnCluster,
-    atlas_layout,
     auto_collider::ImageCollider,
     bounds::WallDespawn,
     bullet::{
         Destructable, Direction,
         emitter::{
             BuckShotEmitter, BulletModifiers, CrisscrossEmitter, MineEmitter, Rate,
-            SpiralOrbEmitter, SwarmEmitter,
+            SpiralOrbEmitter, SwarmEmitter, TargetPlayer, WallEmitter,
         },
     },
     effects::{Size, SpawnExplosion},
     health::{Dead, Health},
+    pickups::PowerUp,
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{BLACK, WHITE},
+    color::palettes::css::{GREEN, WHITE},
     prelude::*,
     time::TimeSystem,
 };
-use bevy_optix::shake::TraumaCommands;
-use bevy_seedling::{
-    prelude::Volume,
-    sample::{PlaybackSettings, SamplePlayer},
-};
+use bevy_enoki::prelude::*;
+use bevy_optix::{debug::DebugRect, shake::TraumaCommands};
 use bevy_tween::{
-    combinator::tween,
     interpolate::{rotation, sprite_color, translation},
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
@@ -52,14 +48,6 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<EnemyDeathEvent>()
             .add_plugins((FormationPlugin, MovementPlugin))
-            .add_systems(
-                Startup,
-                (
-                    init_explosion_layout,
-                    init_cruiser_explosion_layout,
-                    init_explosion1_layout,
-                ),
-            )
             .add_systems(OnEnter(GameState::Game), timeline::start_waves)
             .add_systems(Avian, swarm::swarm_movement)
             .add_systems(
@@ -78,10 +66,6 @@ impl Plugin for EnemyPlugin {
     }
 }
 
-atlas_layout!(ExplosionLayout, init_explosion_layout, 64, 10, 1);
-atlas_layout!(CruiserExplosion, init_cruiser_explosion_layout, 128, 14, 1);
-atlas_layout!(Explosion1Layout, init_explosion1_layout, 64, 8, 9);
-
 // #############
 //    ENEMIES
 // #############
@@ -95,10 +79,8 @@ pub struct Enemy;
     Enemy,
     ImageCollider,
     Health::full(1.),
-    LowHealthEffects,
     EnemySprite8::cell(UVec2::new(4, 0)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
-    swarm::SwarmMovement,
     SwarmEmitter,
     BulletModifiers {
         rate: Rate::Factor(0.2),
@@ -123,8 +105,27 @@ pub struct Swarm;
         ..Default::default()
     },
     Drops::splat(8),
+    DropPowerUp,
 )]
 pub struct BuckShot;
+
+#[derive(Default, Component)]
+#[require(
+    Enemy,
+    ImageCollider,
+    Health::full(10.),
+    LowHealthEffects,
+    DebugRect::from_size_color(Vec2::splat(12.), GREEN),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    WallEmitter,
+    TargetPlayer,
+    BulletModifiers {
+        speed: 0.8,
+        ..Default::default()
+    },
+    Drops::splat(8),
+)]
+pub struct WallShooter;
 
 #[derive(Default, Component)]
 #[require(
@@ -149,6 +150,7 @@ pub struct MineThrower;
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
     SpiralOrbEmitter,
     Drops::splat(8),
+    DropPowerUp,
 )]
 pub struct OrbSlinger;
 
@@ -291,55 +293,8 @@ impl Into<DropCount> for f32 {
     }
 }
 
-//fn configure(&self, commands: &mut EntityCommands) {
-//    let mut rng = rand::rng();
-//    match self {
-//        Self::Gunner => commands.with_child((
-//            BulletModifiers {
-//                rate: Rate::Factor(0.75),
-//                ..Default::default()
-//            },
-//            SoloEmitter::player(),
-//        )),
-//        Self::Missile => commands
-//            .insert((
-//                BackAndForth {
-//                    radius: rng.random_range(9.0..11.0),
-//                    speed: rng.random_range(2.2..3.4),
-//                },
-//                Angle(rng.random_range(0.0..2.0)),
-//            ))
-//            .with_child((
-//                HomingEmitter::<Player>::player(),
-//                TurnSpeed(55.),
-//                BulletModifiers {
-//                    rate: Rate::Factor(0.25),
-//                    speed: 0.75,
-//                    ..Default::default()
-//                },
-//                MaxLifetime(Duration::from_secs_f32(5.0)),
-//            )),
-//        Self::MineThrower => commands
-//            .insert((
-//                BackAndForth {
-//                    radius: rng.random_range(4.0..6.0),
-//                    speed: rng.random_range(1.2..2.4),
-//                },
-//                Angle(rng.random_range(0.0..2.0)),
-//            ))
-//            .with_child(MineEmitter::player()),
-//        Self::OrbSlinger => commands.with_child(OrbEmitter::player()),
-//        Self::BuckShot => commands.with_child((
-//            BuckShotEmitter::player().with_all(4, 1.5, 0.2),
-//            BulletModifiers {
-//                speed: 0.4,
-//                ..Default::default()
-//            },
-//        )),
-//        Self::CrissCross => commands.with_child(CrisscrossEmitter::player()),
-//        Self::Swarm => commands.insert(swarm::SwarmMovement),
-//    };
-//}
+#[derive(Default, Component)]
+pub struct DropPowerUp;
 
 #[derive(Event)]
 pub struct EnemyDeathEvent {
@@ -354,9 +309,9 @@ fn handle_death(
             Entity,
             &Health,
             &GlobalTransform,
-            &Transform,
             &Trauma,
             Option<&Drops>,
+            Option<&DropPowerUp>,
         ),
         (With<Dead>, With<Enemy>),
     >,
@@ -365,7 +320,7 @@ fn handle_death(
     mut clusters: EventWriter<SpawnCluster>,
 ) {
     let mut rng = rand::rng();
-    for (entity, health, gt, transform, trauma, drops) in q.iter() {
+    for (entity, health, gt, trauma, drops, power_up) in q.iter() {
         if health.max() > 1. {
             let sign = if rng.random_bool(0.5) { -1. } else { 1. };
             commands
@@ -375,10 +330,9 @@ fn handle_death(
                 .insert_tween_here(
                     Duration::from_secs_f32(1.5),
                     EaseKind::QuadraticOut,
-                    entity.into_target().with(translation(
-                        transform.translation,
-                        transform.translation.with_z(-1.),
-                    )),
+                    entity
+                        .into_target()
+                        .with(translation(gt.translation(), gt.translation().with_z(-1.))),
                 )
                 .animation()
                 .insert_tween_here(
@@ -397,9 +351,10 @@ fn handle_death(
                         .into_target()
                         .with(sprite_color(WHITE.into(), Color::srgb(0.2, 0.2, 0.2))),
                 )
-                .remove::<(Enemy, BulletModifiers, LinearVelocity)>()
+                .remove::<(Enemy, BulletModifiers, Platoon, ChildOf)>()
                 .insert((
                     WallDespawn,
+                    LinearVelocity(DEFAULT_FORMATION_VEL),
                     CollisionLayers::new(Layer::Bullet, Layer::Bounds),
                 ));
         } else {
@@ -419,6 +374,10 @@ fn handle_death(
                 shield: drops.shield.count(&mut rng),
                 position,
             });
+        }
+
+        if power_up.is_some() {
+            commands.spawn((PowerUp, gt.compute_transform()));
         }
     }
 }
@@ -449,6 +408,7 @@ struct AppliedLowHealthEffects;
 
 fn add_low_health_effects(
     mut commands: Commands,
+    server: Res<AssetServer>,
     query: Query<(Entity, &Health), (With<LowHealthEffects>, Without<AppliedLowHealthEffects>)>,
 ) {
     const DIST: f32 = 8.;
@@ -476,13 +436,16 @@ fn add_low_health_effects(
                         ));
                     }
                     root.spawn((
-                        Transform::from_scale(Vec3::splat(0.2))
-                            .with_translation(Vec2::ZERO.extend(-1.)),
-                        AnimationSprite::repeating(
-                            "sparks.png",
-                            rng.random_range(0.025..0.0251),
-                            0..=19,
-                        ),
+                        ParticleSpawner::default(),
+                        ParticleEffectHandle(server.load("particles/ship_fire.ron")),
+                        Transform::from_translation(Vec2::ZERO.extend(-100.)),
+                        //Transform::from_scale(Vec3::splat(0.2))
+                        //    .with_translation(Vec2::ZERO.extend(-1.)),
+                        //AnimationSprite::repeating(
+                        //    "sparks.png",
+                        //    rng.random_range(0.025..0.0251),
+                        //    0..=19,
+                        //),
                     ));
                 });
         }

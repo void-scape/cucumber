@@ -88,6 +88,7 @@ fn main() {
         bevy_optix::shake::ScreenShakePlugin,
         bevy_optix::debug::DebugPlugin,
         physics::PhysicsPlugin,
+        bevy_enoki::EnokiPlugin,
     ))
     .add_plugins((
         animation::AnimationPlugin,

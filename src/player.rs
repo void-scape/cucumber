@@ -4,11 +4,11 @@ use crate::{
     assets::{self, MISC_PATH, MiscLayout},
     bullet::{
         BulletTimer,
-        emitter::{BulletModifiers, GattlingEmitter, PlayerEmitter},
+        emitter::{BulletModifiers, GattlingEmitter},
     },
     end,
     health::{Dead, Health, Shield},
-    minions::{Gunner, GunnerAnchor, GunnerLeader, GunnerWeapon},
+    minions::{Gunner, GunnerWeapon},
     pickups::{Material, PickupEvent, Upgrade, Weapon},
 };
 use avian2d::prelude::*;
@@ -28,12 +28,6 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
-#[cfg(not(debug_assertions))]
-use bevy_tween::{
-    interpolate::translation,
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::IntoTarget,
-};
 use std::{cmp::Ordering, f32, time::Duration};
 
 pub const PLAYER_HEALTH: f32 = 3.0;
@@ -45,15 +39,16 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::StartGame), spawn_player)
-            .add_systems(OnEnter(GameState::Game), disable_all_emitters)
+        app.add_event::<PowerUpEvent>()
+            .insert_resource(WeaponRack::default())
+            .add_systems(OnEnter(GameState::StartGame), spawn_player)
             .add_systems(
                 Update,
                 (
-                    handle_pickups,
                     zero_rotation,
                     update_player_sprites,
-                    health_effects,
+                    (handle_pickups, health_effects, handle_powerups)
+                        .run_if(in_state(GameState::Game)),
                 ),
             )
             .add_systems(First, handle_death)
@@ -66,39 +61,13 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-fn spawn_player(
-    mut commands: Commands,
-    //mut writer: EventWriter<PickupEvent>,
-    //mut mats: ResMut<MinMaterials>,
-) {
+fn spawn_player(mut commands: Commands) {
+    commands.insert_resource(PowerUps::default());
+
     let player = commands
         .spawn((Player, Transform::from_xyz(0., -HEIGHT / 6., 0.)))
-        .with_children(|root| {
-            root.spawn(GattlingEmitter);
-            //root.spawn((GattlingEmitter, Transform::from_xyz(2.5, 0., 0.)));
-            //root.spawn((GattlingEmitter, Transform::from_xyz(-2.5, 0., 0.)));
-        })
+        .with_child((GattlingEmitter::default(), PlayerEmitter, Disabled))
         .id();
-    //commands.spawn((Miner, MinerLeader(player)));
-
-    commands.spawn((
-        Gunner,
-        GunnerLeader(player),
-        GunnerAnchor::Right,
-        GunnerWeapon(Weapon::Bullet),
-    ));
-    commands.spawn((
-        Gunner,
-        GunnerLeader(player),
-        GunnerAnchor::Left,
-        GunnerWeapon(Weapon::Bullet),
-    ));
-    commands.spawn((
-        Gunner,
-        GunnerLeader(player),
-        GunnerAnchor::Bottom,
-        GunnerWeapon(Weapon::Bullet),
-    ));
 
     let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
     run_after(
@@ -108,21 +77,6 @@ fn spawn_player(
         },
         &mut commands,
     );
-
-    //writer.write(PickupEvent::Weapon(Weapon::Bullet));
-    //writer.write(PickupEvent::Weapon(Weapon::Bullet));
-    //
-    //if crate::SKIP_WAVES {
-    //    writer.write(PickupEvent::Weapon(Weapon::Bullet));
-    //    writer.write(PickupEvent::Weapon(Weapon::Bullet));
-    //    writer.write(PickupEvent::Weapon(Weapon::Missile));
-    //    writer.write(PickupEvent::Upgrade(Upgrade::Speed(0.2)));
-    //    writer.write(PickupEvent::Upgrade(Upgrade::Speed(0.2)));
-    //    writer.write(PickupEvent::Upgrade(Upgrade::Juice(0.2)));
-    //    for _ in 0..5 {
-    //        mats.0 *= 2;
-    //    }
-    //}
 
     #[cfg(not(debug_assertions))]
     commands
@@ -137,6 +91,30 @@ fn spawn_player(
                 Vec3::new(0., -HEIGHT / 6., 0.),
             )),
         );
+}
+
+#[derive(Event)]
+pub struct PowerUpEvent;
+
+#[derive(Default, Resource)]
+struct PowerUps(usize);
+
+fn handle_powerups(
+    mut power_ups: ResMut<PowerUps>,
+    mut reader: EventReader<PowerUpEvent>,
+    mut player: Single<&mut BulletModifiers, With<Player>>,
+) {
+    for _ in reader.read() {
+        power_ups.0 += 1;
+
+        match power_ups.0 {
+            0 => unreachable!(),
+            1..=4 => {
+                player.damage += 0.1;
+            }
+            _ => error!("power up [{}] not handled", power_ups.0),
+        }
+    }
 }
 
 #[derive(Component)]
@@ -155,35 +133,6 @@ fn spawn_player(
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
-
-impl Player {
-    //pub fn bullet_emitter() -> impl Bundle {
-    //    (
-    //        DualEmitter::enemy(3.),
-    //        BulletModifiers {
-    //            damage: 0.5,
-    //            rate: Rate::Factor(2.),
-    //            speed: 1.5,
-    //        },
-    //        Polarity::North,
-    //    )
-    //}
-    //
-    //pub fn missile_emitter() -> impl Bundle {
-    //    (HomingEmitter::<Enemy>::enemy(), Polarity::North)
-    //}
-    //
-    //pub fn laser_emitter() -> impl Bundle {
-    //    (
-    //        LaserEmitter::enemy(),
-    //        BulletModifiers {
-    //            damage: 0.2,
-    //            ..Default::default()
-    //        },
-    //        Polarity::North,
-    //    )
-    //}
-}
 
 #[derive(Default, Component)]
 pub struct Materials(usize);
@@ -219,9 +168,11 @@ impl Player {
                             ),
                         ));
 
-                        actions
-                            .bind::<ShootAction>()
-                            .to((KeyCode::Space, GamepadButton::RightTrigger));
+                        actions.bind::<ShootAction>().to((
+                            KeyCode::Space,
+                            GamepadButton::RightTrigger,
+                            GamepadButton::RightTrigger2,
+                        ));
 
                         actions
                             .bind::<SwitchGunAction>()
@@ -293,24 +244,31 @@ fn stop_movement(
 
 #[derive(Debug, InputAction)]
 #[input_action(output = bool, consume_input = false)]
-struct ShootAction;
+pub struct ShootAction;
 
 #[derive(Component)]
 struct MGSounds;
+
+#[derive(Default, Component)]
+pub struct PlayerEmitter;
 
 fn enable_emitters(
     _: Trigger<Started<ShootAction>>,
     mut commands: Commands,
     server: Res<AssetServer>,
-    mut emitters: Query<(Entity, &mut BulletTimer), (With<PlayerEmitter>, With<Disabled>)>,
+    player_emitter: Single<(Entity, &mut BulletTimer), (With<PlayerEmitter>, With<Disabled>)>,
+    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
 ) {
-    for (entity, mut timer) in emitters.iter_mut() {
-        commands.entity(entity).remove::<Disabled>();
-        let duration = timer.timer.duration();
-        timer.timer.set_elapsed(duration);
+    let (entity, mut timer) = player_emitter.into_inner();
+    commands.entity(entity).remove::<Disabled>();
+    let duration = timer.timer.duration();
+    timer.timer.set_elapsed(duration);
+
+    for mut weapon in weapons.iter_mut() {
+        weapon.enabled = true;
     }
 
-    commands.spawn((
+    commands.entity(entity).with_child((
         MGSounds,
         SamplePlayer::new(server.load("audio/sfx/mg.wav")),
         PlaybackSettings {
@@ -323,18 +281,14 @@ fn enable_emitters(
 fn disable_emitters(
     _: Trigger<Completed<ShootAction>>,
     mut commands: Commands,
-    emitters: Query<Entity, With<PlayerEmitter>>,
+    player_emitter: Single<Entity, With<PlayerEmitter>>,
+    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
     sound: Single<Entity, With<MGSounds>>,
 ) {
     commands.entity(*sound).despawn();
-    for entity in emitters.iter() {
-        commands.entity(entity).insert(Disabled);
-    }
-}
-
-fn disable_all_emitters(mut commands: Commands, emitters: Query<Entity, With<PlayerEmitter>>) {
-    for entity in emitters.iter() {
-        commands.entity(entity).insert(Disabled);
+    commands.entity(*player_emitter).insert(Disabled);
+    for mut weapon in weapons.iter_mut() {
+        weapon.enabled = false;
     }
 }
 
@@ -342,23 +296,118 @@ fn disable_all_emitters(mut commands: Commands, emitters: Query<Entity, With<Pla
 #[input_action(output = bool, consume_input = false)]
 struct SwitchGunAction;
 
-fn switch_emitters(
-    _: Trigger<Started<SwitchGunAction>>,
-    //mut commands: Commands,
-    //player: Single<&Actions<AliveContext>)>,
-    mut gunners: Query<&mut GunnerWeapon, With<Gunner>>,
-    mut next_weapon: Local<Weapon>,
-) {
-    //let (actions, gunners) = player.into_inner();
+#[derive(Resource)]
+pub struct WeaponRack {
+    weapons: [(Weapon, bool); 2],
+    index: Option<usize>,
+}
 
-    for mut weapon in gunners.iter_mut() {
-        weapon.0 = *next_weapon;
+impl Default for WeaponRack {
+    fn default() -> Self {
+        Self {
+            weapons: [(Weapon::Bullet, false), (Weapon::Missile, false)],
+            index: None,
+        }
+    }
+}
+
+impl WeaponRack {
+    pub fn aquire(&mut self, weapon: Weapon) {
+        for (w, enabled) in self.weapons.iter_mut() {
+            if *w == weapon {
+                *enabled = true;
+                break;
+            }
+        }
     }
 
-    match *next_weapon {
-        Weapon::Bullet => *next_weapon = Weapon::Missile,
-        Weapon::Missile => *next_weapon = Weapon::Bullet,
-        _ => {}
+    pub fn expire(&mut self, weapon: Weapon) {
+        for (w, enabled) in self.weapons.iter_mut() {
+            if *w == weapon {
+                *enabled = false;
+                break;
+            }
+        }
+    }
+
+    pub fn next(&mut self) -> Option<Weapon> {
+        match self.index {
+            Some(index) => {
+                if index >= self.weapons.len() - 1 {
+                    self.index = Some(0);
+                } else {
+                    self.index = Some(index + 1);
+                }
+            }
+            None => {
+                self.index = Some(0);
+            }
+        }
+        self.selection()
+    }
+
+    pub fn selection(&mut self) -> Option<Weapon> {
+        if let Some(index) = self.index {
+            match self
+                .weapons
+                .iter()
+                .nth(index)
+                .map(|(w, enabled)| enabled.then_some(*w))
+                .unwrap()
+            {
+                Some(w) => return Some(w),
+                None => {
+                    match self
+                        .weapons
+                        .iter()
+                        .chain(self.weapons.iter().take(index))
+                        .skip(index + 1)
+                        .enumerate()
+                        .find_map(|(i, (w, enabled))| enabled.then_some((i, *w)))
+                    {
+                        Some((i, w)) => {
+                            self.index = Some(i);
+                            return Some(w);
+                        }
+                        None => {
+                            self.index = None;
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        match self
+            .weapons
+            .iter()
+            .enumerate()
+            .find_map(|(i, (w, enabled))| enabled.then_some((i, *w)))
+        {
+            Some((i, w)) => {
+                self.index = Some(i);
+                return Some(w);
+            }
+            None => {
+                self.index = None;
+                return None;
+            }
+        }
+    }
+}
+
+fn switch_emitters(
+    _: Trigger<Started<SwitchGunAction>>,
+    player: Single<&Actions<AliveContext>>,
+    mut gunners: Query<&mut GunnerWeapon, With<Gunner>>,
+    mut rack: ResMut<WeaponRack>,
+) {
+    if let Some(next) = rack.next() {
+        for mut weapon in gunners.iter_mut() {
+            weapon.weapon = next;
+            weapon.enabled = player.action::<ShootAction>().state() == ActionState::Fired;
+            info!("switch weapon: {:?}", weapon);
+        }
     }
 }
 
@@ -399,6 +448,7 @@ fn handle_death(mut commands: Commands, player: Single<Entity, (With<Player>, Wi
 
 fn handle_pickups(
     mut commands: Commands,
+    server: Res<AssetServer>,
     q: Single<
         (
             Entity,
@@ -410,11 +460,21 @@ fn handle_pickups(
         With<Player>,
     >,
     mut events: EventReader<PickupEvent>,
+    mut rack: ResMut<WeaponRack>,
 ) {
     let (player, mut mods, mut materials, mut shield) = q.into_inner();
     for event in events.read() {
         match event {
             PickupEvent::Weapon(weapon) => {
+                rack.aquire(*weapon);
+                commands.spawn((
+                    SamplePlayer::new(server.load("audio/sfx/shotgun_rack.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.5),
+                        ..PlaybackSettings::ONCE
+                    },
+                ));
+
                 // commands.entity(weapon_entity.0).despawn();
 
                 //let emitter = match weapon {

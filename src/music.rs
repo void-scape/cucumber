@@ -1,4 +1,4 @@
-use crate::enemy::formation::Formation;
+use crate::enemy::formation::{Formation, FormationEntity};
 use crate::{GameState, boss};
 use bevy::prelude::*;
 use bevy_seedling::prelude::*;
@@ -90,7 +90,7 @@ fn update_layers(
     boss_b_layer: Single<&SampleEffects, (With<BossLayer>, With<BossBLayer>)>,
     all_boss: Query<&SampleEffects, With<BossLayer>>,
     mut nodes: Query<&mut VolumeNode>,
-    formations: Query<&Formation>,
+    formations: Query<&FormationEntity>,
     boss: Option<Single<&boss::gradius::Gradius>>,
     boss_b: Option<Single<&boss::gradius::PhaseB>>,
 ) -> Result {

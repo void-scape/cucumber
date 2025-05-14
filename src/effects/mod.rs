@@ -1,5 +1,6 @@
 use crate::animation::{AnimationAppExt, AnimationSprite, FlipX, FlipY};
 use bevy::prelude::*;
+use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
 
 pub struct EffectsPlugin;
@@ -63,6 +64,13 @@ fn spawn_explosions(
                     Transform::from_translation((event.position + Vec2::new(-5., 5.)).extend(-99.)),
                     AnimationSprite::once("explosion2.png", 0.1, 0..=11),
                     FlipY,
+                ));
+
+                commands.spawn((
+                    ParticleSpawner::default(),
+                    ParticleEffectHandle(server.load("particles/embers.ron")),
+                    OneShot::Despawn,
+                    Transform::from_translation(event.position.extend(-100.)),
                 ));
             }
             Size::Small => {

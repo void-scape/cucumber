@@ -7,9 +7,8 @@ use bevy::color::palettes::css::{LIGHT_BLUE, YELLOW};
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use bevy_optix::debug::DebugCircle;
+use bevy_optix::debug::{DebugCircle, DebugRect};
 use rand::Rng;
-use rand::seq::IteratorRandom;
 
 const PICKUP_SPEED: f32 = 16.;
 
@@ -18,22 +17,8 @@ pub struct PickupPlugin;
 impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PickupEvent>()
-            //.add_systems(Startup, debug)
             .add_systems(Update, (pickup_triggered, update_scrolling_pickup));
     }
-}
-
-fn debug(mut commands: Commands) {
-    commands.spawn((Upgrade::Speed(0.5), Transform::from_xyz(0., 30., 0.)));
-    commands.spawn((Upgrade::Juice(0.5), Transform::from_xyz(0., -30., 0.)));
-
-    commands.spawn((Weapon::Bullet, Transform::from_xyz(30., 0., 0.)));
-    commands.spawn((Weapon::Laser, Transform::from_xyz(-30., 0., 0.)));
-    commands.spawn((Weapon::Missile, Transform::from_xyz(0., 50., 0.)));
-}
-
-pub fn velocity() -> LinearVelocity {
-    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED)
 }
 
 #[derive(Debug, Event)]
@@ -124,7 +109,7 @@ impl SpriteHook for Upgrade {
 pub enum Weapon {
     #[default]
     Bullet,
-    Laser,
+    //Laser,
     Missile,
 }
 
@@ -134,9 +119,9 @@ impl Weapon {
             Self::Bullet => {
                 assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(0, 1))
             }
-            Self::Laser => {
-                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8))
-            }
+            //Self::Laser => {
+            //    assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8))
+            //}
             Self::Missile => {
                 assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(5, 2))
             }
@@ -163,51 +148,52 @@ where
     }
 }
 
-pub fn random_pickups(num: usize) -> Vec<Pickup> {
-    (0..num).map(|_| Pickup::random()).collect()
-}
-
-pub fn unique_pickups(num: usize) -> Vec<Pickup> {
-    let mut pickups = Vec::with_capacity(num);
-    while pickups.len() != 3 {
-        let pickup = Pickup::random();
-        if !pickups.contains(&pickup) {
-            pickups.push(pickup);
-        }
-    }
-    pickups
-}
-
-pub fn spawn_random_pickup(commands: &mut EntityCommands, bundle: impl Bundle) {
-    match Pickup::random() {
-        Pickup::Upgrade(upgrade) => commands.insert((upgrade, bundle)),
-        Pickup::Weapon(weapon) => commands.insert((weapon, bundle)),
-    };
-}
+//pub fn random_pickups(num: usize) -> Vec<Pickup> {
+//    (0..num).map(|_| Pickup::random()).collect()
+//}
+//
+//pub fn unique_pickups(num: usize) -> Vec<Pickup> {
+//    let mut pickups = Vec::with_capacity(num);
+//    while pickups.len() != 3 {
+//        let pickup = Pickup::random();
+//        if !pickups.contains(&pickup) {
+//            pickups.push(pickup);
+//        }
+//    }
+//    pickups
+//}
+//
+//pub fn spawn_random_pickup(commands: &mut EntityCommands, bundle: impl Bundle) {
+//    match Pickup::random() {
+//        Pickup::Upgrade(upgrade) => commands.insert((upgrade, bundle)),
+//        Pickup::Weapon(weapon) => commands.insert((weapon, bundle)),
+//    };
+//}
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[require(ImageCollider, Collectable, LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED))]
 pub enum Pickup {
     Upgrade(Upgrade),
     Weapon(Weapon),
 }
 
-impl Pickup {
-    pub fn random() -> Self {
-        let mut rng = rand::rng();
-        [
-            Self::Upgrade(Upgrade::Speed(0.2)),
-            Self::Upgrade(Upgrade::Juice(0.2)),
-            Self::Upgrade(Upgrade::Speed(0.2)),
-            Self::Upgrade(Upgrade::Juice(0.2)),
-            Self::Weapon(Weapon::Bullet),
-            Self::Weapon(Weapon::Missile),
-            Self::Weapon(Weapon::Laser),
-        ]
-        .into_iter()
-        .choose(&mut rng)
-        .unwrap()
-    }
-}
+//impl Pickup {
+//    pub fn random() -> Self {
+//        let mut rng = rand::rng();
+//        [
+//            Self::Upgrade(Upgrade::Speed(0.2)),
+//            Self::Upgrade(Upgrade::Juice(0.2)),
+//            Self::Upgrade(Upgrade::Speed(0.2)),
+//            Self::Upgrade(Upgrade::Juice(0.2)),
+//            Self::Weapon(Weapon::Bullet),
+//            Self::Weapon(Weapon::Missile),
+//            Self::Weapon(Weapon::Laser),
+//        ]
+//        .into_iter()
+//        .choose(&mut rng)
+//        .unwrap()
+//    }
+//}
 
 #[derive(Debug, Clone, Copy, Component)]
 #[require(ImageCollider, Collectable)]
@@ -283,3 +269,12 @@ fn update_scrolling_pickup(
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Component)]
+#[require(
+    ImageCollider,
+    Collectable,
+    DebugRect::from_size(Vec2::splat(8.)),
+    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED)
+)]
+pub struct PowerUp;

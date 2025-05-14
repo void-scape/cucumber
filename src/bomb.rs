@@ -1,6 +1,6 @@
 use crate::bullet::{Bullet, PlayerBullet};
 use crate::effects::{Size, SpawnExplosion};
-use crate::player::AliveContext;
+use crate::player::{AliveContext, Player};
 use crate::points::PointEvent;
 use crate::{DespawnRestart, GameState};
 use bevy::prelude::*;
@@ -83,21 +83,22 @@ fn detonate(
     mut points: EventWriter<PointEvent>,
     mut explosions: EventWriter<SpawnExplosion>,
     bullets: Query<(Entity, &Transform), (With<Bullet>, Without<PlayerBullet>)>,
+    player: Single<&Transform, With<Player>>,
 ) {
     if bombs.0 != 0 {
         bombs.0 -= 1;
 
-        commands.spawn((
-            SamplePlayer::new(server.load("audio/sfx/bfxr/Random8 (2).wav")),
-            PlaybackParams {
-                speed: 0.75,
-                ..Default::default()
-            },
-            PlaybackSettings {
-                volume: Volume::Linear(0.65),
-                ..PlaybackSettings::ONCE
-            },
-        ));
+        //commands.spawn((
+        //    SamplePlayer::new(server.load("audio/sfx/explosion4.wav")),
+        //    //PlaybackParams {
+        //    //    speed: 0.75,
+        //    //    ..Default::default()
+        //    //},
+        //    PlaybackSettings {
+        //        volume: Volume::Linear(0.45),
+        //        ..PlaybackSettings::ONCE
+        //    },
+        //));
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/note2.wav")),
             PlaybackSettings {
@@ -105,6 +106,20 @@ fn detonate(
                 ..PlaybackSettings::ONCE
             },
         ));
+
+        let position = player.translation.xy();
+        explosions.write(SpawnExplosion {
+            position: position + Vec2::new(15., -15.),
+            size: Size::Big,
+        });
+        explosions.write(SpawnExplosion {
+            position: position + Vec2::new(5., 10.),
+            size: Size::Big,
+        });
+        explosions.write(SpawnExplosion {
+            position: position + Vec2::new(-10., -10.),
+            size: Size::Big,
+        });
 
         for (entity, transform) in bullets.iter() {
             commands.entity(entity).despawn();
@@ -116,6 +131,7 @@ fn detonate(
                 position: transform.translation.xy(),
                 size: Size::Small,
             });
+
             //commands.spawn((
             //    Material::Parts,
             //    LinearVelocity(Vec2::NEG_Y * MATERIAL_SPEED),

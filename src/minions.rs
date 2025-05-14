@@ -1,21 +1,26 @@
 use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
-use crate::bullet::Polarity;
-use crate::bullet::emitter::{BulletModifiers, GattlingEmitter, HomingEmitter, PlayerEmitter};
+use crate::bounds::WallDespawn;
+use crate::bullet::emitter::{BulletModifiers, GattlingEmitter, HomingEmitter, MissileEmitter};
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
+use crate::bullet::{BulletTimer, Polarity};
 use crate::enemy::Enemy;
-use crate::pickups::{Material, PickupEvent, Weapon};
-use crate::player::{PLAYER_SPEED, Player};
+use crate::pickups::{Collectable, Material, Pickup, PickupEvent, PowerUp, Weapon};
+use crate::player::{AliveContext, PLAYER_SPEED, Player, PowerUpEvent, ShootAction, WeaponRack};
 use crate::{GameState, Layer};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_GREEN};
-use bevy::ecs::component::HookContext;
-use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::entity_disabling::Disabled;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
+use bevy_enhanced_input::prelude::*;
 use bevy_optix::debug::DebugRect;
 use bevy_seedling::prelude::*;
+use bevy_tween::interpolate::translation;
+use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
+use bevy_tween::tween::IntoTarget;
+use std::time::Duration;
 
 pub struct MinionPlugin;
 
@@ -25,6 +30,7 @@ impl Plugin for MinionPlugin {
             Update,
             (
                 update_gunners,
+                spawn_gunners,
                 suck_materials,
                 (miner_collect, update_miners).chain(),
             )
@@ -37,16 +43,27 @@ impl Plugin for MinionPlugin {
 }
 
 fn test_spawn(
-    mut commands: Commands,
+    //mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
-    player: Single<Entity, With<Player>>,
+    //player: Single<Entity, With<Player>>,
+    mut rack: ResMut<WeaponRack>,
 ) {
-    if input.just_pressed(KeyCode::KeyO) {
-        commands.spawn((Miner, MinerLeader(*player)));
-    }
+    //if input.just_pressed(KeyCode::KeyO) {
+    //    commands.spawn((Miner, MinerLeader(*player)));
+    //}
+    //
+    //if input.just_pressed(KeyCode::KeyP) {
+    //    commands.spawn((Gunner, GunnerLeader(*player)));
+    //}
 
-    if input.just_pressed(KeyCode::KeyP) {
-        commands.spawn((Gunner, GunnerLeader(*player)));
+    if input.just_pressed(KeyCode::Digit1) {
+        rack.aquire(Weapon::Bullet);
+    } else if input.just_pressed(KeyCode::Digit2) {
+        rack.aquire(Weapon::Missile);
+    } else if input.just_pressed(KeyCode::Digit3) {
+        if let Some(selection) = rack.selection() {
+            rack.expire(selection);
+        }
     }
 }
 
@@ -132,11 +149,22 @@ fn miner_collect(
     //miners: Query<&CollidingEntities, With<Miner>>,
     player: Single<&CollidingEntities, With<Player>>,
     materials: Query<&Material>,
+    pickups: Query<&PowerUp>,
+    mut power_ups: EventWriter<PowerUpEvent>,
     mut writer: EventWriter<PickupEvent>,
     time: Res<Time>,
     mut timer: Local<(Stopwatch, usize)>,
 ) {
     timer.0.tick(time.delta());
+
+    for entity in player
+        .iter()
+        .copied()
+        .filter(|entity| pickups.get(*entity).is_ok())
+    {
+        power_ups.write(PowerUpEvent);
+        commands.entity(entity).despawn();
+    }
 
     let mut despawned = HashSet::new();
     //for miner in miners.iter() {
@@ -175,18 +203,27 @@ fn miner_collect(
 }
 
 const SUCK_SPEED: f32 = 4.;
-const SUCK_DIST: f32 = 40.;
+const SUCK_DIST: f32 = 30.;
+const NO_SHOT_SUCK_DIST: f32 = crate::HEIGHT / 2.;
 
 fn suck_materials(
-    player: Single<&Transform, With<Player>>,
-    mut materials: Query<(&GlobalTransform, &mut Transform), (With<Material>, Without<Player>)>,
+    player: Single<(&Transform, &Actions<AliveContext>), With<Player>>,
+    mut materials: Query<(&GlobalTransform, &mut Transform), (With<Collectable>, Without<Player>)>,
     time: Res<Time>,
 ) {
-    let pp = player.translation.xy();
+    let (transform, actions) = player.into_inner();
+    let pp = transform.translation.xy();
+    let threshold = if actions.action::<ShootAction>().state() == ActionState::Fired {
+        SUCK_DIST
+    } else {
+        NO_SHOT_SUCK_DIST
+    };
+
     for (gt, mut t) in materials.iter_mut() {
         let p = gt.compute_transform().translation.xy();
         let dist = p.distance(pp);
-        if dist < SUCK_DIST {
+
+        if dist < threshold {
             t.translation += (pp - p).extend(0.) * SUCK_SPEED * time.delta_secs() * 20. / dist;
         }
     }
@@ -237,8 +274,11 @@ pub struct Gunners(Vec<Entity>);
 )]
 pub struct Gunner;
 
-#[derive(Component)]
-pub struct GunnerWeapon(pub Weapon);
+#[derive(Debug, Component)]
+pub struct GunnerWeapon {
+    pub weapon: Weapon,
+    pub enabled: bool,
+}
 
 #[derive(Component)]
 pub enum GunnerAnchor {
@@ -247,11 +287,90 @@ pub enum GunnerAnchor {
     Bottom,
 }
 
+#[derive(Component)]
+struct GunnerEmitter;
+
+const EASE_OUT_DUR: f32 = 3.;
+
+fn spawn_gunners(
+    mut commands: Commands,
+    player: Single<Entity, With<Player>>,
+    actions: Single<&Actions<AliveContext>, With<Player>>,
+    mut gunners: Query<(Entity, &mut GunnerWeapon, &Transform), With<Gunner>>,
+    mut rack: ResMut<WeaponRack>,
+) {
+    if rack.is_changed() && gunners.is_empty() {
+        if let Some(weapon) = rack.selection() {
+            let enabled = actions.action::<ShootAction>().state() == ActionState::Fired;
+            commands.spawn((
+                Gunner,
+                GunnerLeader(*player),
+                GunnerAnchor::Left,
+                GunnerWeapon { weapon, enabled },
+                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
+            ));
+            commands.spawn((
+                Gunner,
+                GunnerLeader(*player),
+                GunnerAnchor::Bottom,
+                GunnerWeapon { weapon, enabled },
+                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
+            ));
+            commands.spawn((
+                Gunner,
+                GunnerLeader(*player),
+                GunnerAnchor::Right,
+                GunnerWeapon { weapon, enabled },
+                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
+            ));
+        }
+    } else if rack.is_changed() {
+        match rack.selection() {
+            Some(w) => {
+                for (_, mut weapon, _) in gunners.iter_mut() {
+                    weapon.enabled = actions.action::<ShootAction>().state() == ActionState::Fired;
+                    weapon.weapon = w;
+                }
+            }
+            None => {
+                for (entity, _, transform) in gunners.iter() {
+                    commands
+                        .entity(entity)
+                        .despawn_related::<Children>()
+                        .remove::<(Gunner, GunnerWeapon, GunnerLeader, GunnerAnchor)>()
+                        .insert((
+                            CollisionLayers::new(Layer::Player, Layer::Bounds),
+                            WallDespawn,
+                        ))
+                        .animation()
+                        .insert_tween_here(
+                            Duration::from_secs_f32(
+                                transform
+                                    .translation
+                                    .xy()
+                                    .distance(Vec2::NEG_Y * crate::HEIGHT / 1.8)
+                                    / crate::HEIGHT
+                                    * EASE_OUT_DUR,
+                            ),
+                            EaseKind::QuadraticIn,
+                            entity.into_target().with(translation(
+                                transform.translation,
+                                Vec3::NEG_Y * crate::HEIGHT / 1.8,
+                            )),
+                        );
+                }
+            }
+        }
+    }
+}
+
 fn update_gunners(
     mut commands: Commands,
     player: Single<&Transform, With<Player>>,
     mut gunners: Query<(&Transform, &mut LinearVelocity, &GunnerAnchor), With<Gunner>>,
-    weapons: Query<(Entity, &GunnerWeapon), Changed<GunnerWeapon>>,
+    weapons: Query<(Entity, Ref<GunnerWeapon>), Changed<GunnerWeapon>>,
+    mut emitters: Query<(Entity, Option<&Disabled>, &mut BulletTimer), With<GunnerEmitter>>,
+    mut last_weapon: Local<Weapon>,
 ) {
     let pp = player.translation.xy();
     for (transform, mut velocity, anchor) in gunners.iter_mut() {
@@ -267,30 +386,52 @@ fn update_gunners(
         velocity.0 = to_player * PLAYER_SPEED;
     }
 
+    let mut next_weapon = *last_weapon;
     for (entity, weapon) in weapons.iter() {
-        commands.entity(entity).despawn_related::<Children>();
-        match weapon.0 {
-            Weapon::Missile => {
-                commands.entity(entity).with_child((
-                    PlayerEmitter,
+        if weapon.weapon != *last_weapon || weapon.is_added() {
+            next_weapon = weapon.weapon;
+            commands.entity(entity).despawn_related::<Children>();
+            let mut gun = match weapon.weapon {
+                Weapon::Missile => commands.spawn((
+                    GunnerEmitter,
                     Polarity::North,
-                    HomingEmitter::<Enemy>::enemy(),
+                    MissileEmitter,
+                    //HomingEmitter::<Enemy>::enemy(),
                     BulletModifiers {
-                        damage: 0.33,
+                        damage: 0.2,
                         ..Default::default()
                     },
-                ));
-            }
-            Weapon::Bullet => {
-                commands.entity(entity).with_child((
-                    GattlingEmitter,
+                )),
+                Weapon::Bullet => commands.spawn((
+                    GunnerEmitter,
+                    GattlingEmitter(0.25),
                     BulletModifiers {
-                        damage: 0.33,
+                        damage: 0.2,
                         ..Default::default()
                     },
-                ));
+                )),
+                _ => unreachable!(),
+            };
+
+            if !weapon.enabled {
+                gun.insert(Disabled);
             }
-            _ => {}
+
+            let id = gun.id();
+            commands.entity(entity).add_child(id);
+        } else {
+            if !weapon.enabled {
+                for (entity, _, _) in emitters.iter() {
+                    commands.entity(entity).insert(Disabled);
+                }
+            } else {
+                for (entity, _, mut timer) in emitters.iter_mut() {
+                    commands.entity(entity).remove::<Disabled>();
+                    let duration = timer.timer.duration();
+                    timer.timer.set_elapsed(duration);
+                }
+            }
         }
     }
+    *last_weapon = next_weapon;
 }

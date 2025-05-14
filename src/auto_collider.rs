@@ -32,7 +32,7 @@ fn insert_collider(
 pub struct ImageCollider;
 
 fn insert_image_collider(
-    sprites: Query<(Entity, &Sprite), With<ImageCollider>>,
+    sprites: Query<(Entity, &Sprite), (With<ImageCollider>, Without<DebugRect>)>,
     debug_rects: Query<(Entity, &DebugRect), With<ImageCollider>>,
     debug_circles: Query<(Entity, &DebugCircle), With<ImageCollider>>,
     mut commands: Commands,

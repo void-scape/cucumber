@@ -65,6 +65,7 @@ avian2d = { git = "https://github.com/Jondolf/avian.git", default-features = fal
 rand = "0.9"
 strum = "0.27.1"
 strum_macros = "0.27.1"
+bevy_enoki = "0.4.0"
 
 [patch."https://github.com/CorvusPrudens/bevy_sequence.git"]
 bevy_sequence = { path = "bevy_sequence" }

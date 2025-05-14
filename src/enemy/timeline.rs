@@ -1,4 +1,5 @@
 use super::formation::*;
+use crate::pickups::Weapon;
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -11,24 +12,27 @@ const START_DELAY: f32 = 0.;
 
 pub fn start_waves(mut commands: Commands) {
     if crate::SKIP_WAVES {
-        commands.insert_resource(WaveTimeline::new(&[(boss(), 0.)]));
+        commands.insert_resource(WaveTimeline::new([(boss(), 0.)]));
     } else {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
-            &[
-                //(swarm(), 8.),
-                (crisscross(), 2.),
-                (double_buck_shot(), 4.),
-                (swarm(), 6.),
-                (double_buck_shot(), 8.),
+            [
+                (swarm_right(), 0.),
+                (swarm_left(), 2.),
+                (crisscross().with(option(Weapon::Bullet)), 2.),
+                (double_buck_shot(), 6.),
+                (double_wall(), 4.),
+                (swarm_right(), 0.),
+                (swarm_left(), 2.),
                 (quad_mine_thrower(), 4.),
-                (swarm(), 4.),
-                (quad_mine_thrower(), 8.),
+                (quad_mine_thrower(), 6.),
                 (double_crisscross(), 2.),
-                (orb_slinger(), 8.),
+                (orb_slinger(), 6.),
+                (double_wall(), 4.),
                 (crisscross(), 2.),
-                (double_orb_slinger(), 10.),
-                (swarm(), 16.),
+                (double_orb_slinger().with(option(Weapon::Missile)), 5.),
+                (swarm_right(), 0.),
+                (swarm_left(), 12.),
                 (boss(), 0.),
             ],
         ));
@@ -45,13 +49,13 @@ pub struct WaveTimeline {
 }
 
 impl WaveTimeline {
-    pub fn new(seq: &[(Formation, f32)]) -> Self {
+    pub fn new(seq: impl IntoIterator<Item = (Formation, f32)>) -> Self {
         Self::new_delayed(0., seq)
     }
 
-    pub fn new_delayed(delay: f32, seq: &[(Formation, f32)]) -> Self {
+    pub fn new_delayed(delay: f32, seq: impl IntoIterator<Item = (Formation, f32)>) -> Self {
         Self {
-            seq: seq.to_vec(),
+            seq: seq.into_iter().collect(),
             timer: Timer::from_seconds(delay, TimerMode::Repeating),
             index: 0,
             finished: false,
@@ -72,13 +76,13 @@ impl WaveTimeline {
         self.timer.tick(time.delta());
     }
 
-    pub fn next(&mut self) -> Option<Formation> {
+    pub fn next(&mut self) -> Option<&mut Formation> {
         if self.timer.just_finished() {
-            match self.seq.get(self.index) {
+            match self.seq.get_mut(self.index) {
                 Some((formation, duration)) => {
                     self.timer.set_duration(Duration::from_secs_f32(*duration));
                     self.index += 1;
-                    Some(formation.clone())
+                    Some(formation)
                 }
                 None => {
                     self.finished = true;
@@ -124,6 +128,7 @@ pub fn timeline_skip(
 
 pub fn update_waves(
     mut commands: Commands,
+    server: Res<AssetServer>,
     controller: Option<ResMut<WaveTimeline>>,
     time: Res<Time>,
 ) {
@@ -135,8 +140,29 @@ pub fn update_waves(
         return;
     }
 
+    const LARGEST_SPRITE_SIZE: f32 = 16.;
+    //const PADDING: f32 = LARGEST_SPRITE_SIZE;
+    //const FORMATION_EASE_DUR: f32 = 2.;
+    const ENEMY_Z: f32 = 0.;
+
     controller.tick(&time);
     if let Some(formation) = controller.next() {
-        commands.spawn(formation);
+        let start_y = crate::HEIGHT / 2. + LARGEST_SPRITE_SIZE / 2.;
+        let start = Vec3::new(0., start_y, ENEMY_Z);
+
+        //commands.entity(root).animation().insert(tween(
+        //    Duration::from_secs_f32(FORMATION_EASE_DUR),
+        //    EaseKind::SineOut,
+        //    root.into_target().with(translation(start, end)),
+        //));
+
+        let mut commands = commands.spawn((
+            FormationEntity(formation.velocity),
+            Transform::from_translation(start),
+        ));
+        (formation.spawn)(&mut commands, &server);
+        for modifier in formation.modifiers.iter_mut() {
+            modifier(&mut commands);
+        }
     }
 }

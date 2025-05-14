@@ -15,7 +15,7 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{RED, SKY_BLUE},
+    color::palettes::css::{MAGENTA, RED, SKY_BLUE},
     ecs::{component::HookContext, world::DeferredWorld},
     platform::collections::HashSet,
     prelude::*,
@@ -146,6 +146,9 @@ fn init_bullet_sprite(
             ColorMod::Friendly => {
                 sprite.color = SKY_BLUE.into();
             }
+            ColorMod::Purple => {
+                sprite.color = MAGENTA.into();
+            }
         }
         commands.entity(entity).insert(sprite);
     }
@@ -204,6 +207,10 @@ impl Bullet {
     }
 
     fn add_color_mod(mut world: DeferredWorld, ctx: HookContext) {
+        if !world.get::<ColorMod>(ctx.entity).is_none() {
+            return;
+        }
+
         let layers = world.get::<CollisionLayers>(ctx.entity).unwrap();
         if layers.filters.has_all(Layer::Player) {
             world.commands().entity(ctx.entity).insert(ColorMod::Enemy);
@@ -220,6 +227,7 @@ impl Bullet {
 enum ColorMod {
     Friendly,
     Enemy,
+    Purple,
 }
 
 #[derive(Component)]

@@ -1,6 +1,6 @@
 use super::{
     Arrow, BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer,
-    Lifetime, MaxLifetime, Mine, Missile, Orb, Polarity,
+    ColorMod, Lifetime, MaxLifetime, Mine, Missile, Orb, Polarity,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
@@ -26,6 +26,7 @@ use bevy_tween::{
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 
 pub const PLAYER_BULLET_SPEED: f32 = 300.;
+pub const PLAYER_MISSILE_SPEED: f32 = PLAYER_BULLET_SPEED * 0.8;
 pub const BULLET_SPEED: f32 = 75.;
 pub const MISSILE_SPEED: f32 = 65.;
 pub const LASER_SPEED: f32 = 15.;
@@ -79,6 +80,7 @@ impl Plugin for EmitterPlugin {
                     (
                         GattlingEmitter::shoot_bullets,
                         LaserEmitter::laser,
+                        MissileEmitter::shoot_bullets,
                         HomingEmitter::<Enemy>::shoot_bullets,
                         HomingEmitter::<Player>::shoot_bullets,
                         MineEmitter::shoot_bullets,
@@ -145,6 +147,15 @@ fn play_samples(
                     },
                     sample_effects![BandPassNode::new(1000.0, 4.0)],
                 ));
+            }
+            EmitterBullet::Arrow => {
+                //commands.spawn((
+                //    SamplePlayer::new(server.load("audio/sfx/bfxr/arrow.wav")),
+                //    PlaybackSettings {
+                //        volume: Volume::Decibels(-18.0),
+                //        ..PlaybackSettings::ONCE
+                //    },
+                //));
             }
             _ => {}
         }
@@ -308,35 +319,48 @@ impl ProximityEmitter {
     }
 }
 
-#[derive(Default, Component)]
-pub struct PlayerEmitter;
+#[derive(Component)]
+#[require(Transform, BulletModifiers)]
+#[component(on_add = Self::insert_timer)]
+pub struct GattlingEmitter(pub f32);
 
-#[derive(Component, Default)]
-#[require(Transform, BulletModifiers, PlayerEmitter)]
-pub struct GattlingEmitter;
+impl Default for GattlingEmitter {
+    fn default() -> Self {
+        GattlingEmitter(0.1)
+    }
+}
+
+impl GattlingEmitter {
+    fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
+        let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
+        let duration = mods.rate.duration(PLAYER_BULLET_RATE);
+        world.commands().entity(ctx.entity).insert(BulletTimer {
+            timer: Timer::new(duration, TimerMode::Repeating),
+        });
+    }
+}
 
 impl GattlingEmitter {
     fn shoot_bullets(
         mut emitters: Query<(
             Entity,
             &GattlingEmitter,
-            Option<&mut BulletTimer>,
+            &mut BulletTimer,
             &BulletModifiers,
             &GlobalTransform,
+            &ChildOf,
         )>,
+        parents: Query<Option<&BulletModifiers>, With<Children>>,
         time: Res<Time>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, _emitter, timer, mods, transform) in emitters.iter_mut() {
-            let duration = mods.rate.duration(PLAYER_BULLET_RATE);
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                });
+        for (_entity, emitter, mut timer, mods, transform, child_of) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
             let mut new_transform = transform.compute_transform();
             new_transform.translation += Vec3::Y * 10.0;
@@ -344,15 +368,14 @@ impl GattlingEmitter {
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
+            let duration = mods.rate.duration(PLAYER_BULLET_RATE);
             timer.timer.set_duration(duration);
-
-            const X_ANGLE: f32 = 0.1;
 
             commands.spawn((
                 BasicBullet,
                 PlayerBullet,
                 LinearVelocity(
-                    (Vec2::Y - Vec2::new(X_ANGLE, 0.)).normalize()
+                    (Vec2::Y - Vec2::new(emitter.0, 0.)).normalize()
                         * PLAYER_BULLET_SPEED
                         * mods.speed,
                 ),
@@ -378,7 +401,7 @@ impl GattlingEmitter {
                 BasicBullet,
                 PlayerBullet,
                 LinearVelocity(
-                    (Vec2::Y + Vec2::new(X_ANGLE, 0.)).normalize()
+                    (Vec2::Y + Vec2::new(emitter.0, 0.)).normalize()
                         * PLAYER_BULLET_SPEED
                         * mods.speed,
                 ),
@@ -394,13 +417,91 @@ impl GattlingEmitter {
 }
 
 #[derive(Component, Default)]
+#[require(Transform, BulletModifiers)]
+#[component(on_add = Self::insert_timer)]
+pub struct MissileEmitter;
+
+impl MissileEmitter {
+    fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
+        let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
+        let duration = mods.rate.duration(MISSILE_RATE);
+        world.commands().entity(ctx.entity).insert(BulletTimer {
+            timer: Timer::new(duration, TimerMode::Repeating),
+        });
+    }
+}
+
+impl MissileEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (
+                &MissileEmitter,
+                &mut BulletTimer,
+                &BulletModifiers,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        targets: Query<&GlobalTransform, With<Enemy>>,
+        mut writer: EventWriter<EmitterSample>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (emitter, mut timer, mods, child_of, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+            let duration = mods.rate.duration(MISSILE_RATE);
+            timer.timer.set_duration(duration);
+
+            let p = transform.translation().xy();
+            let target = match targets
+                .iter()
+                .sort_unstable_by::<&GlobalTransform>(|a, b| {
+                    a.translation()
+                        .xy()
+                        .distance(p)
+                        .total_cmp(&b.translation().xy().distance(p))
+                })
+                .next()
+            {
+                Some(gt) => (gt.translation().xy() - p).normalize_or_zero(),
+                None => Vec2::Y,
+            };
+
+            let new_transform = transform.compute_transform();
+            commands.spawn((
+                Missile,
+                HomingRotate,
+                LinearVelocity(target * PLAYER_MISSILE_SPEED * mods.speed),
+                new_transform.with_rotation(Quat::from_rotation_z(target.to_angle() - PI / 2.0)),
+                Bullet::target_layer(Layer::Enemy),
+                Damage::new(MISSILE_DAMAGE * mods.damage),
+            ));
+
+            writer.write(EmitterSample(EmitterBullet::Missile));
+        }
+    }
+}
+
+#[derive(Component, Default)]
 #[require(Transform, BulletModifiers, TurnSpeed, Polarity)]
+#[component(on_add = Self::insert_timer)]
 pub struct HomingEmitter<T> {
     target: Layer,
     _filter: PhantomData<fn() -> T>,
 }
 
-impl<T: Component> HomingEmitter<T> {
+impl<T> HomingEmitter<T> {
     pub fn player() -> Self {
         Self {
             target: Layer::Player,
@@ -414,15 +515,22 @@ impl<T: Component> HomingEmitter<T> {
             _filter: PhantomData,
         }
     }
+
+    fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
+        let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
+        let duration = mods.rate.duration(MISSILE_RATE);
+        world.commands().entity(ctx.entity).insert(BulletTimer {
+            timer: Timer::new(duration, TimerMode::Repeating),
+        });
+    }
 }
 
 impl<T: Component> HomingEmitter<T> {
     fn shoot_bullets(
         mut emitters: Query<
             (
-                Entity,
                 &HomingEmitter<T>,
-                Option<&mut BulletTimer>,
+                &mut BulletTimer,
                 &BulletModifiers,
                 &TurnSpeed,
                 &Polarity,
@@ -434,11 +542,12 @@ impl<T: Component> HomingEmitter<T> {
         >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
+        mut writer: EventWriter<EmitterSample>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, mods, turn_speed, polarity, child_of, transform, lifetime) in
+        for (emitter, mut timer, mods, turn_speed, polarity, child_of, transform, lifetime) in
             emitters.iter_mut()
         {
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
@@ -446,20 +555,13 @@ impl<T: Component> HomingEmitter<T> {
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
-            let duration = mods.rate.duration(MISSILE_RATE);
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                });
-                continue;
-            };
-
             let mut new_transform = transform.compute_transform();
             new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
 
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
+            let duration = mods.rate.duration(MISSILE_RATE);
             timer.timer.set_duration(duration);
 
             let direction = match polarity {
@@ -484,6 +586,8 @@ impl<T: Component> HomingEmitter<T> {
             if let Some(lifetime) = lifetime {
                 bullet.insert(Lifetime(Timer::new(lifetime.0, TimerMode::Once)));
             }
+
+            writer.write(EmitterSample(EmitterBullet::Missile));
         }
     }
 }
@@ -1084,6 +1188,9 @@ pub struct WallEmitter {
     gap: f32,
 }
 
+#[derive(Default, Component)]
+pub struct TargetPlayer;
+
 impl Default for WallEmitter {
     fn default() -> Self {
         Self::new(Vec2::NEG_Y, 5, 10.)
@@ -1133,17 +1240,21 @@ impl WallEmitter {
                 &Polarity,
                 &ChildOf,
                 &GlobalTransform,
+                Option<&TargetPlayer>,
             ),
             Without<EmitterDelay>,
         >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
+        player: Single<&Transform, With<Player>>,
         mut writer: EventWriter<EmitterSample>,
         mut commands: Commands,
     ) {
         let delta = time.delta();
 
-        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, mods, polarity, parent, transform, target_player) in
+            emitters.iter_mut()
+        {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
             };
@@ -1168,6 +1279,12 @@ impl WallEmitter {
             let x_gap = emitter.gap;
             let center_x = (emitter.bullets - 1) as f32 * x_gap / 2.0;
 
+            let dir = if target_player.is_none() {
+                emitter.dir
+            } else {
+                (player.translation.xy() - new_transform.translation.xy()).normalize_or_zero()
+            };
+
             let bowl_depth = 5.;
             for i in 0..emitter.bullets {
                 let x = i as f32 * x_gap - center_x;
@@ -1177,7 +1294,7 @@ impl WallEmitter {
                 let p = rotate_around(
                     t.translation.xy() + Vec2::new(x, y),
                     t.translation.xy(),
-                    emitter.dir.to_angle() + std::f32::consts::PI / 2.,
+                    dir.to_angle() + std::f32::consts::PI / 2.,
                 )
                 .extend(0.);
                 t.translation = p;
@@ -1185,7 +1302,8 @@ impl WallEmitter {
                 commands.spawn((
                     Orb,
                     t,
-                    LinearVelocity(emitter.dir * ORB_SPEED * mods.speed),
+                    LinearVelocity(dir * ORB_SPEED * mods.speed),
+                    ColorMod::Purple,
                     Bullet::target_layer(emitter.layer),
                     Damage::new(MINE_DAMAGE * mods.damage),
                 ));
@@ -1236,14 +1354,12 @@ impl SwarmEmitter {
                 continue;
             };
 
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
             if !timer.timer.tick(delta).just_finished() {
                 continue;
             }
             timer.timer.set_duration(duration);
 
+            let new_transform = transform.compute_transform();
             let to_player =
                 (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
             commands.spawn((
@@ -1289,7 +1405,7 @@ impl GradiusSpiralEmitter {
         >,
         parents: Query<Option<&BulletModifiers>>,
         time: Res<Time>,
-        mut writer: EventWriter<EmitterSample>,
+        //mut writer: EventWriter<EmitterSample>,
         mut commands: Commands,
     ) {
         for (entity, _emitter, timer, offset, mods, polarity, parent, transform) in
@@ -1359,7 +1475,7 @@ impl GradiusSpiralEmitter {
                 ));
             }
 
-            writer.write(EmitterSample(EmitterBullet::Orb));
+            //writer.write(EmitterSample(EmitterBullet::Orb));
         }
     }
 }

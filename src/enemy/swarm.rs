@@ -5,21 +5,37 @@ use bevy::prelude::*;
 const SWARM_SPEED: f32 = 60.;
 const SWARM_THRESHOLD: f32 = WIDTH * 1.25;
 
-#[derive(Debug, Default, Component)]
-pub struct SwarmMovement;
+#[derive(Debug, Component)]
+pub enum SwarmMovement {
+    Left,
+    Right,
+}
 
 pub(super) fn swarm_movement(
-    mut q: Query<(&mut LinearVelocity, &GlobalTransform), With<SwarmMovement>>,
+    mut q: Query<(&mut LinearVelocity, &GlobalTransform, &SwarmMovement)>,
 ) {
-    for (mut velocity, transform) in &mut q {
+    for (mut velocity, transform, movement) in &mut q {
         let translation = transform.compute_transform().translation;
 
-        if translation.x > SWARM_THRESHOLD && velocity.x > 0. {
-            velocity.x = -SWARM_SPEED;
-        } else if translation.x < -SWARM_THRESHOLD && velocity.x < 0. {
-            velocity.x = SWARM_SPEED;
-        } else if velocity.x == 0. {
-            velocity.x = SWARM_SPEED;
+        match movement {
+            SwarmMovement::Left => {
+                if translation.x > SWARM_THRESHOLD && velocity.x > 0. {
+                    velocity.x = -SWARM_SPEED;
+                } else if translation.x < -SWARM_THRESHOLD && velocity.x < 0. {
+                    velocity.x = SWARM_SPEED;
+                } else if velocity.x == 0. {
+                    velocity.x = SWARM_SPEED;
+                }
+            }
+            SwarmMovement::Right => {
+                if translation.x < SWARM_THRESHOLD && velocity.x < 0. {
+                    velocity.x = -SWARM_SPEED;
+                } else if translation.x > -SWARM_THRESHOLD && velocity.x > 0. {
+                    velocity.x = SWARM_SPEED;
+                } else if velocity.x == 0. {
+                    velocity.x = SWARM_SPEED;
+                }
+            }
         }
 
         if (-WIDTH * 0.5..WIDTH * 0.5).contains(&translation.x) {
