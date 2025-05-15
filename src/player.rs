@@ -24,7 +24,7 @@ use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
 use bevy_tween::{
-    interpolate::sprite_color,
+    interpolate::{sprite_color, translation},
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };

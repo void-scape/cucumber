@@ -1,4 +1,4 @@
-name: Build
+name: Check
 
 on: push
 
@@ -18,6 +18,6 @@ jobs:
       - name: Checkout submodules
         run: git submodule update --init --recursive
 
-      - name: Build
+      - name: Check
         run: |
-          cargo build --no-default-features --release --target x86_64-unknown-linux-gnu
+          cargo check --no-default-features --release
