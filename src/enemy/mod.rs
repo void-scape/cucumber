@@ -3,7 +3,7 @@ use self::{
     movement::*,
 };
 use crate::{
-    Avian, GameState, Layer,
+    Avian, DespawnRestart, GameState, Layer,
     animation::AnimationSprite,
     assets,
     asteroids::SpawnCluster,
@@ -16,13 +16,13 @@ use crate::{
             SpiralOrbEmitter, SwarmEmitter, TargetPlayer, WallEmitter,
         },
     },
-    effects::{Size, SpawnExplosion},
+    effects::Explosion,
     health::{Dead, Health},
     pickups::PowerUp,
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{GREEN, WHITE},
+    color::palettes::css::{GREEN, RED, WHITE, YELLOW},
     prelude::*,
     time::TimeSystem,
 };
@@ -55,11 +55,12 @@ impl Plugin for EnemyPlugin {
                 (
                     timeline::update_waves.before(FormationSet),
                     insert_enemy_sprites.after(FormationSet),
-                    (add_low_health_effects, death_effects, handle_death),
+                    (add_low_health_effects, death_effects),
                 )
                     .chain()
                     .run_if(in_state(GameState::Game)),
-            );
+            )
+            .add_systems(PostUpdate, handle_death.run_if(in_state(GameState::Game)));
 
         #[cfg(debug_assertions)]
         app.add_systems(First, timeline::timeline_skip.after(TimeSystem));
@@ -71,7 +72,7 @@ impl Plugin for EnemyPlugin {
 // #############
 
 #[derive(Default, Component)]
-#[require(Transform, Visibility, Destructable, Trauma)]
+#[require(Transform, Visibility, Destructable, Trauma, DespawnRestart)]
 pub struct Enemy;
 
 #[derive(Default, Component)]
@@ -80,7 +81,7 @@ pub struct Enemy;
     ImageCollider,
     Health::full(1.),
     EnemySprite8::cell(UVec2::new(4, 0)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SwarmEmitter,
     BulletModifiers {
         rate: Rate::Factor(0.2),
@@ -88,17 +89,18 @@ pub struct Enemy;
     },
     Trauma(0.04),
     Drops::new(0.2, 0.5),
+    Explosion::Small,
 )]
 pub struct Swarm;
 
-#[derive(Default, Component)]
+#[derive(Default, Clone, Copy, Component)]
 #[require(
     Enemy,
     ImageCollider,
-    Health::full(15.),
+    Health::full(20.),
     LowHealthEffects,
     EnemySprite16::cell(UVec2::new(4, 4)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     BuckShotEmitter,
     BulletModifiers {
         speed: 0.4,
@@ -106,6 +108,7 @@ pub struct Swarm;
     },
     Drops::splat(8),
     DropPowerUp,
+    Explosion::Big,
 )]
 pub struct BuckShot;
 
@@ -113,10 +116,10 @@ pub struct BuckShot;
 #[require(
     Enemy,
     ImageCollider,
-    Health::full(10.),
+    Health::full(20.),
     LowHealthEffects,
     DebugRect::from_size_color(Vec2::splat(12.), GREEN),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     WallEmitter,
     TargetPlayer,
     BulletModifiers {
@@ -124,6 +127,7 @@ pub struct BuckShot;
         ..Default::default()
     },
     Drops::splat(8),
+    Explosion::Big,
 )]
 pub struct WallShooter;
 
@@ -134,9 +138,10 @@ pub struct WallShooter;
     Health::full(10.),
     LowHealthEffects,
     EnemySprite16::cell(UVec2::new(4, 3)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     MineEmitter,
     Drops::splat(3),
+    Explosion::Big,
 )]
 pub struct MineThrower;
 
@@ -147,10 +152,11 @@ pub struct MineThrower;
     Health::full(20.),
     LowHealthEffects,
     EnemySprite16::cell(UVec2::new(3, 4)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SpiralOrbEmitter,
     Drops::splat(8),
     DropPowerUp,
+    Explosion::Big,
 )]
 pub struct OrbSlinger;
 
@@ -161,11 +167,35 @@ pub struct OrbSlinger;
     Health::full(15.),
     LowHealthEffects,
     EnemySprite16::cell(UVec2::new(2, 4)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet]),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     CrisscrossEmitter,
     Drops::splat(6),
+    Explosion::Big,
 )]
 pub struct CrissCross;
+
+#[derive(Default, Component)]
+#[require(
+    Enemy,
+    ImageCollider,
+    Health::full(8.),
+    LowHealthEffects,
+    DebugRect::from_size_color(Vec2::splat(8.), RED),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
+    Drops::splat(6),
+    Explosion::Small,
+)]
+pub struct LaserNode;
+
+#[derive(Default, Component)]
+#[require(
+    Transform,
+    Visibility,
+    DespawnRestart,
+    ImageCollider,
+    DebugRect::from_size_color(Vec2::splat(8.), YELLOW)
+)]
+pub struct InvincibleLaserNode;
 
 // #############
 //    Systems
@@ -307,11 +337,11 @@ fn handle_death(
     q: Query<
         (
             Entity,
-            &Health,
             &GlobalTransform,
             &Trauma,
             Option<&Drops>,
             Option<&DropPowerUp>,
+            Option<&Explosion>,
         ),
         (With<Dead>, With<Enemy>),
     >,
@@ -320,8 +350,8 @@ fn handle_death(
     mut clusters: EventWriter<SpawnCluster>,
 ) {
     let mut rng = rand::rng();
-    for (entity, health, gt, trauma, drops, power_up) in q.iter() {
-        if health.max() > 1. {
+    for (entity, gt, trauma, drops, power_up, explosion) in q.iter() {
+        if explosion.is_some_and(|e| *e == Explosion::Big) {
             let sign = if rng.random_bool(0.5) { -1. } else { 1. };
             commands
                 .entity(entity)
@@ -351,7 +381,7 @@ fn handle_death(
                         .into_target()
                         .with(sprite_color(WHITE.into(), Color::srgb(0.2, 0.2, 0.2))),
                 )
-                .remove::<(Enemy, BulletModifiers, Platoon, ChildOf)>()
+                .remove::<(Enemy, BulletModifiers, Platoon, ChildOf, Dead, Explosion)>()
                 .insert((
                     WallDespawn,
                     LinearVelocity(DEFAULT_FORMATION_VEL),
@@ -382,21 +412,9 @@ fn handle_death(
     }
 }
 
-fn death_effects(
-    mut commands: Commands,
-    mut reader: EventReader<EnemyDeathEvent>,
-    mut writer: EventWriter<SpawnExplosion>,
-) {
+fn death_effects(mut commands: Commands, mut reader: EventReader<EnemyDeathEvent>) {
     for event in reader.read() {
         commands.add_trauma(event.trauma);
-        writer.write(SpawnExplosion {
-            position: event.position,
-            size: if event.trauma == Trauma::default().0 {
-                Size::Big
-            } else {
-                Size::Small
-            },
-        });
     }
 }
 

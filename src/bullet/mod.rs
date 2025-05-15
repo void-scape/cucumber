@@ -4,14 +4,13 @@ use self::{
 };
 use crate::{
     DespawnRestart, Layer,
-    animation::{AnimationController, AnimationIndices, AnimationMode, AnimationSprite},
-    assets::{self, MISC_PATH, MiscLayout},
+    animation::AnimationSprite,
+    assets::{self, MISC_PATH},
     auto_collider::ImageCollider,
     bounds::WallDespawn,
     health::{Damage, DamageEvent, Dead, Health},
     player::Player,
     points::PointEvent,
-    tween::{OnEnd, time_mult},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -20,19 +19,9 @@ use bevy::{
     platform::collections::HashSet,
     prelude::*,
 };
-use bevy_optix::{
-    glitch::{GlitchIntensity, GlitchSettings, glitch_intensity},
-    pixel_perfect::OuterCamera,
-    post_process::PostProcessCommand,
-    shake::TraumaCommands,
-};
 use bevy_seedling::{
     prelude::Volume,
-    sample::{PitchRange, PlaybackSettings, SamplePlayer},
-};
-use bevy_tween::{
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::{IntoTarget, TargetResource},
+    sample::{PlaybackSettings, SamplePlayer},
 };
 use std::time::Duration;
 use strum_macros::EnumIter;
@@ -68,7 +57,9 @@ impl Plugin for BulletPlugin {
             )
             .add_systems(
                 PostUpdate,
-                init_bullet_sprite.in_set(BulletSystems::Sprite).chain(),
+                init_bullet_sprite
+                    .in_set(BulletSystems::Sprite)
+                    .after(BulletSystems::Collision),
             );
     }
 }
@@ -444,68 +435,11 @@ pub enum BulletSource {
     Enemy,
 }
 
-fn bullet_collision_effects(
-    mut commands: Commands,
-    mut reader: EventReader<BulletCollisionEvent>,
-    server: Res<AssetServer>,
-    misc_layout: Res<MiscLayout>,
-    camera: Single<Entity, With<OuterCamera>>,
-) {
+fn bullet_collision_effects(mut commands: Commands, mut reader: EventReader<BulletCollisionEvent>) {
     for event in reader.read() {
         commands.spawn((
             event.transform,
-            Sprite::from_atlas_image(
-                server.load(MISC_PATH),
-                TextureAtlas::from(misc_layout.0.clone()),
-            ),
-            AnimationController::from_seconds(
-                AnimationIndices::new(AnimationMode::Despawn, 83..=86),
-                0.05,
-            ),
+            AnimationSprite::once(MISC_PATH, 0.05, 83..=86),
         ));
-
-        match event.source {
-            BulletSource::Player => {}
-            BulletSource::Enemy => {
-                if event.hit_player {
-                    let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
-                        commands.remove_post_process::<GlitchSettings, OuterCamera>();
-                        commands.remove_post_process::<GlitchIntensity, OuterCamera>();
-                    });
-
-                    commands.post_process::<OuterCamera>(GlitchSettings::default());
-                    commands.post_process::<OuterCamera>(GlitchIntensity::default());
-                    commands
-                        .animation()
-                        .insert_tween_here(
-                            Duration::from_secs_f32(0.4),
-                            EaseKind::Linear,
-                            camera.into_target().with(glitch_intensity(0.3, 0.0)),
-                        )
-                        .insert(on_end);
-
-                    commands.add_trauma(0.15);
-                    commands
-                        .animation()
-                        .insert_tween_here(
-                            Duration::from_secs_f32(0.25),
-                            EaseKind::Linear,
-                            TargetResource.with(time_mult(0.25, 1.)),
-                        )
-                        .insert(DespawnRestart);
-                }
-
-                if event.hit_player {
-                    commands.spawn((
-                        SamplePlayer::new(server.load("audio/sfx/melee.wav")),
-                        PitchRange(0.98..1.02),
-                        PlaybackSettings {
-                            volume: Volume::Linear(0.25),
-                            ..PlaybackSettings::ONCE
-                        },
-                    ));
-                }
-            }
-        }
     }
 }

@@ -1,13 +1,24 @@
-use super::WallShooter;
 use super::swarm::SwarmMovement;
+use super::timeline::LARGEST_SPRITE_SIZE;
 use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, Swarm, timeline::WaveTimeline};
-use crate::bullet::emitter::EmitterDelay;
+use super::{InvincibleLaserNode, WallShooter};
+use crate::bullet::emitter::{BulletModifiers, EmitterDelay, LaserEmitter, WallEmitter};
 use crate::pickups::{Pickup, Weapon};
+use crate::tween::OnEnd;
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::Physics;
+use bevy::color::palettes::css::WHITE;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy_enoki::prelude::*;
+use bevy_seedling::prelude::*;
+use bevy_sequence::combinators::delay::run_after;
+use bevy_tween::interpolate::{rotation, sprite_color, translation};
+use bevy_tween::prelude::*;
+use bevy_tween::tween::apply_component_tween_system;
+use std::f32;
+use std::f32::consts::PI;
 
 pub const DEFAULT_FORMATION_VEL: Vec2 = Vec2::new(0., -12.);
 
@@ -22,7 +33,8 @@ impl Plugin for FormationPlugin {
                 .chain()
                 .run_if(in_state(GameState::Game)),
         )
-        .add_systems(Avian, update_formations);
+        .add_systems(Avian, update_formations)
+        .add_tween_systems(apply_component_tween_system::<LaserEmitterTween>);
     }
 }
 
@@ -105,19 +117,44 @@ pub fn quad_mine_thrower() -> Formation {
 }
 
 pub fn double_buck_shot() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![
-            (
-                BuckShot,
-                Platoon(formation.id()),
-                Transform::from_xyz(-30., 0., 0.)
-            ),
-            (
-                BuckShot,
-                Platoon(formation.id()),
-                Transform::from_xyz(30., 0., 0.)
-            ),
-        ]);
+    Formation::new(|formation: &mut EntityCommands, server: &AssetServer| {
+        formation.with_children(|root| {
+            let platoon = root.target_entity();
+
+            animate_entrance(
+                &server,
+                &mut root.commands(),
+                (
+                    ChildOf(platoon),
+                    BuckShot,
+                    Platoon(platoon),
+                    Transform::from_xyz(-30., 0., 0.),
+                ),
+                None,
+                1.5,
+                Vec3::new(-crate::WIDTH / 2. - LARGEST_SPRITE_SIZE / 2., 0., 0.),
+                Vec3::new(-30., -10., 0.),
+                Quat::from_rotation_z(PI / 4.) + Quat::from_rotation_x(PI / 4.),
+                Quat::default(),
+            );
+
+            animate_entrance(
+                &server,
+                &mut root.commands(),
+                (
+                    ChildOf(platoon),
+                    BuckShot,
+                    Platoon(platoon),
+                    Transform::from_xyz(-30., 0., 0.),
+                ),
+                Some(1.),
+                1.5,
+                Vec3::new(-crate::WIDTH / 2. - LARGEST_SPRITE_SIZE / 2., 0., 0.),
+                Vec3::new(30., -10., 0.),
+                Quat::from_rotation_z(PI / 3.) + Quat::from_rotation_x(PI / 4.),
+                Quat::default(),
+            );
+        });
     })
 }
 
@@ -143,16 +180,19 @@ pub fn triple_wall() -> Formation {
         formation.insert(children![
             (
                 WallShooter,
+                WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
                 Transform::from_xyz(-40., 0., 0.)
             ),
             (
                 WallShooter,
+                WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
-                Transform::from_xyz(0., 0., 0.)
+                Transform::from_xyz(0., 20., 0.)
             ),
             (
                 WallShooter,
+                WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
                 Transform::from_xyz(40., 0., 0.)
             ),
@@ -250,6 +290,69 @@ pub fn swarm_left() -> Formation {
     )
 }
 
+#[derive(Component)]
+struct LaserEmitterTween {
+    start: f32,
+    end: f32,
+}
+
+impl Interpolator for LaserEmitterTween {
+    type Item = LaserEmitter;
+
+    fn interpolate(&self, item: &mut Self::Item, value: f32) {
+        item.dir = Vec2::from_angle(self.start.lerp(self.end, value));
+    }
+}
+
+pub fn laser_maze() -> Formation {
+    Formation::new(|formation: &mut EntityCommands, _| {
+        formation.with_children(|root| {
+            let laser = root
+                .spawn((InvincibleLaserNode, LaserEmitter::new(Vec2::NEG_Y)))
+                .id();
+            root.commands()
+                .entity(laser)
+                .animation()
+                .repeat(Repeat::Infinitely)
+                .insert_tween_here(
+                    Duration::from_secs_f32(10.),
+                    EaseKind::Linear,
+                    laser.into_target().with(LaserEmitterTween {
+                        start: 0.,
+                        end: PI * 2.,
+                    }),
+                );
+        });
+    })
+}
+
+pub fn laser_ladder() -> Formation {
+    Formation::new(|formation: &mut EntityCommands, _| {
+        formation.with_children(|root| {
+            root.spawn((
+                InvincibleLaserNode,
+                LaserEmitter::new(Vec2::X),
+                Transform::from_xyz(-35., 0., 0.),
+            ));
+            root.spawn((
+                InvincibleLaserNode,
+                LaserEmitter::new(Vec2::NEG_X),
+                Transform::from_xyz(35., 50., 0.),
+            ));
+            root.spawn((
+                InvincibleLaserNode,
+                LaserEmitter::new(Vec2::X),
+                Transform::from_xyz(-35., 100., 0.),
+            ));
+            root.spawn((
+                InvincibleLaserNode,
+                LaserEmitter::new(Vec2::NEG_X),
+                Transform::from_xyz(35., 150., 0.),
+            ));
+        });
+    })
+}
+
 pub fn boss() -> Formation {
     Formation::with_velocity(Vec2::ZERO, |formation: &mut EntityCommands, _| {
         formation.commands().remove_resource::<WaveTimeline>();
@@ -257,7 +360,7 @@ pub fn boss() -> Formation {
     })
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 #[relationship(relationship_target = Units)]
 #[component(on_remove = on_remove_platoon)]
 pub struct Platoon(pub Entity);
@@ -413,4 +516,152 @@ fn despawn_formations(
     //            .despawn();
     //    }
     //}
+}
+
+fn animate_entrance(
+    server: &AssetServer,
+    commands: &mut Commands,
+    bundle: impl Bundle + Clone,
+    delay: Option<f32>,
+    secs: f32,
+    tstart: Vec3,
+    tend: Vec3,
+    rstart: Quat,
+    rend: Quat,
+) {
+    match delay {
+        Some(delay) => {
+            run_after(
+                Duration::from_secs_f32(delay),
+                move |mut commands: Commands, server: Res<AssetServer>| {
+                    let entity = commands.spawn(bundle.clone()).id();
+                    animate_entrance_inner(
+                        &server,
+                        &mut commands,
+                        entity,
+                        secs,
+                        tstart,
+                        tend,
+                        rstart,
+                        rend,
+                    );
+                },
+                commands,
+            );
+        }
+        None => {
+            let entity = commands.spawn(bundle).id();
+            animate_entrance_inner(server, commands, entity, secs, tstart, tend, rstart, rend);
+        }
+    }
+}
+
+fn animate_entrance_inner(
+    server: &AssetServer,
+    commands: &mut Commands,
+    entity: Entity,
+    secs: f32,
+    tstart: Vec3,
+    tend: Vec3,
+    rstart: Quat,
+    rend: Quat,
+) {
+    commands.spawn((
+        SamplePlayer::new(server.load("audio/sfx/rockets.wav")),
+        PlaybackSettings {
+            volume: Volume::Linear(0.3),
+            ..PlaybackSettings::ONCE
+        },
+    ));
+
+    let trail = commands
+        .spawn((
+            ParticleSpawner::default(),
+            ParticleEffectHandle(server.load("particles/ship_fire.ron")),
+            Transform::from_translation(Vec2::ZERO.extend(-100.))
+                .with_rotation(Quat::from_rotation_z(PI)),
+        ))
+        .id();
+    commands.entity(entity).add_child(trail);
+
+    let id = entity;
+    run_after(
+        Duration::from_secs_f32((secs - 0.3).clamp(0., f32::MAX)),
+        move |mut commands: Commands,
+              mut states: Query<&mut ParticleSpawnerState>,
+              server: Res<AssetServer>| {
+            if let Ok(mut state) = states.get_mut(trail) {
+                state.active = false;
+            }
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/doot.wav")),
+                PlaybackParams {
+                    speed: 0.9,
+                    ..Default::default()
+                },
+                PlaybackSettings {
+                    volume: Volume::Linear(0.4),
+                    ..PlaybackSettings::ONCE
+                },
+            ));
+
+            let sprite = commands
+                .spawn((
+                    Sprite::from_image(server.load("crosshair.png")),
+                    Transform::from_xyz(0., 0., 1.),
+                ))
+                .id();
+            commands
+                .entity(sprite)
+                .animation()
+                .insert_tween_here(
+                    Duration::from_secs_f32(0.5),
+                    EaseKind::Linear,
+                    sprite
+                        .into_target()
+                        .with(rotation(Quat::default(), Quat::from_rotation_z(PI))),
+                )
+                .animation()
+                .insert_tween_here(
+                    Duration::from_secs_f32(0.5),
+                    EaseKind::QuadraticOut,
+                    sprite
+                        .into_target()
+                        .with(sprite_color(Color::WHITE, Color::WHITE.with_alpha(0.))),
+                );
+            commands.entity(id).add_child(sprite);
+
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/blurp.wav")),
+                PlaybackSettings {
+                    volume: Volume::Linear(0.15),
+                    ..PlaybackSettings::ONCE
+                },
+            ));
+        },
+        commands,
+    );
+
+    commands
+        .animation()
+        .insert_tween_here(
+            Duration::from_secs_f32(secs),
+            EaseKind::QuadraticIn,
+            id.into_target()
+                .with(sprite_color(Color::srgb(0.2, 0.2, 0.2), WHITE.into())),
+        )
+        .animation()
+        .insert_tween_here(
+            Duration::from_secs_f32(secs),
+            EaseKind::QuadraticOut,
+            id.into_target().with(translation(tstart, tend)),
+        )
+        .animation()
+        .insert_tween_here(
+            Duration::from_secs_f32(secs),
+            EaseKind::QuadraticOut,
+            id.into_target().with(rotation(rstart, rend)),
+        )
+        .insert(ChildOf(id));
 }

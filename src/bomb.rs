@@ -1,5 +1,5 @@
 use crate::bullet::{Bullet, PlayerBullet};
-use crate::effects::{Size, SpawnExplosion};
+use crate::effects::{Explosion, SpawnExplosion};
 use crate::player::{AliveContext, Player};
 use crate::points::PointEvent;
 use crate::{DespawnRestart, GameState};
@@ -110,15 +110,15 @@ fn detonate(
         let position = player.translation.xy();
         explosions.write(SpawnExplosion {
             position: position + Vec2::new(15., -15.),
-            size: Size::Big,
+            explosion: Explosion::Big,
         });
         explosions.write(SpawnExplosion {
             position: position + Vec2::new(5., 10.),
-            size: Size::Big,
+            explosion: Explosion::Big,
         });
         explosions.write(SpawnExplosion {
             position: position + Vec2::new(-10., -10.),
-            size: Size::Big,
+            explosion: Explosion::Big,
         });
 
         for (entity, transform) in bullets.iter() {
@@ -129,7 +129,7 @@ fn detonate(
             });
             explosions.write(SpawnExplosion {
                 position: transform.translation.xy(),
-                size: Size::Small,
+                explosion: Explosion::Small,
             });
 
             //commands.spawn((

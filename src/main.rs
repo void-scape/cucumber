@@ -153,7 +153,7 @@ fn main() {
 pub struct Avian;
 
 // this many layers is probably not necessary
-#[derive(Default, Clone, Copy, PhysicsLayer)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PhysicsLayer)]
 pub enum Layer {
     #[default]
     Default,
@@ -210,12 +210,19 @@ enum GameState {
 #[derive(Default, Component)]
 pub struct DespawnRestart;
 
-fn despawn_on_restart(mut commands: Commands, entities: Query<Entity, With<DespawnRestart>>) {
-    info!("Despawn on restart");
+fn despawn_on_restart(
+    mut commands: Commands,
+    entities: Query<Entity, (With<DespawnRestart>, Without<Children>)>,
+    parents: Query<Entity, (With<DespawnRestart>, With<Children>)>,
+) {
     for entity in entities.iter() {
         commands
             .entity(entity)
             .despawn_related::<Children>()
             .despawn();
+    }
+
+    for entity in parents.iter() {
+        commands.entity(entity).despawn();
     }
 }

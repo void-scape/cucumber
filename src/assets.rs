@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use crate::HEIGHT;
+use crate::animation::AnimationAppExt;
 use crate::atlas_layout;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -53,15 +54,15 @@ pub struct AssetPlugin;
 
 impl Plugin for AssetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreStartup, init_misc_layout)
-            .add_systems(Update, insert_sprite);
+        app.add_systems(Update, insert_sprite).register_layout(
+            MISC_PATH,
+            TextureAtlasLayout::from_grid(UVec2::splat(8), 13, 8, None, None),
+        );
 
         #[cfg(debug_assertions)]
         app.add_systems(Update, debug_assets);
     }
 }
-
-atlas_layout!(MiscLayout, init_misc_layout, 8, 13, 8);
 
 #[derive(Component)]
 pub struct AutoSprite {

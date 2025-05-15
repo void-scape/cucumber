@@ -5,6 +5,9 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::time::Duration;
 
+pub const LARGEST_SPRITE_SIZE: f32 = 16.;
+pub const ENEMY_Z: f32 = 0.;
+
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
 #[cfg(debug_assertions)]
@@ -19,8 +22,8 @@ pub fn start_waves(mut commands: Commands) {
             [
                 (swarm_right(), 0.),
                 (swarm_left(), 2.),
-                (crisscross().with(option(Weapon::Bullet)), 2.),
-                (double_buck_shot(), 6.),
+                (crisscross().with(option(Weapon::Bullet)), 4.),
+                (double_buck_shot(), 8.),
                 (double_wall(), 4.),
                 (swarm_right(), 0.),
                 (swarm_left(), 2.),
@@ -28,11 +31,17 @@ pub fn start_waves(mut commands: Commands) {
                 (quad_mine_thrower(), 6.),
                 (double_crisscross(), 2.),
                 (orb_slinger(), 6.),
-                (double_wall(), 4.),
+                (laser_maze(), 2.),
+                (double_wall(), 6.),
                 (crisscross(), 2.),
-                (double_orb_slinger().with(option(Weapon::Missile)), 5.),
+                (double_orb_slinger().with(option(Weapon::Missile)), 6.),
+                (laser_ladder(), 4.),
                 (swarm_right(), 0.),
-                (swarm_left(), 12.),
+                (swarm_left(), 4.),
+                (swarm_right(), 0.),
+                (swarm_left(), 3.8),
+                (triple_wall(), 8.),
+                (double_buck_shot(), 18.),
                 (boss(), 0.),
             ],
         ));
@@ -140,10 +149,8 @@ pub fn update_waves(
         return;
     }
 
-    const LARGEST_SPRITE_SIZE: f32 = 16.;
     //const PADDING: f32 = LARGEST_SPRITE_SIZE;
     //const FORMATION_EASE_DUR: f32 = 2.;
-    const ENEMY_Z: f32 = 0.;
 
     controller.tick(&time);
     if let Some(formation) = controller.next() {

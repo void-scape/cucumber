@@ -1,4 +1,5 @@
 use crate::animation::{AnimationAppExt, AnimationSprite, FlipX, FlipY};
+use crate::health::Dead;
 use bevy::prelude::*;
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
@@ -8,7 +9,7 @@ pub struct EffectsPlugin;
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnExplosion>()
-            .add_systems(Update, spawn_explosions)
+            .add_systems(Update, (spawn_explosions, write_explosions))
             .register_layout(
                 "fire_sparks.png",
                 TextureAtlasLayout::from_grid(UVec2::splat(96), 4, 5, None, None),
@@ -28,14 +29,26 @@ impl Plugin for EffectsPlugin {
     }
 }
 
+fn write_explosions(
+    mut writer: EventWriter<SpawnExplosion>,
+    explosions: Query<(&GlobalTransform, &Explosion), With<Dead>>,
+) {
+    for (gt, explosion) in explosions.iter() {
+        writer.write(SpawnExplosion {
+            position: gt.translation().xy(),
+            explosion: *explosion,
+        });
+    }
+}
+
 #[derive(Clone, Copy, Event)]
 pub struct SpawnExplosion {
     pub position: Vec2,
-    pub size: Size,
+    pub explosion: Explosion,
 }
 
-#[derive(Clone, Copy)]
-pub enum Size {
+#[derive(Clone, Copy, PartialEq, Eq, Component)]
+pub enum Explosion {
     Big,
     Small,
 }
@@ -48,8 +61,8 @@ fn spawn_explosions(
     let mut big = false;
     let mut small = false;
     for event in reader.read() {
-        match event.size {
-            Size::Big => {
+        match event.explosion {
+            Explosion::Big => {
                 big = true;
                 commands.spawn((
                     Transform::from_translation(event.position.extend(-97.)),
@@ -73,7 +86,7 @@ fn spawn_explosions(
                     Transform::from_translation(event.position.extend(-100.)),
                 ));
             }
-            Size::Small => {
+            Explosion::Small => {
                 small = true;
                 commands.spawn((
                     Transform::from_translation(event.position.extend(-97.))

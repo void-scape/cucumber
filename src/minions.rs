@@ -1,7 +1,9 @@
 use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
-use crate::bullet::emitter::{BulletModifiers, GattlingEmitter, HomingEmitter, MissileEmitter};
+use crate::bullet::emitter::{
+    BulletModifiers, GattlingEmitter, HomingEmitter, MissileEmitter, Rate,
+};
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
 use crate::bullet::{BulletTimer, Polarity};
 use crate::enemy::Enemy;
@@ -398,7 +400,8 @@ fn update_gunners(
                     MissileEmitter,
                     //HomingEmitter::<Enemy>::enemy(),
                     BulletModifiers {
-                        damage: 0.2,
+                        damage: 0.6,
+                        rate: Rate::Factor(1.8),
                         ..Default::default()
                     },
                 )),

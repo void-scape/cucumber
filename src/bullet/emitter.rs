@@ -4,11 +4,11 @@ use super::{
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
-    HEIGHT, Layer,
+    Avian, HEIGHT, Layer,
     bullet::PlayerBullet,
     enemy::Enemy,
     float_tween,
-    health::{Damage, DamageEvent, Health},
+    health::{Damage, DamageEvent, Health, HealthSet},
     player::Player,
 };
 use avian2d::prelude::*;
@@ -79,7 +79,6 @@ impl Plugin for EmitterPlugin {
                     play_samples,
                     (
                         GattlingEmitter::shoot_bullets,
-                        LaserEmitter::laser,
                         MissileEmitter::shoot_bullets,
                         HomingEmitter::<Enemy>::shoot_bullets,
                         HomingEmitter::<Player>::shoot_bullets,
@@ -96,6 +95,7 @@ impl Plugin for EmitterPlugin {
                     .chain()
                     .in_set(EmitterSet),
             )
+            .add_systems(Avian, LaserEmitter::laser.before(HealthSet))
             .add_tween_systems(apply_component_tween_system::<SpiralOffsetTween>);
     }
 }
@@ -451,7 +451,7 @@ impl MissileEmitter {
     ) {
         let delta = time.delta();
 
-        for (emitter, mut timer, mods, child_of, transform) in emitters.iter_mut() {
+        for (_emitter, mut timer, mods, child_of, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -463,6 +463,9 @@ impl MissileEmitter {
             let duration = mods.rate.duration(MISSILE_RATE);
             timer.timer.set_duration(duration);
 
+            let w = crate::WIDTH / 2.;
+            let h = crate::HEIGHT / 2.;
+
             let p = transform.translation().xy();
             let target = match targets
                 .iter()
@@ -471,6 +474,12 @@ impl MissileEmitter {
                         .xy()
                         .distance(p)
                         .total_cmp(&b.translation().xy().distance(p))
+                })
+                .filter(|gt| {
+                    gt.translation().x > -w
+                        && gt.translation().x < w
+                        && gt.translation().y > -h
+                        && gt.translation().y < h
                 })
                 .next()
             {
@@ -593,34 +602,34 @@ impl<T: Component> HomingEmitter<T> {
 }
 
 #[derive(Component)]
-#[require(Transform, BulletModifiers, Visibility, Polarity)]
+#[require(Transform, BulletModifiers, Visibility)]
 #[component(on_insert = Self::on_insert_hook)]
-pub struct LaserEmitter(Layer);
+pub struct LaserEmitter {
+    layer: Layer,
+    pub dir: Vec2,
+}
 
 impl LaserEmitter {
-    pub fn player() -> Self {
-        Self(Layer::Player)
-    }
-
-    pub fn enemy() -> Self {
-        Self(Layer::Enemy)
+    pub fn new(dir: Vec2) -> Self {
+        assert!(dir != Vec2::ZERO);
+        Self {
+            layer: Layer::Player,
+            dir: dir.normalize(),
+        }
     }
 }
 
 impl LaserEmitter {
-    fn on_insert_hook(mut world: DeferredWorld, context: HookContext) {
+    fn on_insert_hook(mut world: DeferredWorld, ctx: HookContext) {
         let server = world.resource();
         let sprite = BulletSprite::from_cell(1, 8);
         let sprite = super::assets::sprite_rect8(server, sprite.path, sprite.cell);
 
-        world.commands().entity(context.entity).with_children(|c| {
-            let rot = Quat::from_rotation_z(core::f32::consts::FRAC_PI_2);
-
+        let dir = world.get::<LaserEmitter>(ctx.entity).unwrap().dir;
+        world.commands().entity(ctx.entity).with_children(|c| {
             c.spawn((
                 sprite,
-                Transform::default()
-                    .with_translation(Vec3::new(0.0, 4.0, 10.0))
-                    .with_rotation(rot),
+                //Transform::from_rotation(Quat::from_rotation_z(dir.to_angle())),
             ));
         });
     }
@@ -630,10 +639,9 @@ impl LaserEmitter {
         mut emitters: Query<
             (
                 Entity,
-                &LaserEmitter,
+                Ref<LaserEmitter>,
                 Option<&mut BulletTimer>,
                 &BulletModifiers,
-                &Polarity,
                 &ChildOf,
                 &GlobalTransform,
                 &Children,
@@ -650,9 +658,7 @@ impl LaserEmitter {
     ) -> Result {
         let delta = time.delta();
 
-        for (entity, emitter, timer, mods, polarity, child_of, transform, children) in
-            emitters.iter_mut()
-        {
+        for (entity, emitter, timer, mods, child_of, gt, children) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -665,8 +671,8 @@ impl LaserEmitter {
                 });
             };
 
-            let direction = polarity.to_vec2();
-            let mut new_transform = transform.compute_transform();
+            let direction = emitter.dir;
+            let mut new_transform = gt.compute_transform();
             new_transform.translation += direction.extend(0.0) * 10.0;
 
             let child_entity = children
@@ -674,8 +680,11 @@ impl LaserEmitter {
                 .next()
                 .ok_or("laser emitter should have child")?;
 
-            let filter =
-                SpatialQueryFilter::default().with_mask([emitter.0, Layer::Bounds, Layer::Debris]);
+            let filter = SpatialQueryFilter::default().with_mask([
+                emitter.layer,
+                Layer::Bounds,
+                Layer::Debris,
+            ]);
 
             if let Some(hit_data) = spatial_query.cast_ray(
                 new_transform.translation.xy(),
@@ -685,10 +694,14 @@ impl LaserEmitter {
                 &filter,
             ) {
                 let mut child = child.get_mut(child_entity)?;
+                if emitter.is_changed() {
+                    child.rotation = Quat::from_rotation_z(emitter.dir.to_angle());
+                }
 
                 let target_scale = (hit_data.distance + 8.0) / 8.0;
                 let difference = target_scale - child.scale.x;
 
+                //child.scale.x = target_scale;
                 if difference < 0.0 {
                     child.scale.x = target_scale;
                 } else {
@@ -696,13 +709,21 @@ impl LaserEmitter {
                 }
 
                 child.translation.y = direction.y * (4.0 + child.scale.x * 8.0 / 2.0);
+                child.translation.x = direction.x * (4.0 + child.scale.x * 8.0 / 2.0);
 
                 if let Ok((entity, target_transform, player)) = targets.get(hit_data.entity) {
                     if (child.scale.x * 8.0 - hit_data.distance).abs() <= 16.0 {
-                        damage_writer.write(DamageEvent {
-                            entity,
-                            damage: 15.0 * mods.damage * delta.as_secs_f32(),
-                        });
+                        if emitter.layer == Layer::Enemy {
+                            damage_writer.write(DamageEvent {
+                                entity,
+                                damage: 15.0 * mods.damage * delta.as_secs_f32(),
+                            });
+                        } else {
+                            damage_writer.write(DamageEvent {
+                                entity,
+                                damage: 1. * mods.damage,
+                            });
+                        }
                     }
 
                     if let Some(mut timer) = timer {
@@ -710,7 +731,7 @@ impl LaserEmitter {
                             writer.write(BulletCollisionEvent::new(
                                 UVec2::new(1, 8),
                                 target_transform.compute_transform(),
-                                match emitter.0 {
+                                match emitter.layer {
                                     Layer::Player => BulletSource::Enemy,
                                     Layer::Enemy => BulletSource::Player,
                                     _ => BulletSource::Enemy,
@@ -1180,7 +1201,7 @@ impl BuckShotEmitter {
 }
 
 #[derive(Component)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+#[require(Transform, BulletModifiers, Polarity)]
 pub struct WallEmitter {
     layer: Layer,
     bullets: usize,
@@ -1211,6 +1232,13 @@ impl WallEmitter {
     pub fn from_dir(dir: Vec2) -> Self {
         Self {
             dir,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_bullets(bullets: usize) -> Self {
+        Self {
+            bullets,
             ..Default::default()
         }
     }

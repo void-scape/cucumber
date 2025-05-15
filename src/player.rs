@@ -1,19 +1,22 @@
 use crate::{
-    DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
-    animation::{AnimationController, AnimationIndices},
-    assets::{self, MISC_PATH, MiscLayout},
+    Avian, DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
+    animation::AnimationSprite,
+    assets::{self, MISC_PATH},
     bullet::{
         BulletTimer,
         emitter::{BulletModifiers, GattlingEmitter},
     },
+    effects::Explosion,
     end,
-    health::{Dead, Health, Shield},
+    enemy::Enemy,
+    health::{DamageEvent, Dead, Health, HealthSet, Invincible, Shield},
     minions::{Gunner, GunnerWeapon},
     pickups::{Material, PickupEvent, Upgrade, Weapon},
+    tween::{OnEnd, TimeMult, time_mult},
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{DARK_RED, SKY_BLUE},
+    color::palettes::css::{BLUE, DARK_RED, RED, SKY_BLUE, WHITE},
     ecs::{
         component::HookContext, entity_disabling::Disabled, system::RunSystemOnce,
         world::DeferredWorld,
@@ -21,12 +24,18 @@ use bevy::{
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
+use bevy_optix::{
+    glitch::{GlitchIntensity, GlitchSettings, glitch_intensity},
+    pixel_perfect::OuterCamera,
+    post_process::PostProcessCommand,
+    shake::TraumaCommands,
+};
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
 use bevy_tween::{
-    interpolate::{sprite_color, translation},
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::IntoTarget,
+    interpolate::sprite_color,
+    prelude::{AnimationBuilderExt, EaseKind, Repeat, RepeatStyle},
+    tween::{IntoTarget, TargetResource},
 };
 use std::{cmp::Ordering, f32, time::Duration};
 
@@ -41,15 +50,22 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PowerUpEvent>()
             .insert_resource(WeaponRack::default())
+            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(OnEnter(GameState::StartGame), spawn_player)
             .add_systems(
                 Update,
                 (
                     zero_rotation,
                     update_player_sprites,
-                    (handle_pickups, health_effects, handle_powerups)
+                    (handle_pickups, handle_powerups, enemy_collision)
                         .run_if(in_state(GameState::Game)),
                 ),
+            )
+            .add_systems(
+                Avian,
+                (handle_damage, health_effects)
+                    .after(HealthSet)
+                    .run_if(in_state(GameState::Game)),
             )
             .add_systems(First, handle_death)
             .add_input_context::<AliveContext>()
@@ -79,18 +95,32 @@ fn spawn_player(mut commands: Commands) {
     );
 
     #[cfg(not(debug_assertions))]
-    commands
-        .entity(player)
-        .insert(BlockControls)
-        .animation()
-        .insert_tween_here(
-            dur,
-            EaseKind::SineOut,
-            player.into_target().with(translation(
-                Vec3::new(0., -HEIGHT / 2. + 16., 0.),
-                Vec3::new(0., -HEIGHT / 6., 0.),
-            )),
-        );
+    {
+        use bevy_tween::interpolate::translation;
+        commands
+            .entity(player)
+            .insert(BlockControls)
+            .animation()
+            .insert_tween_here(
+                dur,
+                EaseKind::SineOut,
+                player.into_target().with(translation(
+                    Vec3::new(0., -HEIGHT / 2. + 16., 0.),
+                    Vec3::new(0., -HEIGHT / 6., 0.),
+                )),
+            );
+    }
+}
+
+fn enemy_collision(
+    mut writer: EventWriter<DamageEvent>,
+    player: Single<(Entity, &CollidingEntities), With<Player>>,
+    enemies: Query<&Enemy>,
+) {
+    let (entity, collisions) = player.into_inner();
+    if enemies.iter_many(collisions.iter()).count() > 0 {
+        writer.write(DamageEvent { entity, damage: 1. });
+    }
 }
 
 #[derive(Event)]
@@ -126,13 +156,28 @@ fn handle_powerups(
     RigidBody::Dynamic,
     Collider::rectangle(2., 2.),
     CollidingEntities,
-    CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Bullet, Layer::Collectable]),
     BulletModifiers,
     Materials,
     DespawnRestart,
+    CollisionLayers = Self::layers(),
+    Explosion::Big,
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
+
+impl Player {
+    fn layers() -> CollisionLayers {
+        CollisionLayers::new(
+            Layer::Player,
+            [
+                Layer::Bounds,
+                Layer::Bullet,
+                Layer::Collectable,
+                Layer::Enemy,
+            ],
+        )
+    }
+}
 
 #[derive(Default, Component)]
 pub struct Materials(usize);
@@ -147,60 +192,46 @@ impl Materials {
     }
 }
 
-#[derive(Component)]
-pub struct WeaponEntity(pub Entity);
-
 impl Player {
     fn on_add(mut world: DeferredWorld, ctx: HookContext) {
         world.commands().queue(move |world: &mut World| {
             world
-                .run_system_once(
-                    move |mut commands: Commands,
-                          server: Res<AssetServer>,
-                          misc_layout: Res<MiscLayout>| {
-                        let mut actions = Actions::<AliveContext>::default();
-                        actions.bind::<MoveAction>().to((
-                            Cardinal::wasd_keys(),
-                            Cardinal::arrow_keys(),
-                            Cardinal::dpad_buttons(),
-                            Axial::left_stick().with_modifiers_each(
-                                DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
-                            ),
-                        ));
+                .run_system_once(move |mut commands: Commands, server: Res<AssetServer>| {
+                    let mut actions = Actions::<AliveContext>::default();
+                    actions.bind::<MoveAction>().to((
+                        Cardinal::wasd_keys(),
+                        Cardinal::arrow_keys(),
+                        Cardinal::dpad_buttons(),
+                        Axial::left_stick().with_modifiers_each(
+                            DeadZone::new(DeadZoneKind::Radial).with_lower_threshold(0.15),
+                        ),
+                    ));
 
-                        actions.bind::<ShootAction>().to((
-                            KeyCode::Space,
-                            GamepadButton::RightTrigger,
-                            GamepadButton::RightTrigger2,
-                        ));
+                    actions.bind::<ShootAction>().to((
+                        KeyCode::Space,
+                        GamepadButton::RightTrigger,
+                        GamepadButton::RightTrigger2,
+                    ));
 
-                        actions
-                            .bind::<SwitchGunAction>()
-                            .to((KeyCode::ShiftLeft, GamepadButton::South));
+                    actions
+                        .bind::<SwitchGunAction>()
+                        .to((KeyCode::ShiftLeft, GamepadButton::South));
 
-                        commands.entity(ctx.entity).insert((
-                            actions,
-                            assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
-                            BulletTimer {
-                                timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
-                            },
-                        ));
+                    commands.entity(ctx.entity).insert((
+                        actions,
+                        assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
+                        BulletTimer {
+                            timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
+                        },
+                    ));
 
-                        commands.entity(ctx.entity).with_child((
-                            PlayerBlasters,
-                            Visibility::Hidden,
-                            Transform::from_xyz(0., -7., -1.),
-                            Sprite::from_atlas_image(
-                                server.load(MISC_PATH),
-                                TextureAtlas::from(misc_layout.0.clone()),
-                            ),
-                            AnimationController::from_seconds(
-                                AnimationIndices::repeating(18..=21),
-                                0.1,
-                            ),
-                        ));
-                    },
-                )
+                    commands.entity(ctx.entity).with_child((
+                        PlayerBlasters,
+                        Visibility::Hidden,
+                        Transform::from_xyz(0., -7., -1.),
+                        AnimationSprite::repeating(MISC_PATH, 0.1, 18..=21),
+                    ));
+                })
                 .unwrap();
         });
     }
@@ -444,21 +475,24 @@ fn zero_rotation(mut player: Single<&mut Transform, With<Player>>) {
 fn handle_death(mut commands: Commands, player: Single<Entity, (With<Player>, With<Dead>)>) {
     commands.entity(*player).despawn();
     commands.queue(|world: &mut World| world.run_system_once(end::show_loose_screen));
+    commands
+        .animation()
+        .insert_tween_here(
+            Duration::from_secs_f32(2.),
+            EaseKind::QuadraticIn,
+            TargetResource.with(time_mult(1., 0.)),
+        )
+        .insert(DespawnRestart);
+}
+
+fn restart(mut time: ResMut<TimeMult>) {
+    time.0 = 1.;
 }
 
 fn handle_pickups(
     mut commands: Commands,
     server: Res<AssetServer>,
-    q: Single<
-        (
-            Entity,
-            //&mut WeaponEntity,
-            &mut BulletModifiers,
-            &mut Materials,
-            &mut Shield,
-        ),
-        With<Player>,
-    >,
+    q: Single<(Entity, &mut BulletModifiers, &mut Materials, &mut Shield), With<Player>>,
     mut events: EventReader<PickupEvent>,
     mut rack: ResMut<WeaponRack>,
 ) {
@@ -515,8 +549,59 @@ fn handle_pickups(
     }
 }
 
-fn health_effects(mut commands: Commands, player: Single<(Ref<Shield>, Ref<Health>)>) {
-    let (shield, health) = player.into_inner();
+#[derive(Component)]
+struct FlickerAnimation;
+
+fn handle_damage(
+    mut commands: Commands,
+    mut reader: EventReader<DamageEvent>,
+    player: Single<(Entity, Ref<Shield>, Ref<Health>), (With<Player>, Without<Invincible>)>,
+) {
+    let (player, shield, _health) = player.into_inner();
+
+    if reader.read().any(|e| e.entity == player) {
+        commands.entity(player).insert(Invincible);
+
+        let color = if shield.is_changed() && shield.empty() {
+            BLUE.into()
+        } else {
+            RED.into()
+        };
+        let flicker = commands
+            .animation()
+            .repeat(Repeat::times(3))
+            .repeat_style(RepeatStyle::PingPong)
+            .insert_tween_here(
+                Duration::from_secs_f32(0.25),
+                EaseKind::Linear,
+                player.into_target().with(sprite_color(WHITE.into(), color)),
+            )
+            .insert(FlickerAnimation)
+            .id();
+        commands.entity(player).add_child(flicker);
+
+        run_after(
+            Duration::from_secs_f32(1.5),
+            |mut commands: Commands,
+             mut player: Single<(Entity, &mut Sprite), With<Player>>,
+             animation: Single<Entity, With<FlickerAnimation>>| {
+                commands.entity(*animation).despawn();
+                commands.entity(player.0).remove::<Invincible>();
+                player.1.color = WHITE.into();
+            },
+            &mut commands,
+        );
+    }
+}
+
+fn health_effects(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut reader: EventReader<DamageEvent>,
+    player: Single<(Entity, Ref<Shield>, Ref<Health>), (With<Player>, Without<Invincible>)>,
+    camera: Single<Entity, With<OuterCamera>>,
+) {
+    let (player, shield, health) = player.into_inner();
 
     if shield.is_changed() && shield.empty() {
         let mask = commands
@@ -558,5 +643,50 @@ fn health_effects(mut commands: Commands, player: Single<(Ref<Shield>, Ref<Healt
                 DARK_RED.with_alpha(0.).into(),
             )),
         );
+    }
+
+    if reader.read().any(|e| e.entity == player) {
+        let on_end = OnEnd::new(&mut commands, |mut commands: Commands| {
+            commands.remove_post_process::<GlitchSettings, OuterCamera>();
+            commands.remove_post_process::<GlitchIntensity, OuterCamera>();
+        });
+
+        commands.post_process::<OuterCamera>(GlitchSettings::default());
+        commands.post_process::<OuterCamera>(GlitchIntensity::default());
+        commands
+            .animation()
+            .insert_tween_here(
+                Duration::from_secs_f32(0.4),
+                EaseKind::Linear,
+                camera.into_target().with(glitch_intensity(0.3, 0.0)),
+            )
+            .insert(on_end);
+
+        commands.add_trauma(0.15);
+        //commands
+        //    .animation()
+        //    .insert_tween_here(
+        //        Duration::from_secs_f32(0.25),
+        //        EaseKind::Linear,
+        //        TargetResource.with(time_mult(0.25, 1.)),
+        //    )
+        //    .insert(DespawnRestart);
+
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/melee.wav")),
+            PitchRange(0.98..1.02),
+            PlaybackSettings {
+                volume: Volume::Linear(0.25),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/player_damage.wav")),
+            //PitchRange(0.98..1.02),
+            PlaybackSettings {
+                volume: Volume::Linear(0.25),
+                ..PlaybackSettings::ONCE
+            },
+        ));
     }
 }

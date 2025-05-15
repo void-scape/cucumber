@@ -21,6 +21,9 @@ impl Plugin for HealthPlugin {
     }
 }
 
+#[derive(Component)]
+pub struct Invincible;
+
 #[derive(Debug, Clone, Copy, Component)]
 pub struct Health {
     current: f32,
@@ -61,6 +64,10 @@ impl Health {
 
     pub fn dead(&self) -> bool {
         self.dead || self.current == 0.0
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.current == self.max
     }
 
     /// Calculate the current proportion of health
@@ -159,7 +166,7 @@ impl Damage {
 }
 
 pub fn handle_damage(
-    mut healths: Query<(Option<&mut Shield>, &mut Health)>,
+    mut healths: Query<(Option<&mut Shield>, &mut Health), Without<Invincible>>,
     mut reader: EventReader<DamageEvent>,
 ) {
     for event in reader.read() {
@@ -167,7 +174,9 @@ pub fn handle_damage(
             if let Some(mut shield) = shield {
                 if shield.current() < event.damage {
                     let remaining = shield.current();
-                    shield.damage_all();
+                    if !shield.empty() {
+                        shield.damage_all();
+                    }
                     health.damage(event.damage - remaining);
                 } else {
                     shield.damage(event.damage);
