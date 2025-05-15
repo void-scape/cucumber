@@ -131,7 +131,7 @@ pub struct BuckShot;
 )]
 pub struct WallShooter;
 
-#[derive(Default, Component)]
+#[derive(Default, Clone, Copy, Component)]
 #[require(
     Enemy,
     ImageCollider,

@@ -83,36 +83,76 @@ pub fn option(weapon: Weapon) -> impl FnMut(&mut EntityCommands) + 'static {
     }
 }
 
-pub fn mine_thrower() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![(MineThrower, Platoon(formation.id()))]);
-    })
-}
-
 pub fn quad_mine_thrower() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![
-            (
-                MineThrower,
-                Platoon(formation.id()),
-                Transform::from_xyz(-20., 0., 0.)
-            ),
-            (
-                MineThrower,
-                Platoon(formation.id()),
-                Transform::from_xyz(20., 0., 1.)
-            ),
-            (
-                MineThrower,
-                Platoon(formation.id()),
-                Transform::from_xyz(-40., 10., 2.)
-            ),
-            (
-                MineThrower,
-                Platoon(formation.id()),
-                Transform::from_xyz(40., 10., 3.)
-            ),
-        ]);
+    Formation::new(|formation: &mut EntityCommands, server: &AssetServer| {
+        formation.with_children(|root| {
+            let platoon = root.target_entity();
+
+            animate_entrance(
+                server,
+                &mut root.commands(),
+                (
+                    MineThrower,
+                    ChildOf(platoon),
+                    Platoon(platoon),
+                    Transform::from_xyz(-20., 0., 0.),
+                ),
+                None,
+                1.5,
+                Vec3::ZERO,
+                Vec3::new(-20., 0., 0.),
+                Quat::default(),
+                Quat::default(),
+            );
+            animate_entrance(
+                server,
+                &mut root.commands(),
+                (
+                    MineThrower,
+                    ChildOf(platoon),
+                    Platoon(platoon),
+                    Transform::from_xyz(-20., 0., 0.),
+                ),
+                None,
+                1.5,
+                Vec3::ZERO,
+                Vec3::new(20., 0., 0.),
+                Quat::default(),
+                Quat::default(),
+            );
+            animate_entrance(
+                server,
+                &mut root.commands(),
+                (
+                    MineThrower,
+                    ChildOf(platoon),
+                    Platoon(platoon),
+                    Transform::from_xyz(-20., 0., 0.),
+                ),
+                Some(1.),
+                1.5,
+                Vec3::ZERO,
+                Vec3::new(40., 10., 0.),
+                Quat::default(),
+                Quat::default(),
+            );
+            animate_entrance(
+                server,
+                &mut root.commands(),
+                (
+                    MineThrower,
+                    ChildOf(platoon),
+                    Platoon(platoon),
+                    Transform::from_xyz(-20., 0., 0.),
+                ),
+                Some(1.),
+                1.5,
+                Vec3::ZERO,
+                Vec3::new(-40., 10., 0.),
+                Quat::default(),
+                Quat::default(),
+            );
+        });
     })
 }
 
@@ -601,7 +641,14 @@ fn animate_entrance_inner(
                     ..Default::default()
                 },
                 PlaybackSettings {
-                    volume: Volume::Linear(0.4),
+                    volume: Volume::Linear(0.2),
+                    ..PlaybackSettings::ONCE
+                },
+            ));
+            commands.spawn((
+                SamplePlayer::new(server.load("audio/sfx/blurp.wav")),
+                PlaybackSettings {
+                    volume: Volume::Linear(0.25),
                     ..PlaybackSettings::ONCE
                 },
             ));
@@ -631,14 +678,6 @@ fn animate_entrance_inner(
                         .with(sprite_color(Color::WHITE, Color::WHITE.with_alpha(0.))),
                 );
             commands.entity(id).add_child(sprite);
-
-            commands.spawn((
-                SamplePlayer::new(server.load("audio/sfx/blurp.wav")),
-                PlaybackSettings {
-                    volume: Volume::Linear(0.15),
-                    ..PlaybackSettings::ONCE
-                },
-            ));
         },
         commands,
     );
