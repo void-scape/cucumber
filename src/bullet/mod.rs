@@ -10,6 +10,7 @@ use crate::{
     bounds::WallDespawn,
     effects::{AlwaysBlast, Blasters, Explosion, SpawnExplosion},
     health::{Damage, DamageEvent, Dead, Health},
+    particles::ParticleEmitter,
     player::Player,
     points::PointEvent,
     tween::{DespawnTweenFinish, OnEnd},
@@ -21,6 +22,7 @@ use bevy::{
     prelude::*,
     sprite::Anchor,
 };
+use bevy_enoki::{ParticleEffectHandle, ParticleSpawner};
 use bevy_seedling::{
     prelude::Volume,
     sample::{PlaybackSettings, SamplePlayer},
@@ -429,19 +431,24 @@ fn despawn_dead_bullets(
                 .id();
 
             let t = *transform;
-            let end = OnEnd::new(&mut commands, move |mut commands: Commands| {
-                commands.spawn((
-                    Rocket,
-                    HomingRotate,
-                    LinearVelocity(
-                        PLAYER_BULLET_SPEED
-                            * (dir.to_vec2().rotate(Vec2::from_angle(offset)))
-                            * 0.8,
-                    ),
-                    t.with_rotation(Quat::from_rotation_z(rot)),
-                    Damage::new(BULLET_DAMAGE),
-                ));
-            });
+            let end = OnEnd::new(
+                &mut commands,
+                move |mut commands: Commands, server: Res<AssetServer>| {
+                    commands.spawn((
+                        Rocket,
+                        ParticleSpawner::default(),
+                        ParticleEffectHandle(server.load("particles/rocket.ron")),
+                        HomingRotate,
+                        LinearVelocity(
+                            PLAYER_BULLET_SPEED
+                                * (dir.to_vec2().rotate(Vec2::from_angle(offset)))
+                                * 0.8,
+                        ),
+                        t.with_rotation(Quat::from_rotation_z(rot)),
+                        Damage::new(BULLET_DAMAGE),
+                    ));
+                },
+            );
             commands
                 .entity(indicators)
                 .animation()
