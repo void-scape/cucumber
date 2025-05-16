@@ -2,17 +2,17 @@ use crate::asteroids::MaterialCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::bullet::emitter::{
-    BulletModifiers, GattlingEmitter, HomingEmitter, MissileEmitter, Rate,
+    BulletModifiers, EmitterState, GattlingEmitter, MissileEmitter, Rate,
 };
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
 use crate::bullet::{BulletTimer, Polarity};
-use crate::enemy::Enemy;
-use crate::pickups::{Collectable, Material, Pickup, PickupEvent, PowerUp, Weapon};
+use crate::effects::Blasters;
+use crate::enemy::EnemySprite8;
+use crate::pickups::{Collectable, Material, PickupEvent, PowerUp, Weapon};
 use crate::player::{AliveContext, PLAYER_SPEED, Player, PowerUpEvent, ShootAction, WeaponRack};
 use crate::{GameState, Layer};
 use avian2d::prelude::*;
-use bevy::color::palettes::css::{LIGHT_BLUE, LIGHT_GREEN};
-use bevy::ecs::entity_disabling::Disabled;
+use bevy::color::palettes::css::LIGHT_BLUE;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
@@ -22,6 +22,7 @@ use bevy_seedling::prelude::*;
 use bevy_tween::interpolate::translation;
 use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
 use bevy_tween::tween::IntoTarget;
+use std::f32::EPSILON;
 use std::time::Duration;
 
 pub struct MinionPlugin;
@@ -204,7 +205,7 @@ fn miner_collect(
     //}
 }
 
-const SUCK_SPEED: f32 = 4.;
+const SUCK_SPEED: f32 = 8.;
 const SUCK_DIST: f32 = 30.;
 const NO_SHOT_SUCK_DIST: f32 = crate::HEIGHT / 2.;
 
@@ -269,10 +270,12 @@ pub struct Gunners(Vec<Entity>);
 
 #[derive(Component)]
 #[require(
-    Transform,
+    Visibility,
     RigidBody::Kinematic,
     LinearVelocity,
-    DebugRect::from_size_color(Vec2::splat(4.), LIGHT_GREEN)
+    EnemySprite8::cell(UVec2::new(0, 6)),
+    Blasters(const { &[Vec3::new(0., -6., -1.)] }),
+    Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
 )]
 pub struct Gunner;
 
@@ -304,27 +307,15 @@ fn spawn_gunners(
     if rack.is_changed() && gunners.is_empty() {
         if let Some(weapon) = rack.selection() {
             let enabled = actions.action::<ShootAction>().state() == ActionState::Fired;
-            commands.spawn((
-                Gunner,
-                GunnerLeader(*player),
-                GunnerAnchor::Left,
-                GunnerWeapon { weapon, enabled },
-                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
-            ));
-            commands.spawn((
-                Gunner,
-                GunnerLeader(*player),
+            spawn_gunner(&mut commands, *player, weapon, GunnerAnchor::Left, enabled);
+            spawn_gunner(
+                &mut commands,
+                *player,
+                weapon,
                 GunnerAnchor::Bottom,
-                GunnerWeapon { weapon, enabled },
-                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
-            ));
-            commands.spawn((
-                Gunner,
-                GunnerLeader(*player),
-                GunnerAnchor::Right,
-                GunnerWeapon { weapon, enabled },
-                Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
-            ));
+                enabled,
+            );
+            spawn_gunner(&mut commands, *player, weapon, GunnerAnchor::Right, enabled);
         }
     } else if rack.is_changed() {
         match rack.selection() {
@@ -366,13 +357,59 @@ fn spawn_gunners(
     }
 }
 
+fn spawn_gunner(
+    commands: &mut Commands,
+    player: Entity,
+    weapon: Weapon,
+    anchor: GunnerAnchor,
+    enabled: bool,
+) {
+    commands.spawn((
+        Gunner,
+        GunnerLeader(player),
+        anchor,
+        GunnerWeapon { weapon, enabled },
+        children![
+            (
+                GunnerEmitter,
+                Polarity::North,
+                MissileEmitter,
+                BulletModifiers {
+                    damage: 0.6,
+                    rate: Rate::Factor(1.8),
+                    ..Default::default()
+                },
+                EmitterState { enabled: false },
+            ),
+            (
+                GunnerEmitter,
+                GattlingEmitter(0.25),
+                BulletModifiers {
+                    damage: 0.2,
+                    ..Default::default()
+                },
+                EmitterState { enabled: false },
+            )
+        ],
+    ));
+}
+
 fn update_gunners(
-    mut commands: Commands,
     player: Single<&Transform, With<Player>>,
     mut gunners: Query<(&Transform, &mut LinearVelocity, &GunnerAnchor), With<Gunner>>,
-    weapons: Query<(Entity, Ref<GunnerWeapon>), Changed<GunnerWeapon>>,
-    mut emitters: Query<(Entity, Option<&Disabled>, &mut BulletTimer), With<GunnerEmitter>>,
-    mut last_weapon: Local<Weapon>,
+    weapons: Query<(&GunnerWeapon, &Children), Changed<GunnerWeapon>>,
+    mut gattling: Query<
+        (&mut EmitterState, &mut BulletTimer),
+        (With<GunnerEmitter>, With<GattlingEmitter>),
+    >,
+    mut missile: Query<
+        (&mut EmitterState, &mut BulletTimer),
+        (
+            With<GunnerEmitter>,
+            With<MissileEmitter>,
+            Without<GattlingEmitter>,
+        ),
+    >,
 ) {
     let pp = player.translation.xy();
     for (transform, mut velocity, anchor) in gunners.iter_mut() {
@@ -388,53 +425,23 @@ fn update_gunners(
         velocity.0 = to_player * PLAYER_SPEED;
     }
 
-    let mut next_weapon = *last_weapon;
-    for (entity, weapon) in weapons.iter() {
-        if weapon.weapon != *last_weapon || weapon.is_added() {
-            next_weapon = weapon.weapon;
-            commands.entity(entity).despawn_related::<Children>();
-            let mut gun = match weapon.weapon {
-                Weapon::Missile => commands.spawn((
-                    GunnerEmitter,
-                    Polarity::North,
-                    MissileEmitter,
-                    //HomingEmitter::<Enemy>::enemy(),
-                    BulletModifiers {
-                        damage: 0.6,
-                        rate: Rate::Factor(1.8),
-                        ..Default::default()
-                    },
-                )),
-                Weapon::Bullet => commands.spawn((
-                    GunnerEmitter,
-                    GattlingEmitter(0.25),
-                    BulletModifiers {
-                        damage: 0.2,
-                        ..Default::default()
-                    },
-                )),
-                _ => unreachable!(),
-            };
-
-            if !weapon.enabled {
-                gun.insert(Disabled);
+    for (weapon, children) in weapons.iter() {
+        let mut iter = gattling.iter_many_mut(children);
+        while let Some((mut state, mut timer)) = iter.fetch_next() {
+            state.enabled = weapon.weapon == Weapon::Bullet && weapon.enabled;
+            if state.enabled {
+                let duration = timer.timer.duration();
+                timer.timer.set_elapsed(duration);
             }
+        }
 
-            let id = gun.id();
-            commands.entity(entity).add_child(id);
-        } else {
-            if !weapon.enabled {
-                for (entity, _, _) in emitters.iter() {
-                    commands.entity(entity).insert(Disabled);
-                }
-            } else {
-                for (entity, _, mut timer) in emitters.iter_mut() {
-                    commands.entity(entity).remove::<Disabled>();
-                    let duration = timer.timer.duration();
-                    timer.timer.set_elapsed(duration);
-                }
+        let mut iter = missile.iter_many_mut(children);
+        while let Some((mut state, mut timer)) = iter.fetch_next() {
+            state.enabled = weapon.weapon == Weapon::Missile && weapon.enabled;
+            if state.enabled {
+                let duration = timer.timer.duration();
+                timer.timer.set_elapsed(duration);
             }
         }
     }
-    *last_weapon = next_weapon;
 }

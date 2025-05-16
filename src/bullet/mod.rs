@@ -123,6 +123,9 @@ fn init_bullet_sprite(
     server: Res<AssetServer>,
 ) {
     for (entity, sprite, color, velocity, rotation) in bullets.iter() {
+        let brightness = sprite.brightness;
+        let alpha = sprite.alpha;
+
         let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
         if rotation.is_none() {
             if let Some(velocity) = velocity {
@@ -130,17 +133,16 @@ fn init_bullet_sprite(
                 sprite.flip_x = velocity.0.x < 0.;
             }
         }
-        match color {
-            ColorMod::Enemy => {
-                sprite.color = RED.into();
-            }
-            ColorMod::Friendly => {
-                sprite.color = SKY_BLUE.into();
-            }
-            ColorMod::Purple => {
-                sprite.color = MAGENTA.into();
-            }
+
+        sprite.color = match color {
+            ColorMod::Enemy => RED,
+            ColorMod::Friendly => SKY_BLUE,
+            ColorMod::Purple => MAGENTA,
         }
+        .with_luminance(brightness)
+        .with_alpha(alpha)
+        .into();
+
         commands.entity(entity).insert(sprite);
     }
 }
@@ -158,7 +160,13 @@ pub struct Lifetime(pub Timer);
 
 impl Default for Lifetime {
     fn default() -> Self {
-        Self(Timer::new(Duration::from_secs(10), TimerMode::Once))
+        Self::new(10.)
+    }
+}
+
+impl Lifetime {
+    fn new(secs: f32) -> Self {
+        Self(Timer::new(Duration::from_secs_f32(secs), TimerMode::Once))
     }
 }
 
@@ -214,7 +222,7 @@ impl Bullet {
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, EnumIter, Component)]
 enum ColorMod {
     Friendly,
     Enemy,
@@ -225,6 +233,8 @@ enum ColorMod {
 pub struct BulletSprite {
     path: &'static str,
     cell: UVec2,
+    brightness: f32,
+    alpha: f32,
 }
 
 impl BulletSprite {
@@ -232,7 +242,19 @@ impl BulletSprite {
         Self {
             path: assets::PROJECTILES_PATH,
             cell: UVec2::new(x, y),
+            brightness: 1.,
+            alpha: 1.,
         }
+    }
+
+    pub fn with_brightness(mut self, brightness: f32) -> Self {
+        self.brightness = brightness;
+        self
+    }
+
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = alpha;
+        self
     }
 }
 
@@ -258,7 +280,7 @@ pub struct Arrow;
     Destructable,
     Health::full(MISSILE_HEALTH),
     Collider::rectangle(2., 2.),
-    BulletSprite::from_cell(5, 2)
+    BulletSprite::from_cell(5, 5)
 )]
 pub struct Missile;
 

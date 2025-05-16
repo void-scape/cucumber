@@ -1,64 +1,253 @@
+use crate::DespawnRestart;
+use crate::bullet::emitter::{BackgroundGattlingEmitter, BulletModifiers, Rate};
+use avian2d::math::PI;
 use bevy::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{AlphaMode2d, Material2d, Material2dPlugin};
+use rand::Rng;
 
 pub struct BackgroundPlugin;
 
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<ScrollingTexture>::default())
-            .add_systems(Startup, scrolling_background)
-            .add_systems(Update, update_scrolling_background);
+            .insert_resource(BackgroundEmitters(true))
+            .add_systems(Startup, background)
+            .add_systems(
+                Update,
+                (
+                    update_scrolling_background,
+                    spawn_background_emitters,
+                    update_emitters,
+                ),
+            );
     }
 }
 
-const BACKGROUND_WIDTH: f32 = 128.;
-const BACKGROUND_HEIGHT: f32 = 256.;
-const BACKGROUND_PATH1: &'static str = "shooters/background1.png";
-const BACKGROUND_PATH2: &'static str = "shooters/background2.png";
-const SCROLL_SPEED1: f32 = 0.05;
-const SCROLL_SPEED2: f32 = 0.15;
+const SPEED: f32 = 0.5;
+const SCROLL_SPEED1: f32 = 1. * SPEED;
+const SCROLL_SPEED2: f32 = 0.5 * SPEED;
+const SCROLL_SPEED3: f32 = 0.1 * SPEED;
+
+/// Enable/disable background emitter spawning
+#[derive(Resource)]
+pub struct BackgroundEmitters(pub bool);
+
+#[derive(Component)]
+struct EmitterLifespan(Timer);
+
+fn spawn_background_emitters(
+    mut commands: Commands,
+    time: Res<Time>,
+    emitters: Res<BackgroundEmitters>,
+    mut timer: Local<Option<Timer>>,
+    mut root: Local<Option<Entity>>,
+) {
+    if !emitters.0 {
+        return;
+    }
+
+    let mut entity = root.get_or_insert_with(|| {
+        commands
+            .spawn((Transform::default(), Visibility::Visible, DespawnRestart))
+            .id()
+    });
+    if commands.get_entity(*entity).is_err() {
+        entity = root.insert(
+            commands
+                .spawn((Transform::default(), Visibility::Visible, DespawnRestart))
+                .id(),
+        );
+    }
+
+    let timer = timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
+    timer.tick(time.delta());
+
+    let mut rng = rand::rng();
+    if timer.just_finished() && rng.random() {
+        let z = match rng.random_range(0..=1) {
+            0 => -901.5,
+            1 => -903.5,
+            _ => unreachable!(),
+        };
+
+        let w = crate::WIDTH / 2.;
+        let h = crate::HEIGHT / 2.;
+        const ANGLE_RAND: f32 = 0.4;
+        const OFFSET: f32 = 15.;
+
+        let (xy, rot) = match rng.random_range(0..4) {
+            // top
+            0 => (
+                Vec2::new(rng.random_range(-w..w), -h - OFFSET),
+                Vec2::Y + Vec2::new(rng.random_range(-ANGLE_RAND..ANGLE_RAND), 0.),
+            ),
+            // bottom
+            1 => (
+                Vec2::new(rng.random_range(-w..w), h + OFFSET),
+                Vec2::NEG_Y + Vec2::new(rng.random_range(-ANGLE_RAND..ANGLE_RAND), 0.),
+            ),
+            // left
+            2 => (
+                Vec2::new(-w - OFFSET, rng.random_range(-h..h)),
+                Vec2::X + Vec2::new(0., rng.random_range(-ANGLE_RAND..ANGLE_RAND)),
+            ),
+            // right
+            3 => (
+                Vec2::new(w + OFFSET, rng.random_range(-h..h)),
+                Vec2::NEG_X + Vec2::new(0., rng.random_range(-ANGLE_RAND..ANGLE_RAND)),
+            ),
+            _ => unreachable!(),
+        };
+
+        commands.entity(*entity).with_child((
+            BackgroundGattlingEmitter(0.1, rot),
+            EmitterLifespan(Timer::from_seconds(
+                rng.random_range(1.0..3.0),
+                TimerMode::Once,
+            )),
+            BulletModifiers {
+                rate: Rate::Factor(rng.random_range(0.75..1.25)),
+                speed: rng.random_range(0.25..0.75),
+                ..Default::default()
+            },
+            Transform::from_translation(xy.extend(z)),
+        ));
+    }
+}
+
+fn update_emitters(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut emitters: Query<(Entity, &mut EmitterLifespan)>,
+) {
+    let delta = time.delta();
+    for (entity, mut lifespan) in emitters.iter_mut() {
+        lifespan.0.tick(delta);
+        if lifespan.0.finished() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
 
 #[derive(Component)]
 struct Speed(f32);
 
-fn scrolling_background(
+fn background(
     mut commands: Commands,
     server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut custom_materials: ResMut<Assets<ScrollingTexture>>,
+    mut mats: ResMut<Assets<ScrollingTexture>>,
 ) {
-    //commands.spawn(Sprite::from_image(server.load("star.png")));
-
     commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(BACKGROUND_WIDTH, BACKGROUND_HEIGHT))),
-        MeshMaterial2d(custom_materials.add(ScrollingTexture {
-            texture: server.load_with_settings(BACKGROUND_PATH1, |s: &mut _| {
-                *s = ImageLoaderSettings {
-                    sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                        address_mode_u: ImageAddressMode::MirrorRepeat,
-                        address_mode_v: ImageAddressMode::MirrorRepeat,
-                        mag_filter: ImageFilterMode::Nearest,
-                        min_filter: ImageFilterMode::Nearest,
-                        mipmap_filter: ImageFilterMode::Nearest,
-                        ..default()
-                    }),
-                    ..default()
-                }
-            }),
-            uv_offset: 0.,
-        })),
-        Speed(SCROLL_SPEED1),
-        Transform::from_xyz(0., 0., -2.),
+        Sprite::from_image(server.load("space.png")),
+        Transform::from_xyz(0., 0., -999.),
     ));
 
+    let mesh = meshes.add(Rectangle::new(crate::WIDTH, crate::HEIGHT));
+
+    //first
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED1,
+        Vec3::new(-30., 0., -900.),
+        0.8,
+        1.,
+        0.,
+    );
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED1,
+        Vec3::new(30., 0., -901.),
+        0.8,
+        1.,
+        0.2,
+    );
+    // second
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED2,
+        Vec3::new(-45., 0., -902.),
+        0.9,
+        0.25,
+        0.3,
+    );
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED2,
+        Vec3::new(45., 0., -903.),
+        0.9,
+        0.25,
+        0.7,
+    );
+    // third
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED3,
+        Vec3::new(crate::WIDTH / 2., 0., -904.),
+        1.,
+        0.,
+        0.8,
+    );
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED3,
+        Vec3::new(-crate::WIDTH / 2., 0., -905.),
+        1.,
+        0.,
+        0.15,
+    );
+    spawn_clouds(
+        &mut commands,
+        &server,
+        &mut mats,
+        &mesh,
+        SCROLL_SPEED3,
+        Vec3::new(0., 0., -906.),
+        1.,
+        0.,
+        0.55,
+    );
+}
+
+fn spawn_clouds(
+    commands: &mut Commands,
+    server: &AssetServer,
+    mats: &mut Assets<ScrollingTexture>,
+    mesh: &Handle<Mesh>,
+    speed: f32,
+    position: Vec3,
+    alpha: f32,
+    fade_strength: f32,
+    uv_offset: f32,
+) {
     commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(BACKGROUND_WIDTH, BACKGROUND_HEIGHT))),
-        MeshMaterial2d(custom_materials.add(ScrollingTexture {
-            texture: server.load_with_settings(BACKGROUND_PATH2, |s: &mut _| {
+        Mesh2d(mesh.clone()),
+        MeshMaterial2d(mats.add(ScrollingTexture {
+            alpha,
+            alpha_effect: fade_strength,
+            texture: server.load_with_settings("clouds.png", |s: &mut _| {
                 *s = ImageLoaderSettings {
                     sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
                         address_mode_u: ImageAddressMode::MirrorRepeat,
@@ -71,10 +260,10 @@ fn scrolling_background(
                     ..default()
                 }
             }),
-            uv_offset: 0.,
+            uv_offset,
         })),
-        Speed(SCROLL_SPEED2),
-        Transform::from_xyz(0., 0., -1.5),
+        Speed(speed),
+        Transform::from_translation(position),
     ));
 }
 
@@ -99,6 +288,10 @@ struct ScrollingTexture {
     texture: Handle<Image>,
     #[uniform(2)]
     uv_offset: f32,
+    #[uniform(3)]
+    alpha: f32,
+    #[uniform(4)]
+    alpha_effect: f32,
 }
 
 impl Material2d for ScrollingTexture {

@@ -4,6 +4,7 @@
 
 use avian2d::prelude::{Gravity, PhysicsLayer};
 use bevy::app::FixedMainScheduleOrder;
+use bevy::core_pipeline::bloom::Bloom;
 use bevy::ecs::schedule::ScheduleLabel;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::prelude::*;
@@ -32,6 +33,7 @@ mod miniboss;
 mod minions;
 mod music;
 mod opening;
+mod particles;
 mod pickups;
 mod player;
 mod points;
@@ -46,7 +48,7 @@ pub const WIDTH: f32 = 128.;
 pub const HEIGHT: f32 = 192.;
 
 pub const RESOLUTION_SCALE: f32 = 4.;
-pub const RES_WIDTH: f32 = WIDTH * 1.25;
+pub const RES_WIDTH: f32 = WIDTH;
 pub const RES_HEIGHT: f32 = HEIGHT;
 
 pub const METER: f32 = 8.;
@@ -120,6 +122,7 @@ fn main() {
         bomb::BombPlugin,
         points::PointPlugin,
         effects::EffectsPlugin,
+        particles::ParticlePlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
@@ -136,7 +139,7 @@ fn main() {
             enter_start_game.run_if(in_state(GameState::Restart)),
         ),
     )
-    .add_systems(Startup, configure_screen_shake)
+    .add_systems(Startup, configure_camera)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Scaling::Canvas);
 
@@ -190,10 +193,11 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
     }
 }
 
-fn configure_screen_shake(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
-    commands
-        .entity(*main_camera)
-        .insert(Shake::from_trauma_limit(0.7));
+fn configure_camera(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
+    commands.entity(*main_camera).insert((
+        Shake::from_trauma_limit(0.7),
+        // Bloom::ANAMORPHIC,
+    ));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

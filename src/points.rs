@@ -96,8 +96,8 @@ fn point_effects(
             HIGH_RES_LAYER,
             Text2d::new(format!("+{}", event.points)),
             TextFont {
-                font: server.load("fonts/at01.ttf"),
-                font_size: 64.,
+                font: server.load("fonts/gravity.ttf"),
+                font_size: 32.,
                 ..Default::default()
             },
             Transform::from_translation((event.position * RESOLUTION_SCALE).extend(500.)),

@@ -1,7 +1,8 @@
+use crate::assets::{PROJECTILES_COLORED_PATH, SHIPS_PATH};
 use crate::health::{Health, Shield};
 use crate::pickups::PickupEvent;
 use crate::player::{PLAYER_HEALTH, PLAYER_SHIELD, Player};
-use crate::{DespawnRestart, GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE};
+use crate::{DespawnRestart, GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE, assets, bomb};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
@@ -12,9 +13,86 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(GameState::StartGame),
-            (frame, health, shield, init_upgrade_ui),
+            ui,
+            // (frame, health, shield, init_upgrade_ui),
         )
-        .add_systems(Update, (update_health, update_upgrades, update_shield));
+        .add_systems(Update, update_ui);
+        // .add_systems(Update, (update_health, update_upgrades, update_shield));
+    }
+}
+
+#[derive(Component)]
+struct Lives;
+
+#[derive(Component)]
+struct Bombs;
+
+fn ui(mut commands: Commands, server: Res<AssetServer>) {
+    let mut lives_sprite = assets::sprite_rect8(&server, SHIPS_PATH, UVec2::new(1, 5));
+    lives_sprite.anchor = Anchor::TopLeft;
+    commands
+        .spawn((
+            DespawnRestart,
+            Lives,
+            HIGH_RES_LAYER,
+            Text2d::default(),
+            TextFont {
+                font_size: 32.,
+                font: server.load("fonts/gravity_bold.ttf"),
+                ..Default::default()
+            },
+            Transform::from_xyz(
+                -crate::WIDTH / 2. * crate::RESOLUTION_SCALE + 12. * crate::RESOLUTION_SCALE,
+                crate::HEIGHT / 2. * crate::RESOLUTION_SCALE - 10.,
+                500.,
+            ),
+            Anchor::TopLeft,
+        ))
+        .with_child((
+            lives_sprite,
+            Transform::from_xyz(-10. * crate::RESOLUTION_SCALE, -crate::RESOLUTION_SCALE, 0.)
+                .with_scale(Vec3::splat(crate::RESOLUTION_SCALE)),
+        ));
+
+    let mut bomb_sprite = assets::sprite_rect8(&server, PROJECTILES_COLORED_PATH, UVec2::new(4, 3));
+    bomb_sprite.anchor = Anchor::TopLeft;
+    commands
+        .spawn((
+            DespawnRestart,
+            Bombs,
+            HIGH_RES_LAYER,
+            Text2d::default(),
+            TextFont {
+                font_size: 32.,
+                font: server.load("fonts/gravity.ttf"),
+                ..Default::default()
+            },
+            Transform::from_xyz(
+                -crate::WIDTH / 2. * crate::RESOLUTION_SCALE + 32. * crate::RESOLUTION_SCALE,
+                crate::HEIGHT / 2. * crate::RESOLUTION_SCALE - 10.,
+                500.,
+            ),
+            Anchor::TopLeft,
+        ))
+        .with_child((
+            bomb_sprite,
+            Transform::from_xyz(-10. * crate::RESOLUTION_SCALE, -crate::RESOLUTION_SCALE, 0.)
+                .with_scale(Vec3::splat(crate::RESOLUTION_SCALE)),
+        ));
+}
+
+fn update_ui(
+    mut live_text: Single<&mut Text2d, With<Lives>>,
+    mut bomb_text: Single<&mut Text2d, (With<Bombs>, Without<Lives>)>,
+    player: Single<Ref<Health>, With<Player>>,
+    bombs: Res<bomb::Bombs>,
+) {
+    if player.is_changed() {
+        live_text.0 = format!("{}", (player.current() - 1.).max(0.));
+    }
+
+    if bombs.is_changed() {
+        bomb_text.0 = format!("{}", bombs.get());
     }
 }
 
@@ -45,23 +123,23 @@ fn health(
     server: Res<AssetServer>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    commands.spawn((
-        DespawnRestart,
-        HeartText,
-        HIGH_RES_LAYER,
-        Text2d::default(),
-        TextFont {
-            font_size: 20.,
-            font: server.load("fonts/joystix.otf"),
-            ..Default::default()
-        },
-        Transform::from_xyz(
-            -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
-            -crate::HEIGHT / 4. * crate::RESOLUTION_SCALE,
-            500.,
-        ),
-        Anchor::BottomLeft,
-    ));
+    //commands.spawn((
+    //    DespawnRestart,
+    //    HeartText,
+    //    HIGH_RES_LAYER,
+    //    Text2d::default(),
+    //    TextFont {
+    //        font_size: 20.,
+    //        font: server.load("fonts/joystix.otf"),
+    //        ..Default::default()
+    //    },
+    //    Transform::from_xyz(
+    //        -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
+    //        -crate::HEIGHT / 4. * crate::RESOLUTION_SCALE,
+    //        500.,
+    //    ),
+    //    Anchor::BottomLeft,
+    //));
 
     let layout = layouts.add(TextureAtlasLayout::from_grid(
         UVec2::splat(10),
@@ -95,7 +173,7 @@ fn update_health(
     mut q: Query<(&mut Sprite, &Transform), With<HeartUi>>,
     health: Single<&Health, With<Player>>,
     changed_health: Option<Single<&Health, (With<Player>, Changed<Health>)>>,
-    mut text: Single<&mut Text2d, With<HeartText>>,
+    //mut text: Single<&mut Text2d, With<HeartText>>,
 ) {
     let current_health = health.current();
     for (i, (mut sprite, _)) in q
@@ -106,39 +184,39 @@ fn update_health(
         sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_health as usize) as usize;
     }
 
-    if changed_health.is_some() {
-        text.0 = format!("H: {:.1}", current_health);
-    }
+    //if changed_health.is_some() {
+    //    text.0 = format!("H: {:.1}", current_health);
+    //}
 }
 
 #[derive(Component)]
 struct ShieldUi;
 
-#[derive(Component)]
-struct ShieldText;
+//#[derive(Component)]
+//struct ShieldText;
 
 fn shield(
     mut commands: Commands,
     server: Res<AssetServer>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    commands.spawn((
-        DespawnRestart,
-        ShieldText,
-        HIGH_RES_LAYER,
-        Text2d::default(),
-        TextFont {
-            font_size: 20.,
-            font: server.load("fonts/joystix.otf"),
-            ..Default::default()
-        },
-        Transform::from_xyz(
-            -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
-            (-crate::HEIGHT / 4. - 10.) * crate::RESOLUTION_SCALE,
-            500.,
-        ),
-        Anchor::BottomLeft,
-    ));
+    //commands.spawn((
+    //    DespawnRestart,
+    //    ShieldText,
+    //    HIGH_RES_LAYER,
+    //    Text2d::default(),
+    //    TextFont {
+    //        font_size: 20.,
+    //        font: server.load("fonts/joystix.otf"),
+    //        ..Default::default()
+    //    },
+    //    Transform::from_xyz(
+    //        -crate::WIDTH / 2. * crate::RESOLUTION_SCALE,
+    //        (-crate::HEIGHT / 4. - 10.) * crate::RESOLUTION_SCALE,
+    //        500.,
+    //    ),
+    //    Anchor::BottomLeft,
+    //));
 
     let layout = layouts.add(TextureAtlasLayout::from_grid(
         UVec2::splat(16),
@@ -173,7 +251,7 @@ fn update_shield(
     mut q: Query<(&mut Sprite, &Transform), With<ShieldUi>>,
     shield: Single<&Shield, With<Player>>,
     changed_shield: Option<Single<&Health, (With<Player>, Changed<Shield>)>>,
-    mut text: Single<&mut Text2d, With<ShieldText>>,
+    //mut text: Single<&mut Text2d, With<ShieldText>>,
 ) {
     let current_shield = shield.current();
     for (i, (mut sprite, _)) in q
@@ -184,9 +262,9 @@ fn update_shield(
         sprite.texture_atlas.as_mut().unwrap().index = (i + 1 > current_shield as usize) as usize;
     }
 
-    if changed_shield.is_some() {
-        text.0 = format!("S: {:.1}", current_shield);
-    }
+    //if changed_shield.is_some() {
+    //    text.0 = format!("S: {:.1}", current_shield);
+    //}
 }
 
 #[derive(Component)]

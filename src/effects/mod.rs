@@ -1,5 +1,7 @@
 use crate::animation::{AnimationAppExt, AnimationSprite, FlipX, FlipY};
+use crate::assets::MISC_PATH;
 use crate::health::Dead;
+use avian2d::prelude::LinearVelocity;
 use bevy::prelude::*;
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
@@ -9,7 +11,14 @@ pub struct EffectsPlugin;
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnExplosion>()
-            .add_systems(Update, (spawn_explosions, write_explosions))
+            .add_systems(
+                Update,
+                (
+                    spawn_explosions,
+                    write_explosions,
+                    (spawn_blasters, update_blasters).chain(),
+                ),
+            )
             .register_layout(
                 "fire_sparks.png",
                 TextureAtlasLayout::from_grid(UVec2::splat(96), 4, 5, None, None),
@@ -117,5 +126,52 @@ fn spawn_explosions(
                 ..PlaybackSettings::ONCE
             },
         ));
+    }
+}
+
+#[derive(Component)]
+pub struct Blasters(pub &'static [Vec3]);
+
+#[derive(Component)]
+struct BlastersEntity;
+
+fn spawn_blasters(
+    mut commands: Commands,
+    blasters: Query<(Entity, &Blasters, Option<&Children>), Added<Blasters>>,
+    entities: Query<Entity, With<BlastersEntity>>,
+) {
+    for (entity, blasters, children) in blasters.iter() {
+        if let Some(children) = children {
+            for entity in entities.iter_many(children) {
+                commands.entity(entity).despawn();
+            }
+        }
+
+        commands.entity(entity).with_children(|root| {
+            for t in blasters.0.iter().copied() {
+                root.spawn((
+                    BlastersEntity,
+                    Visibility::Hidden,
+                    Transform::from_translation(t),
+                    AnimationSprite::repeating(MISC_PATH, 0.1, 18..=21),
+                ));
+            }
+        });
+    }
+}
+
+fn update_blasters(
+    blasters: Query<(&LinearVelocity, &Children), (With<Blasters>, Changed<LinearVelocity>)>,
+    mut vis: Query<&mut Visibility, With<BlastersEntity>>,
+) {
+    for (velocity, children) in blasters.iter() {
+        let mut iter = vis.iter_many_mut(children);
+        while let Some(mut vis) = iter.fetch_next() {
+            if velocity.0.y > 1. {
+                *vis = Visibility::Visible;
+            } else {
+                *vis = Visibility::Hidden;
+            }
+        }
     }
 }

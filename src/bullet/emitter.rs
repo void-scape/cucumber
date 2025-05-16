@@ -4,11 +4,12 @@ use super::{
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
-    Avian, HEIGHT, Layer,
+    Avian, DespawnRestart, HEIGHT, Layer,
     bullet::PlayerBullet,
     enemy::Enemy,
     float_tween,
     health::{Damage, DamageEvent, Health, HealthSet},
+    particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState},
     player::Player,
 };
 use avian2d::prelude::*;
@@ -23,7 +24,9 @@ use bevy_tween::{
     prelude::*,
     tween::apply_component_tween_system,
 };
+use rand::seq::IteratorRandom;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
+use strum::IntoEnumIterator;
 
 pub const PLAYER_BULLET_SPEED: f32 = 300.;
 pub const PLAYER_MISSILE_SPEED: f32 = PLAYER_BULLET_SPEED * 0.8;
@@ -72,6 +75,7 @@ pub struct EmitterPlugin;
 impl Plugin for EmitterPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<EmitterSample>()
+            .register_particle_state::<EmitterState>()
             .add_systems(
                 PreUpdate,
                 (
@@ -79,6 +83,7 @@ impl Plugin for EmitterPlugin {
                     play_samples,
                     (
                         GattlingEmitter::shoot_bullets,
+                        BackgroundGattlingEmitter::shoot_bullets,
                         MissileEmitter::shoot_bullets,
                         HomingEmitter::<Enemy>::shoot_bullets,
                         HomingEmitter::<Player>::shoot_bullets,
@@ -97,6 +102,24 @@ impl Plugin for EmitterPlugin {
             )
             .add_systems(Avian, LaserEmitter::laser.before(HealthSet))
             .add_tween_systems(apply_component_tween_system::<SpiralOffsetTween>);
+    }
+}
+
+#[derive(Component)]
+#[require(Transform, Visibility)]
+pub struct EmitterState {
+    pub enabled: bool,
+}
+
+impl ParticleState for EmitterState {
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
+impl Default for EmitterState {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 
@@ -320,7 +343,12 @@ impl ProximityEmitter {
 }
 
 #[derive(Component)]
-#[require(Transform, BulletModifiers)]
+#[require(
+    Transform,
+    BulletModifiers,
+    EmitterState,
+    ParticleBundle<EmitterState> = Self::particles()
+)]
 #[component(on_add = Self::insert_timer)]
 pub struct GattlingEmitter(pub f32);
 
@@ -331,6 +359,16 @@ impl Default for GattlingEmitter {
 }
 
 impl GattlingEmitter {
+    fn particles() -> ParticleBundle<EmitterState> {
+        ParticleBundle::<EmitterState>::from_emitter(
+            ParticleEmitter::from_effect("particles/bullet_shells.ron")
+                .with_sprite("shell.png")
+                .with(particles::transform(
+                    Transform::from_xyz(0., -5., -1.).with_rotation(Quat::from_rotation_z(PI)),
+                )),
+        )
+    }
+
     fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
         let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
         let duration = mods.rate.duration(PLAYER_BULLET_RATE);
@@ -344,6 +382,7 @@ impl GattlingEmitter {
     fn shoot_bullets(
         mut emitters: Query<(
             Entity,
+            &EmitterState,
             &GattlingEmitter,
             &mut BulletTimer,
             &BulletModifiers,
@@ -356,14 +395,18 @@ impl GattlingEmitter {
     ) {
         let delta = time.delta();
 
-        for (_entity, emitter, mut timer, mods, transform, child_of) in emitters.iter_mut() {
+        for (_entity, state, emitter, mut timer, mods, transform, child_of) in emitters.iter_mut() {
+            if !state.enabled {
+                continue;
+            }
+
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
             let mut new_transform = transform.compute_transform();
-            new_transform.translation += Vec3::Y * 10.0;
+            new_transform.translation += Vec3::Y * 4.0;
 
             if !timer.timer.tick(delta).just_finished() {
                 continue;
@@ -416,12 +459,134 @@ impl GattlingEmitter {
     }
 }
 
+#[derive(Component)]
+#[require(Transform, Visibility, BulletModifiers)]
+#[component(on_add = Self::insert_timer)]
+pub struct BackgroundGattlingEmitter(pub f32, pub Vec2);
+
+impl Default for BackgroundGattlingEmitter {
+    fn default() -> Self {
+        BackgroundGattlingEmitter(0.1, Vec2::Y)
+    }
+}
+
+impl BackgroundGattlingEmitter {
+    fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
+        let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
+        let duration = mods.rate.duration(PLAYER_BULLET_RATE);
+
+        let mut rng = rand::rng();
+        world.commands().entity(ctx.entity).insert((
+            BulletTimer {
+                timer: Timer::new(duration, TimerMode::Repeating),
+            },
+            ColorMod::iter().choose(&mut rng).unwrap(),
+        ));
+    }
+}
+
+impl BackgroundGattlingEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<(
+            Entity,
+            &BackgroundGattlingEmitter,
+            &mut BulletTimer,
+            &BulletModifiers,
+            &GlobalTransform,
+            &ColorMod,
+        )>,
+        time: Res<Time>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (_entity, emitter, mut timer, mods, gt, color) in emitters.iter_mut() {
+            let mut new_transform = gt.compute_transform();
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+            let duration = mods.rate.duration(PLAYER_BULLET_RATE);
+            timer.timer.set_duration(duration);
+
+            commands.spawn((
+                Lifetime::new(5.),
+                DespawnRestart,
+                BulletSprite::from_cell(1, 2)
+                    .with_brightness(0.3)
+                    .with_alpha(0.5),
+                *color,
+                RigidBody::Kinematic,
+                PlayerBullet,
+                LinearVelocity(
+                    (emitter.1 - Vec2::splat(emitter.0)).normalize()
+                        * PLAYER_BULLET_SPEED
+                        * mods.speed,
+                ),
+                {
+                    let mut t = new_transform;
+                    t.translation.x -= 5.;
+                    t
+                },
+            ));
+
+            commands.spawn((
+                Lifetime::new(5.),
+                DespawnRestart,
+                BulletSprite::from_cell(1, 2)
+                    .with_brightness(0.3)
+                    .with_alpha(0.5),
+                *color,
+                RigidBody::Kinematic,
+                PlayerBullet,
+                LinearVelocity(emitter.1 * PLAYER_BULLET_SPEED * mods.speed),
+                new_transform,
+            ));
+
+            commands.spawn((
+                Lifetime::new(5.),
+                DespawnRestart,
+                BulletSprite::from_cell(1, 2)
+                    .with_brightness(0.3)
+                    .with_alpha(0.5),
+                *color,
+                RigidBody::Kinematic,
+                PlayerBullet,
+                LinearVelocity(
+                    (emitter.1 + Vec2::splat(emitter.0)).normalize()
+                        * PLAYER_BULLET_SPEED
+                        * mods.speed,
+                ),
+                {
+                    new_transform.translation.x += 5.;
+                    new_transform
+                },
+            ));
+        }
+    }
+}
+
 #[derive(Component, Default)]
-#[require(Transform, BulletModifiers)]
+#[require(
+    Transform,
+    BulletModifiers,
+    EmitterState,
+    ParticleBundle<EmitterState> = Self::particles(),
+)]
 #[component(on_add = Self::insert_timer)]
 pub struct MissileEmitter;
 
 impl MissileEmitter {
+    fn particles() -> ParticleBundle<EmitterState> {
+        ParticleBundle::<EmitterState>::from_emitter(
+            ParticleEmitter::from_effect("particles/bullet_shells.ron")
+                .with_sprite("missile_shell.png")
+                .with(particles::transform(
+                    Transform::from_xyz(0., -5., -1.).with_rotation(Quat::from_rotation_z(PI)),
+                )),
+        )
+    }
+
     fn insert_timer(mut world: DeferredWorld, ctx: HookContext) {
         let mods = world.get::<BulletModifiers>(ctx.entity).unwrap();
         let duration = mods.rate.duration(MISSILE_RATE);
@@ -436,6 +601,7 @@ impl MissileEmitter {
         mut emitters: Query<
             (
                 &MissileEmitter,
+                &EmitterState,
                 &mut BulletTimer,
                 &BulletModifiers,
                 &ChildOf,
@@ -451,7 +617,11 @@ impl MissileEmitter {
     ) {
         let delta = time.delta();
 
-        for (_emitter, mut timer, mods, child_of, transform) in emitters.iter_mut() {
+        for (_emitter, state, mut timer, mods, child_of, transform) in emitters.iter_mut() {
+            if !state.enabled {
+                continue;
+            }
+
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -492,7 +662,9 @@ impl MissileEmitter {
                 Missile,
                 HomingRotate,
                 LinearVelocity(target * PLAYER_MISSILE_SPEED * mods.speed),
-                new_transform.with_rotation(Quat::from_rotation_z(target.to_angle() - PI / 2.0)),
+                new_transform.with_rotation(Quat::from_rotation_z(
+                    target.to_angle() - PI / 2.0 + PI / 4.,
+                )),
                 Bullet::target_layer(Layer::Enemy),
                 Damage::new(MISSILE_DAMAGE * mods.damage),
             ));

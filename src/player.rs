@@ -1,12 +1,11 @@
 use crate::{
     Avian, DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
-    animation::AnimationSprite,
-    assets::{self, MISC_PATH},
+    assets::{self},
     bullet::{
         BulletTimer,
-        emitter::{BulletModifiers, GattlingEmitter},
+        emitter::{BulletModifiers, EmitterState, GattlingEmitter},
     },
-    effects::Explosion,
+    effects::{Blasters, Explosion},
     end,
     enemy::Enemy,
     health::{DamageEvent, Dead, Health, HealthSet, Invincible, Shield},
@@ -17,10 +16,7 @@ use crate::{
 use avian2d::prelude::*;
 use bevy::{
     color::palettes::css::{BLUE, DARK_RED, RED, SKY_BLUE, WHITE},
-    ecs::{
-        component::HookContext, entity_disabling::Disabled, system::RunSystemOnce,
-        world::DeferredWorld,
-    },
+    ecs::{component::HookContext, system::RunSystemOnce, world::DeferredWorld},
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
@@ -37,7 +33,11 @@ use bevy_tween::{
     prelude::{AnimationBuilderExt, EaseKind, Repeat, RepeatStyle},
     tween::{IntoTarget, TargetResource},
 };
-use std::{cmp::Ordering, f32, time::Duration};
+use std::{
+    cmp::Ordering,
+    f32::{self},
+    time::Duration,
+};
 
 pub const PLAYER_HEALTH: f32 = 3.0;
 pub const PLAYER_SHIELD: f32 = 1.0;
@@ -81,8 +81,16 @@ fn spawn_player(mut commands: Commands) {
     commands.insert_resource(PowerUps::default());
 
     let player = commands
-        .spawn((Player, Transform::from_xyz(0., -HEIGHT / 6., 0.)))
-        .with_child((GattlingEmitter::default(), PlayerEmitter, Disabled))
+        .spawn((
+            Player,
+            Transform::from_xyz(0., -HEIGHT / 6., 0.),
+            Blasters(const { &[Vec3::new(0., -6., -1.)] }),
+        ))
+        .with_child((
+            GattlingEmitter::default(),
+            PlayerEmitter,
+            EmitterState { enabled: false },
+        ))
         .id();
 
     let dur = Duration::from_secs_f32(PLAYER_EASE_DUR);
@@ -130,11 +138,21 @@ pub struct PowerUpEvent;
 struct PowerUps(usize);
 
 fn handle_powerups(
+    mut commands: Commands,
+    server: Res<AssetServer>,
     mut power_ups: ResMut<PowerUps>,
     mut reader: EventReader<PowerUpEvent>,
     mut player: Single<&mut BulletModifiers, With<Player>>,
 ) {
     for _ in reader.read() {
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/ring.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.25),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+
         power_ups.0 += 1;
 
         match power_ups.0 {
@@ -224,13 +242,6 @@ impl Player {
                             timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
                         },
                     ));
-
-                    commands.entity(ctx.entity).with_child((
-                        PlayerBlasters,
-                        Visibility::Hidden,
-                        Transform::from_xyz(0., -7., -1.),
-                        AnimationSprite::repeating(MISC_PATH, 0.1, 18..=21),
-                    ));
                 })
                 .unwrap();
         });
@@ -243,10 +254,6 @@ pub struct AliveContext;
 #[derive(Debug, InputAction)]
 #[input_action(output = Vec2)]
 struct MoveAction;
-
-// TODO: make this for enemies too?
-#[derive(Component)]
-struct PlayerBlasters;
 
 #[derive(Component)]
 pub struct BlockControls;
@@ -278,7 +285,10 @@ fn stop_movement(
 pub struct ShootAction;
 
 #[derive(Component)]
-struct MGSounds;
+struct MGEffects;
+
+#[derive(Component)]
+struct MGSound;
 
 #[derive(Default, Component)]
 pub struct PlayerEmitter;
@@ -287,11 +297,12 @@ fn enable_emitters(
     _: Trigger<Started<ShootAction>>,
     mut commands: Commands,
     server: Res<AssetServer>,
-    player_emitter: Single<(Entity, &mut BulletTimer), (With<PlayerEmitter>, With<Disabled>)>,
+    player_emitter: Single<(&mut EmitterState, &mut BulletTimer), With<PlayerEmitter>>,
     mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
+    player: Single<Entity, With<Player>>,
 ) {
-    let (entity, mut timer) = player_emitter.into_inner();
-    commands.entity(entity).remove::<Disabled>();
+    let (mut state, mut timer) = player_emitter.into_inner();
+    state.enabled = true;
     let duration = timer.timer.duration();
     timer.timer.set_elapsed(duration);
 
@@ -299,8 +310,10 @@ fn enable_emitters(
         weapon.enabled = true;
     }
 
-    commands.entity(entity).with_child((
-        MGSounds,
+    commands.spawn((
+        MGSound,
+        ChildOf(*player),
+        //
         SamplePlayer::new(server.load("audio/sfx/mg.wav")),
         PlaybackSettings {
             volume: Volume::Linear(0.25),
@@ -312,12 +325,12 @@ fn enable_emitters(
 fn disable_emitters(
     _: Trigger<Completed<ShootAction>>,
     mut commands: Commands,
-    player_emitter: Single<Entity, With<PlayerEmitter>>,
+    mut player_emitter: Single<&mut EmitterState, With<PlayerEmitter>>,
     mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
-    sound: Single<Entity, With<MGSounds>>,
+    sound: Single<Entity, With<MGSound>>,
 ) {
     commands.entity(*sound).despawn();
-    commands.entity(*player_emitter).insert(Disabled);
+    player_emitter.enabled = false;
     for mut weapon in weapons.iter_mut() {
         weapon.enabled = false;
     }
@@ -429,38 +442,61 @@ impl WeaponRack {
 
 fn switch_emitters(
     _: Trigger<Started<SwitchGunAction>>,
+    mut commands: Commands,
+    server: Res<AssetServer>,
     player: Single<&Actions<AliveContext>>,
     mut gunners: Query<&mut GunnerWeapon, With<Gunner>>,
     mut rack: ResMut<WeaponRack>,
 ) {
+    let mut changed = false;
     if let Some(next) = rack.next() {
         for mut weapon in gunners.iter_mut() {
+            if next != weapon.weapon {
+                changed = true;
+            }
             weapon.weapon = next;
             weapon.enabled = player.action::<ShootAction>().state() == ActionState::Fired;
-            info!("switch weapon: {:?}", weapon);
         }
+    }
+
+    if changed {
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/shotgun_rack.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.35),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+    } else {
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/bfxr/failed.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.7),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/electric.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.5),
+                ..PlaybackSettings::ONCE
+            },
+        ));
     }
 }
 
 fn update_player_sprites(
     player: Single<(&LinearVelocity, &mut Sprite), (With<Player>, Changed<LinearVelocity>)>,
-    mut blasters: Single<&mut Visibility, With<PlayerBlasters>>,
 ) {
     let (velocity, mut sprite) = player.into_inner();
 
     let (tl, br) = match velocity.0.x.total_cmp(&0.) {
-        Ordering::Less => (Vec2::new(0., 4.), Vec2::new(1., 5.)),
-        Ordering::Greater => (Vec2::new(2., 4.), Vec2::new(3., 5.)),
-        Ordering::Equal => (Vec2::new(1., 4.), Vec2::new(2., 5.)),
+        Ordering::Less => (Vec2::new(0., 5.), Vec2::new(1., 6.)),
+        Ordering::Greater => (Vec2::new(2., 5.), Vec2::new(3., 6.)),
+        Ordering::Equal => (Vec2::new(1., 5.), Vec2::new(2., 6.)),
     };
 
     sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
-
-    if velocity.0.y > f32::EPSILON {
-        **blasters = Visibility::Visible;
-    } else {
-        **blasters = Visibility::Hidden;
-    }
 }
 
 // TODO: this does not work? we don't brush on anything anyways
@@ -502,9 +538,9 @@ fn handle_pickups(
             PickupEvent::Weapon(weapon) => {
                 rack.aquire(*weapon);
                 commands.spawn((
-                    SamplePlayer::new(server.load("audio/sfx/shotgun_rack.wav")),
+                    SamplePlayer::new(server.load("audio/sfx/pickup.wav")),
                     PlaybackSettings {
-                        volume: Volume::Linear(0.5),
+                        volume: Volume::Linear(0.2),
                         ..PlaybackSettings::ONCE
                     },
                 ));

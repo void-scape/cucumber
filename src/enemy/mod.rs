@@ -203,7 +203,7 @@ pub struct InvincibleLaserNode;
 
 #[derive(Component)]
 #[require(Visibility)]
-struct EnemySprite8 {
+pub struct EnemySprite8 {
     path: &'static str,
     cell: UVec2,
 }
@@ -360,9 +360,10 @@ fn handle_death(
                 .insert_tween_here(
                     Duration::from_secs_f32(1.5),
                     EaseKind::QuadraticOut,
-                    entity
-                        .into_target()
-                        .with(translation(gt.translation(), gt.translation().with_z(-1.))),
+                    entity.into_target().with(translation(
+                        gt.translation(),
+                        gt.translation().with_z(-903.5),
+                    )),
                 )
                 .animation()
                 .insert_tween_here(
@@ -379,7 +380,7 @@ fn handle_death(
                     EaseKind::Linear,
                     entity
                         .into_target()
-                        .with(sprite_color(WHITE.into(), Color::srgb(0.2, 0.2, 0.2))),
+                        .with(sprite_color(WHITE.into(), Color::srgb(0.5, 0.5, 0.5))),
                 )
                 .remove::<(Enemy, BulletModifiers, Platoon, ChildOf, Dead, Explosion)>()
                 .insert((

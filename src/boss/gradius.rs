@@ -153,7 +153,6 @@ fn phasea(
 
     flip_orbs.0.tick(time.delta());
     if flip_orbs.0.just_finished() {
-        info!("flip");
         let mut iter = emitters.iter_many_mut(children.iter());
         while let Some(mut transform) = iter.fetch_next() {
             match transform.translation.y {
