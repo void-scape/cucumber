@@ -1,6 +1,6 @@
 use super::{
-    Arrow, BasicBullet, Bullet, BulletCollisionEvent, BulletSource, BulletSprite, BulletTimer,
-    ColorMod, Lifetime, MaxLifetime, Mine, Missile, Orb, Polarity,
+    Arrow, BasicBullet, BlueOrb, Bullet, BulletCollisionEvent, BulletSource, BulletSprite,
+    BulletTimer, ColorMod, Lifetime, MaxLifetime, Mine, Missile, Polarity, RedOrb,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
 };
 use crate::{
@@ -21,6 +21,7 @@ use bevy::{
 use bevy_seedling::prelude::*;
 use bevy_tween::{
     combinator::{sequence, tween},
+    interpolate::rotation,
     prelude::*,
     tween::apply_component_tween_system,
 };
@@ -63,7 +64,7 @@ const CRISSCROSS_SHOT_RATE: f32 = 0.15;
 const CRISSCROSS_WAVES: usize = 5;
 
 pub const MISSILE_HEALTH: f32 = 2.;
-pub const MINE_HEALTH: f32 = 2.;
+pub const MINE_HEALTH: f32 = 1.5;
 
 const BULLET_PITCH_RANGE: core::ops::Range<f64> = 0.9..1.1;
 
@@ -417,6 +418,7 @@ impl GattlingEmitter {
             commands.spawn((
                 BasicBullet,
                 PlayerBullet,
+                ColorMod::Blue,
                 LinearVelocity(
                     (Vec2::Y - Vec2::new(emitter.0, 0.)).normalize()
                         * PLAYER_BULLET_SPEED
@@ -434,6 +436,7 @@ impl GattlingEmitter {
             commands.spawn((
                 BasicBullet,
                 PlayerBullet,
+                ColorMod::Blue,
                 LinearVelocity(Vec2::Y * PLAYER_BULLET_SPEED * mods.speed),
                 new_transform,
                 Bullet::target_layer(Layer::Enemy),
@@ -443,6 +446,7 @@ impl GattlingEmitter {
             commands.spawn((
                 BasicBullet,
                 PlayerBullet,
+                ColorMod::Blue,
                 LinearVelocity(
                     (Vec2::Y + Vec2::new(emitter.0, 0.)).normalize()
                         * PLAYER_BULLET_SPEED
@@ -661,6 +665,7 @@ impl MissileEmitter {
             commands.spawn((
                 Missile,
                 HomingRotate,
+                ColorMod::Blue,
                 LinearVelocity(target * PLAYER_MISSILE_SPEED * mods.speed),
                 new_transform.with_rotation(Quat::from_rotation_z(
                     target.to_angle() - PI / 2.0 + PI / 4.,
@@ -796,14 +801,7 @@ impl LaserEmitter {
         let server = world.resource();
         let sprite = BulletSprite::from_cell(1, 8);
         let sprite = super::assets::sprite_rect8(server, sprite.path, sprite.cell);
-
-        let dir = world.get::<LaserEmitter>(ctx.entity).unwrap().dir;
-        world.commands().entity(ctx.entity).with_children(|c| {
-            c.spawn((
-                sprite,
-                //Transform::from_rotation(Quat::from_rotation_z(dir.to_angle())),
-            ));
-        });
+        world.commands().entity(ctx.entity).with_child(sprite);
     }
 
     fn laser(
@@ -901,7 +899,6 @@ impl LaserEmitter {
                     if let Some(mut timer) = timer {
                         if timer.timer.tick(delta).just_finished() {
                             writer.write(BulletCollisionEvent::new(
-                                UVec2::new(1, 8),
                                 target_transform.compute_transform(),
                                 match emitter.layer {
                                     Layer::Player => BulletSource::Enemy,
@@ -974,12 +971,24 @@ impl MineEmitter {
                 * to_player.xy().with_y(-to_player.y)
                 * MINE_SPEED
                 * mods.speed;
-            commands.spawn((
-                Mine,
-                LinearVelocity(velocity),
-                new_transform,
-                Damage::new(MINE_DAMAGE * mods.damage),
-            ));
+            let mine = commands
+                .spawn((
+                    Mine,
+                    LinearVelocity(velocity),
+                    new_transform,
+                    Damage::new(MINE_DAMAGE * mods.damage),
+                ))
+                .id();
+            commands
+                .entity(mine)
+                .animation()
+                .repeat(Repeat::Infinitely)
+                .insert_tween_here(
+                    Duration::from_secs_f32(1.),
+                    EaseKind::Linear,
+                    mine.into_target()
+                        .with(rotation(Quat::default(), Quat::from_rotation_z(PI))),
+                );
 
             writer.write(EmitterSample(EmitterBullet::Mine));
         }
@@ -1160,7 +1169,7 @@ impl SpiralOrbEmitter {
                 let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
                     + timer.current_pulse() as f32 * std::f32::consts::PI / 4.;
                 commands.spawn((
-                    Orb,
+                    BlueOrb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
                     Damage::new(ORB_DAMAGE * mods.damage),
@@ -1253,7 +1262,7 @@ impl CrisscrossEmitter {
                     + angle_offset;
 
                 commands.spawn((
-                    Orb,
+                    RedOrb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
                     Damage::new(ORB_DAMAGE * mods.damage),
@@ -1356,7 +1365,7 @@ impl BuckShotEmitter {
             let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
             for angle in angles.into_iter() {
                 commands.spawn((
-                    Orb,
+                    BlueOrb,
                     LinearVelocity(
                         (Vec2::from_angle(angle - std::f32::consts::PI / 2.) + to_player)
                             * ORB_SPEED
@@ -1500,7 +1509,7 @@ impl WallEmitter {
                 t.translation = p;
 
                 commands.spawn((
-                    Orb,
+                    RedOrb,
                     t,
                     LinearVelocity(dir * ORB_SPEED * mods.speed),
                     ColorMod::Purple,
@@ -1668,7 +1677,7 @@ impl GradiusSpiralEmitter {
             for angle in 0..bullets {
                 let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI + offset.0;
                 commands.spawn((
-                    Orb,
+                    BlueOrb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
                     Damage::new(ORB_DAMAGE * mods.damage),

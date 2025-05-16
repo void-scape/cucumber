@@ -25,7 +25,11 @@ impl Plugin for TweenPlugin {
             ))
             .add_systems(
                 Update,
-                (insert_timeouts, emit_tween_timeouts, run_tween_on_end),
+                (
+                    insert_timeouts,
+                    emit_tween_timeouts,
+                    (despawn_finished_tweens, run_tween_on_end).chain(),
+                ),
             );
 
         #[cfg(not(debug_assertions))]
@@ -132,6 +136,20 @@ fn emit_tween_timeouts(
     for (entity, runner, timeout) in tweens.iter() {
         if runner.is_completed() {
             writer.write(timeout.0);
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct DespawnTweenFinish;
+
+fn despawn_finished_tweens(
+    mut commands: Commands,
+    tweens: Query<(Entity, &TimeRunner), With<DespawnTweenFinish>>,
+) {
+    for (entity, runner) in tweens.iter() {
+        if runner.is_completed() {
             commands.entity(entity).despawn();
         }
     }

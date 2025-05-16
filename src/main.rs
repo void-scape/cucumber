@@ -216,17 +216,12 @@ pub struct DespawnRestart;
 
 fn despawn_on_restart(
     mut commands: Commands,
-    entities: Query<Entity, (With<DespawnRestart>, Without<Children>)>,
-    parents: Query<Entity, (With<DespawnRestart>, With<Children>)>,
+    entities: Query<Entity, (With<DespawnRestart>, Without<ChildOf>)>,
 ) {
     for entity in entities.iter() {
         commands
             .entity(entity)
             .despawn_related::<Children>()
-            .despawn();
-    }
-
-    for entity in parents.iter() {
-        commands.entity(entity).despawn();
+            .try_despawn();
     }
 }

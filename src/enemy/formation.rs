@@ -2,9 +2,8 @@ use super::swarm::SwarmMovement;
 use super::timeline::LARGEST_SPRITE_SIZE;
 use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, Swarm, timeline::WaveTimeline};
 use super::{InvincibleLaserNode, WallShooter};
-use crate::bullet::emitter::{BulletModifiers, EmitterDelay, LaserEmitter, WallEmitter};
+use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
 use crate::pickups::{Pickup, Weapon};
-use crate::tween::OnEnd;
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::Physics;
 use bevy::color::palettes::css::WHITE;
@@ -81,6 +80,13 @@ pub fn option(weapon: Weapon) -> impl FnMut(&mut EntityCommands) + 'static {
     move |commands| {
         commands.insert(DropOption(weapon));
     }
+}
+
+#[derive(Component)]
+struct DropBomb;
+
+pub fn bomb(commands: &mut EntityCommands) {
+    commands.insert(DropBomb);
 }
 
 pub fn quad_mine_thrower() -> Formation {
@@ -513,22 +519,26 @@ fn update_formations(
 fn despawn_formations(
     mut commands: Commands,
     formations: Query<
-        (Entity, &UnitDeaths, Option<&DropOption>),
+        (Entity, &UnitDeaths, Option<&DropOption>, Option<&DropBomb>),
         (With<FormationEntity>, Without<Units>),
     >,
     //formations: Query<(Entity, &UnitDeaths), (With<Formation>, Without<Units>)>,
     //off_screen: Query<(Entity, &Transform, &Formation)>,
 ) {
     //let mut rng = rand::rng();
-    for (entity, deaths, drop) in formations.iter() {
+    for (entity, deaths, option, bomb) in formations.iter() {
         commands.entity(entity).despawn();
-        if let Some(drop) = drop {
+        if let Some(drop) = option {
             commands.spawn((
                 Pickup::Weapon(drop.0),
                 drop.0,
                 Transform::from_translation(deaths.last_death_position().unwrap().extend(1.)),
             ));
         }
+        if let Some(bomb) = bomb {
+            error!("drop bomb");
+        }
+
         //if rng.random_bool(0.75) {
         //    let mut commands = commands.spawn_empty();
         //    let position = deaths.last_death_position().unwrap();

@@ -132,21 +132,14 @@ fn spawn_explosions(
 #[derive(Component)]
 pub struct Blasters(pub &'static [Vec3]);
 
+#[derive(Default, Component)]
+pub struct AlwaysBlast;
+
 #[derive(Component)]
 struct BlastersEntity;
 
-fn spawn_blasters(
-    mut commands: Commands,
-    blasters: Query<(Entity, &Blasters, Option<&Children>), Added<Blasters>>,
-    entities: Query<Entity, With<BlastersEntity>>,
-) {
-    for (entity, blasters, children) in blasters.iter() {
-        if let Some(children) = children {
-            for entity in entities.iter_many(children) {
-                commands.entity(entity).despawn();
-            }
-        }
-
+fn spawn_blasters(mut commands: Commands, blasters: Query<(Entity, &Blasters), Added<Blasters>>) {
+    for (entity, blasters) in blasters.iter() {
         commands.entity(entity).with_children(|root| {
             for t in blasters.0.iter().copied() {
                 root.spawn((
@@ -161,16 +154,23 @@ fn spawn_blasters(
 }
 
 fn update_blasters(
-    blasters: Query<(&LinearVelocity, &Children), (With<Blasters>, Changed<LinearVelocity>)>,
+    blasters: Query<
+        (&LinearVelocity, &Children, Option<&AlwaysBlast>),
+        (With<Blasters>, Changed<LinearVelocity>),
+    >,
     mut vis: Query<&mut Visibility, With<BlastersEntity>>,
 ) {
-    for (velocity, children) in blasters.iter() {
+    for (velocity, children, always) in blasters.iter() {
         let mut iter = vis.iter_many_mut(children);
         while let Some(mut vis) = iter.fetch_next() {
-            if velocity.0.y > 1. {
+            if always.is_some() {
                 *vis = Visibility::Visible;
             } else {
-                *vis = Visibility::Hidden;
+                if velocity.0.y > 1. {
+                    *vis = Visibility::Visible;
+                } else {
+                    *vis = Visibility::Hidden;
+                }
             }
         }
     }

@@ -1,5 +1,7 @@
-use crate::RESOLUTION_SCALE;
+use std::usize;
+
 use crate::enemy::EnemyDeathEvent;
+use crate::{GameState, RESOLUTION_SCALE};
 use bevy::color::palettes::css::{WHITE, YELLOW};
 use bevy::prelude::*;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
@@ -12,11 +14,26 @@ pub struct PointPlugin;
 impl Plugin for PointPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PointEvent>()
+            .insert_resource(Points(0))
+            .add_systems(OnEnter(GameState::Restart), restart)
             .add_systems(
                 PostUpdate,
                 (score_enemy_death, point_effects, update_point_text).chain(),
             )
             .add_tween_systems(apply_component_tween_system::<TextColorTween>);
+    }
+}
+
+fn restart(mut commands: Commands) {
+    commands.insert_resource(Points(0));
+}
+
+#[derive(Resource)]
+pub struct Points(usize);
+
+impl Points {
+    pub fn get(&self) -> usize {
+        self.0
     }
 }
 
@@ -39,10 +56,12 @@ fn score_enemy_death(
 }
 
 #[derive(Component)]
-struct PointText {
+pub struct PointText {
     timer: Timer,
     max: usize,
     count: usize,
+    despawn: bool,
+    slide: bool,
 }
 
 impl Default for PointText {
@@ -51,6 +70,19 @@ impl Default for PointText {
             timer: Timer::from_seconds(0.1, TimerMode::Repeating),
             max: 8,
             count: 0,
+            despawn: true,
+            slide: true,
+        }
+    }
+}
+
+impl PointText {
+    pub fn ui() -> Self {
+        Self {
+            max: usize::MAX,
+            despawn: false,
+            slide: false,
+            ..Default::default()
         }
     }
 }
@@ -80,6 +112,7 @@ fn point_effects(
     mut commands: Commands,
     server: Res<AssetServer>,
     mut reader: EventReader<PointEvent>,
+    mut points: ResMut<Points>,
 ) {
     if !reader.is_empty() {
         commands.spawn((
@@ -92,12 +125,13 @@ fn point_effects(
     }
 
     for event in reader.read() {
+        points.0 += event.points;
         commands.spawn((
             HIGH_RES_LAYER,
             Text2d::new(format!("+{}", event.points)),
             TextFont {
                 font: server.load("fonts/gravity.ttf"),
-                font_size: 32.,
+                font_size: 20.,
                 ..Default::default()
             },
             Transform::from_translation((event.position * RESOLUTION_SCALE).extend(500.)),
@@ -112,12 +146,21 @@ fn update_point_text(
     time: Res<Time>,
 ) {
     for (entity, mut text, mut transform, mut color) in text.iter_mut() {
-        transform.translation.y += 20. * time.delta_secs();
+        if text.slide {
+            transform.translation.y += 20. * time.delta_secs();
+        }
+
         text.timer.tick(time.delta());
         if text.timer.finished() {
             text.count += 1;
             if text.count >= text.max {
-                commands.entity(entity).despawn();
+                if text.despawn {
+                    commands.entity(entity).despawn();
+                } else {
+                    commands.entity(entity).remove::<PointText>();
+                }
+
+                color.0 = WHITE.into();
             } else {
                 if color.to_srgba() == WHITE {
                     color.0 = YELLOW.into();

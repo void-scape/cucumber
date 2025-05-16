@@ -1,8 +1,10 @@
 use crate::assets::{PROJECTILES_COLORED_PATH, SHIPS_PATH};
+use crate::bomb::Bombs;
 use crate::health::{Health, Shield};
 use crate::pickups::PickupEvent;
 use crate::player::{PLAYER_HEALTH, PLAYER_SHIELD, Player};
-use crate::{DespawnRestart, GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE, assets, bomb};
+use crate::points::{PointText, Points};
+use crate::{DespawnRestart, GameState, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE, assets};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
@@ -11,21 +13,31 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(GameState::StartGame),
-            ui,
-            // (frame, health, shield, init_upgrade_ui),
-        )
-        .add_systems(Update, update_ui);
+        app.insert_resource(PointAccumulator(0))
+            .add_systems(OnEnter(GameState::Restart), restart)
+            .add_systems(
+                OnEnter(GameState::StartGame),
+                ui,
+                // (frame, health, shield, init_upgrade_ui),
+            )
+            .add_systems(Update, update_ui)
+            .add_systems(FixedUpdate, accumulate_points);
         // .add_systems(Update, (update_health, update_upgrades, update_shield));
     }
 }
 
-#[derive(Component)]
-struct Lives;
+fn restart(mut commands: Commands) {
+    commands.insert_resource(PointAccumulator(0));
+}
 
 #[derive(Component)]
-struct Bombs;
+struct LivesText;
+
+#[derive(Component)]
+struct BombText;
+
+#[derive(Component)]
+struct GamePointText;
 
 fn ui(mut commands: Commands, server: Res<AssetServer>) {
     let mut lives_sprite = assets::sprite_rect8(&server, SHIPS_PATH, UVec2::new(1, 5));
@@ -33,12 +45,12 @@ fn ui(mut commands: Commands, server: Res<AssetServer>) {
     commands
         .spawn((
             DespawnRestart,
-            Lives,
+            LivesText,
             HIGH_RES_LAYER,
             Text2d::default(),
             TextFont {
                 font_size: 32.,
-                font: server.load("fonts/gravity_bold.ttf"),
+                font: server.load("fonts/gravity.ttf"),
                 ..Default::default()
             },
             Transform::from_xyz(
@@ -59,7 +71,7 @@ fn ui(mut commands: Commands, server: Res<AssetServer>) {
     commands
         .spawn((
             DespawnRestart,
-            Bombs,
+            BombText,
             HIGH_RES_LAYER,
             Text2d::default(),
             TextFont {
@@ -79,13 +91,59 @@ fn ui(mut commands: Commands, server: Res<AssetServer>) {
             Transform::from_xyz(-10. * crate::RESOLUTION_SCALE, -crate::RESOLUTION_SCALE, 0.)
                 .with_scale(Vec3::splat(crate::RESOLUTION_SCALE)),
         ));
+
+    commands.spawn((
+        DespawnRestart,
+        GamePointText,
+        HIGH_RES_LAYER,
+        Text2d::default(),
+        TextFont {
+            font_size: 32.,
+            font: server.load("fonts/gravity.ttf"),
+            ..Default::default()
+        },
+        Transform::from_xyz(
+            crate::WIDTH / 2. * crate::RESOLUTION_SCALE - 2. * crate::RESOLUTION_SCALE,
+            crate::HEIGHT / 2. * crate::RESOLUTION_SCALE - 10.,
+            500.,
+        ),
+        Anchor::TopRight,
+    ));
+}
+
+#[derive(Resource)]
+struct PointAccumulator(usize);
+
+fn accumulate_points(
+    mut commands: Commands,
+    mut accumulator: ResMut<PointAccumulator>,
+    points: Res<Points>,
+    text: Single<(Entity, &mut TextColor, Option<&PointText>), With<GamePointText>>,
+) {
+    let (text, mut color, point_text) = text.into_inner();
+
+    let points = points.get();
+    if accumulator.0 < points {
+        accumulator.0 += 1;
+        if point_text.is_none() {
+            commands.entity(text).insert(PointText::ui());
+        }
+    } else if point_text.is_some() {
+        commands.entity(text).remove::<PointText>();
+        **color = Color::WHITE;
+    }
 }
 
 fn update_ui(
-    mut live_text: Single<&mut Text2d, With<Lives>>,
-    mut bomb_text: Single<&mut Text2d, (With<Bombs>, Without<Lives>)>,
+    mut live_text: Single<&mut Text2d, With<LivesText>>,
+    mut bomb_text: Single<&mut Text2d, (With<BombText>, Without<LivesText>)>,
+    mut point_text: Single<
+        &mut Text2d,
+        (With<GamePointText>, Without<LivesText>, Without<BombText>),
+    >,
     player: Single<Ref<Health>, With<Player>>,
-    bombs: Res<bomb::Bombs>,
+    bombs: Res<Bombs>,
+    points: Res<PointAccumulator>,
 ) {
     if player.is_changed() {
         live_text.0 = format!("{}", (player.current() - 1.).max(0.));
@@ -93,6 +151,10 @@ fn update_ui(
 
     if bombs.is_changed() {
         bomb_text.0 = format!("{}", bombs.get());
+    }
+
+    if points.is_changed() {
+        point_text.0 = format!("{}", points.0);
     }
 }
 

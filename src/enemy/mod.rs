@@ -1,6 +1,7 @@
 use self::{
     formation::{DEFAULT_FORMATION_VEL, FormationPlugin, FormationSet, Platoon},
     movement::*,
+    timeline::LARGEST_SPRITE_SIZE,
 };
 use crate::{
     Avian, DespawnRestart, GameState, Layer,
@@ -60,7 +61,10 @@ impl Plugin for EnemyPlugin {
                     .chain()
                     .run_if(in_state(GameState::Game)),
             )
-            .add_systems(PostUpdate, handle_death.run_if(in_state(GameState::Game)));
+            .add_systems(
+                PostUpdate,
+                (handle_death, despawn_enemy).run_if(in_state(GameState::Game)),
+            );
 
         #[cfg(debug_assertions)]
         app.add_systems(First, timeline::timeline_skip.after(TimeSystem));
@@ -72,7 +76,7 @@ impl Plugin for EnemyPlugin {
 // #############
 
 #[derive(Default, Component)]
-#[require(Transform, Visibility, Destructable, Trauma, DespawnRestart)]
+#[require(Transform, Visibility, Destructable, Trauma)]
 pub struct Enemy;
 
 #[derive(Default, Component)]
@@ -386,6 +390,7 @@ fn handle_death(
                 .insert((
                     WallDespawn,
                     LinearVelocity(DEFAULT_FORMATION_VEL),
+                    DespawnRestart,
                     CollisionLayers::new(Layer::Bullet, Layer::Bounds),
                 ));
         } else {
@@ -458,15 +463,16 @@ fn add_low_health_effects(
                         ParticleSpawner::default(),
                         ParticleEffectHandle(server.load("particles/ship_fire.ron")),
                         Transform::from_translation(Vec2::ZERO.extend(-100.)),
-                        //Transform::from_scale(Vec3::splat(0.2))
-                        //    .with_translation(Vec2::ZERO.extend(-1.)),
-                        //AnimationSprite::repeating(
-                        //    "sparks.png",
-                        //    rng.random_range(0.025..0.0251),
-                        //    0..=19,
-                        //),
                     ));
                 });
+        }
+    }
+}
+
+fn despawn_enemy(mut commands: Commands, enemies: Query<(Entity, &GlobalTransform), With<Enemy>>) {
+    for (entity, gt) in enemies.iter() {
+        if gt.translation().y < -crate::HEIGHT / 2. - LARGEST_SPRITE_SIZE {
+            commands.entity(entity).despawn();
         }
     }
 }

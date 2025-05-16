@@ -22,7 +22,6 @@ use bevy_seedling::prelude::*;
 use bevy_tween::interpolate::translation;
 use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
 use bevy_tween::tween::IntoTarget;
-use std::f32::EPSILON;
 use std::time::Duration;
 
 pub struct MinionPlugin;
@@ -205,7 +204,7 @@ fn miner_collect(
     //}
 }
 
-const SUCK_SPEED: f32 = 8.;
+const SUCK_SPEED: f32 = 6.;
 const SUCK_DIST: f32 = 30.;
 const NO_SHOT_SUCK_DIST: f32 = crate::HEIGHT / 2.;
 
