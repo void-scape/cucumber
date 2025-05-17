@@ -1,17 +1,12 @@
 use crate::bullet::Destructable;
 use crate::health::{Dead, Health};
-use crate::pickups::Material;
-use crate::sampler::Sampler;
+use crate::sprites::{self, CellSize};
 use crate::{GameState, Layer, assets};
 use avian2d::prelude::*;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use bevy_tween::prelude::{AnimationBuilderExt, EaseKind};
-use bevy_tween::tween::IntoTarget;
-use physics::linear_velocity;
 use rand::Rng;
-use std::time::Duration;
 
 pub struct AsteroidPlugin;
 
@@ -58,8 +53,15 @@ impl Asteroid {
         let server = world.get_resource::<AssetServer>().unwrap();
 
         let sprite = match asteroid {
-            Self::Big => assets::sprite_rect16(server, assets::MISC_PATH, UVec2::new(1, 1)),
-            Self::Small => assets::sprite_rect8(server, assets::MISC_PATH, UVec2::new(1, 3)),
+            Self::Big => sprites::sprite_rect(
+                server,
+                assets::MISC_PATH,
+                CellSize::Sixteen,
+                UVec2::new(1, 1),
+            ),
+            Self::Small => {
+                sprites::sprite_rect(server, assets::MISC_PATH, CellSize::Eight, UVec2::new(1, 3))
+            }
         };
         let velocity = match asteroid {
             Self::Big => LinearVelocity(Vec2::NEG_Y * 18.),

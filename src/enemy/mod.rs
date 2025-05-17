@@ -1,14 +1,13 @@
 use self::{
     formation::{DEFAULT_FORMATION_VEL, FormationPlugin, FormationSet, Platoon},
     movement::*,
-    timeline::LARGEST_SPRITE_SIZE,
+    timeline::{ENEMY_Z, LARGEST_SPRITE_SIZE},
 };
 use crate::{
-    Avian, DespawnRestart, GameState, Layer,
-    animation::AnimationSprite,
-    assets,
+    Avian, DespawnRestart, GameState, Layer, assets,
     asteroids::SpawnCluster,
     auto_collider::ImageCollider,
+    background::{LAYER2, LAYER4},
     bounds::WallDespawn,
     bullet::{
         Destructable, Direction,
@@ -20,10 +19,17 @@ use crate::{
     effects::Explosion,
     health::{Dead, Health},
     pickups::PowerUp,
+    player::Player,
+    sprites::{
+        BehaviorNodes, BehaviorRoot, CellSize, CellSprite, MultiSprite, SpriteBehavior,
+        SpriteBundle,
+    },
+    tween::DespawnTweenFinish,
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{GREEN, RED, WHITE, YELLOW},
+    color::palettes::css::{RED, WHITE, YELLOW},
+    ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
     time::TimeSystem,
 };
@@ -55,8 +61,8 @@ impl Plugin for EnemyPlugin {
                 Update,
                 (
                     timeline::update_waves.before(FormationSet),
-                    insert_enemy_sprites.after(FormationSet),
                     (add_low_health_effects, death_effects),
+                    face_player,
                 )
                     .chain()
                     .run_if(in_state(GameState::Game)),
@@ -84,7 +90,7 @@ pub struct Enemy;
     Enemy,
     ImageCollider,
     Health::full(1.),
-    EnemySprite8::cell(UVec2::new(4, 0)),
+    CellSprite::new8("ships.png", UVec2::new(3, 0)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SwarmEmitter,
     BulletModifiers {
@@ -100,29 +106,56 @@ pub struct Swarm;
 #[derive(Default, Clone, Copy, Component)]
 #[require(
     Enemy,
-    ImageCollider,
+    Collider::rectangle(12., 12.),
+    SpriteBundle = Self::sprites(),
     Health::full(20.),
     LowHealthEffects,
     EnemySprite16::cell(UVec2::new(4, 4)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     BuckShotEmitter,
     BulletModifiers {
-        speed: 0.4,
+        speed: 1.,
         ..Default::default()
     },
     Drops::splat(8),
     DropPowerUp,
     Explosion::Big,
+    FacePlayer,
 )]
 pub struct BuckShot;
+
+impl BuckShot {
+    fn sprites() -> SpriteBundle {
+        SpriteBundle::new([
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(3, 1),
+                z: 0.,
+            }),
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(3, 2),
+                z: 1.,
+            }),
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(3, 3),
+                z: -1.,
+            }),
+        ])
+    }
+}
 
 #[derive(Default, Component)]
 #[require(
     Enemy,
-    ImageCollider,
+    Collider::rectangle(12., 12.),
+    SpriteBundle = Self::sprites(),
     Health::full(20.),
     LowHealthEffects,
-    DebugRect::from_size_color(Vec2::splat(12.), GREEN),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     WallEmitter,
     TargetPlayer,
@@ -132,16 +165,36 @@ pub struct BuckShot;
     },
     Drops::splat(8),
     Explosion::Big,
+    FacePlayer,
 )]
 pub struct WallShooter;
+
+impl WallShooter {
+    fn sprites() -> SpriteBundle {
+        SpriteBundle::new([
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(1, 1),
+                z: 0.,
+            }),
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(1, 2),
+                z: -1.,
+            }),
+        ])
+    }
+}
 
 #[derive(Default, Clone, Copy, Component)]
 #[require(
     Enemy,
-    ImageCollider,
+    Collider::rectangle(12., 12.),
+    CellSprite::new24("ships.png", UVec2::new(2, 1)),
     Health::full(10.),
     LowHealthEffects,
-    EnemySprite16::cell(UVec2::new(4, 3)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     MineEmitter,
     Drops::splat(3),
@@ -152,31 +205,67 @@ pub struct MineThrower;
 #[derive(Default, Component)]
 #[require(
     Enemy,
-    ImageCollider,
     Health::full(20.),
+    Collider::circle(6.),
+    CellSprite::new24("ships.png", UVec2::new(0, 1)),
     LowHealthEffects,
-    EnemySprite16::cell(UVec2::new(3, 4)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SpiralOrbEmitter,
     Drops::splat(8),
     DropPowerUp,
     Explosion::Big,
 )]
+#[component(on_add = Self::sprites)]
 pub struct OrbSlinger;
+
+impl OrbSlinger {
+    fn sprites(mut world: DeferredWorld, ctx: HookContext) {
+        world.commands().entity(ctx.entity).with_child((
+            CellSprite::new24("ships.png", UVec2::new(0, 2)),
+            RigidBody::Kinematic,
+            AngularVelocity(0.4),
+            // no behavior, just need to despawn on death
+            BehaviorRoot(ctx.entity),
+        ));
+    }
+}
 
 #[derive(Default, Component)]
 #[require(
     Enemy,
-    ImageCollider,
+    Collider::rectangle(12., 12.),
+    SpriteBundle = Self::sprites(),
     Health::full(15.),
     LowHealthEffects,
-    EnemySprite16::cell(UVec2::new(2, 4)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     CrisscrossEmitter,
     Drops::splat(6),
     Explosion::Big,
 )]
 pub struct CrissCross;
+
+impl CrissCross {
+    fn sprites() -> SpriteBundle {
+        SpriteBundle::new([
+            MultiSprite::Static(CellSprite {
+                path: "ships.png",
+                size: CellSize::TwentyFour,
+                cell: UVec2::new(4, 1),
+                z: 0.,
+            }),
+            MultiSprite::Dynamic {
+                sprite: CellSprite {
+                    path: "ships.png",
+                    size: CellSize::TwentyFour,
+                    cell: UVec2::new(4, 2),
+                    z: ENEMY_Z - 1.,
+                },
+                behavior: SpriteBehavior::Crisscross,
+                position: Vec2::ZERO,
+            },
+        ])
+    }
+}
 
 #[derive(Default, Component)]
 #[require(
@@ -207,23 +296,6 @@ pub struct InvincibleLaserNode;
 
 #[derive(Component)]
 #[require(Visibility)]
-pub struct EnemySprite8 {
-    path: &'static str,
-    cell: UVec2,
-}
-
-impl EnemySprite8 {
-    pub fn new(path: &'static str, cell: UVec2) -> Self {
-        Self { path, cell }
-    }
-
-    pub fn cell(cell: UVec2) -> Self {
-        Self::new(assets::SHIPS_PATH, cell)
-    }
-}
-
-#[derive(Component)]
-#[require(Visibility)]
 struct EnemySprite16 {
     path: &'static str,
     cell: UVec2,
@@ -236,27 +308,6 @@ impl EnemySprite16 {
 
     pub fn cell(cell: UVec2) -> Self {
         Self::new(assets::SHIPS_PATH, cell)
-    }
-}
-
-fn insert_enemy_sprites(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    sprite8: Query<(Entity, &EnemySprite8)>,
-    sprite16: Query<(Entity, &EnemySprite16)>,
-) {
-    for (entity, sprite) in sprite8.iter() {
-        commands
-            .entity(entity)
-            .insert(assets::sprite_rect8(&server, sprite.path, sprite.cell))
-            .remove::<EnemySprite8>();
-    }
-
-    for (entity, sprite) in sprite16.iter() {
-        commands
-            .entity(entity)
-            .insert(assets::sprite_rect16(&server, sprite.path, sprite.cell))
-            .remove::<EnemySprite16>();
     }
 }
 
@@ -356,42 +407,35 @@ fn handle_death(
     let mut rng = rand::rng();
     for (entity, gt, trauma, drops, power_up, explosion) in q.iter() {
         if explosion.is_some_and(|e| *e == Explosion::Big) {
-            let sign = if rng.random_bool(0.5) { -1. } else { 1. };
             commands
                 .entity(entity)
-                .despawn_related::<Children>()
+                .despawn_related::<BehaviorNodes>()
                 .animation()
                 .insert_tween_here(
-                    Duration::from_secs_f32(1.5),
-                    EaseKind::QuadraticOut,
+                    Duration::from_secs_f32(0.5),
+                    EaseKind::Linear,
                     entity.into_target().with(translation(
                         gt.translation(),
-                        gt.translation().with_z(-903.5),
+                        gt.translation()
+                            .with_z(LAYER2 - 10.)
+                            .with_y(gt.translation().y + DEFAULT_FORMATION_VEL.y * 1.5),
                     )),
                 )
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(1.5),
-                    EaseKind::QuadraticIn,
-                    entity.into_target().with(rotation(
-                        gt.rotation(),
-                        Quat::from_rotation_z(sign * PI / 6.) + Quat::from_rotation_x(PI / 2.),
-                    )),
-                )
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(1.5),
-                    EaseKind::Linear,
-                    entity
-                        .into_target()
-                        .with(sprite_color(WHITE.into(), Color::srgb(0.5, 0.5, 0.5))),
-                )
-                .remove::<(Enemy, BulletModifiers, Platoon, ChildOf, Dead, Explosion)>()
+                .remove::<(
+                    Enemy,
+                    BulletModifiers,
+                    Platoon,
+                    ChildOf,
+                    Dead,
+                    Explosion,
+                    FacePlayer,
+                )>()
                 .insert((
-                    WallDespawn,
-                    LinearVelocity(DEFAULT_FORMATION_VEL),
-                    DespawnRestart,
-                    CollisionLayers::new(Layer::Bullet, Layer::Bounds),
+                    DespawnTweenFinish,
+                    //WallDespawn,
+                    //LinearVelocity(DEFAULT_FORMATION_VEL),
+                    //DespawnRestart,
+                    //CollisionLayers::new(Layer::Bullet, Layer::Bounds),
                 ));
         } else {
             commands.entity(entity).despawn();
@@ -435,8 +479,8 @@ fn add_low_health_effects(
     server: Res<AssetServer>,
     query: Query<(Entity, &Health), (With<LowHealthEffects>, Without<AppliedLowHealthEffects>)>,
 ) {
-    const DIST: f32 = 8.;
-    const Y_OFFSET: f32 = 5.;
+    const DIST: f32 = 4.;
+    const Y_OFFSET: f32 = 1.;
 
     let mut rng = rand::rng();
     for (entity, health) in query.iter() {
@@ -450,19 +494,16 @@ fn add_low_health_effects(
                     for dir in chosen.iter() {
                         root.spawn((
                             Transform::from_scale(Vec3::splat(0.2)).with_translation(
-                                ((dir.to_vec2() * DIST) + Vec2::Y * Y_OFFSET).extend(1.),
+                                ((dir.to_vec2() * DIST) + Vec2::Y * Y_OFFSET).extend(0.1),
                             ),
-                            AnimationSprite::repeating(
-                                "fire_sparks.png",
-                                rng.random_range(0.025..0.05),
-                                0..=18,
-                            ),
+                            ParticleSpawner::default(),
+                            ParticleEffectHandle(server.load("particles/fire.ron")),
                         ));
                     }
                     root.spawn((
                         ParticleSpawner::default(),
                         ParticleEffectHandle(server.load("particles/ship_fire.ron")),
-                        Transform::from_translation(Vec2::ZERO.extend(-100.)),
+                        Transform::from_translation(Vec2::ZERO.extend(-0.1)),
                     ));
                 });
         }
@@ -473,6 +514,40 @@ fn despawn_enemy(mut commands: Commands, enemies: Query<(Entity, &GlobalTransfor
     for (entity, gt) in enemies.iter() {
         if gt.translation().y < -crate::HEIGHT / 2. - LARGEST_SPRITE_SIZE {
             commands.entity(entity).despawn();
+        }
+    }
+}
+
+#[derive(Default, Component)]
+#[require(AngularVelocity)]
+struct FacePlayer;
+
+fn face_player(
+    player: Single<&Transform, With<Player>>,
+    time: Res<Time>,
+    mut entities: Query<
+        (&GlobalTransform, &mut AngularVelocity),
+        (With<FacePlayer>, Without<Player>),
+    >,
+) {
+    let pp = player.translation.xy();
+    for (gt, mut ang_vel) in entities.iter_mut() {
+        let p = gt.translation().xy();
+        if p != Vec2::ZERO && pp != Vec2::ZERO {
+            let dir_to_player = pp - p;
+            let forward = gt.rotation().mul_vec3(Vec3::X).xy().normalize();
+
+            let angle = forward.x.atan2(forward.y) - dir_to_player.x.atan2(dir_to_player.y);
+            // Add 90 degrees (π/2 radians) rotation offset
+            let angle_with_offset = angle + std::f32::consts::FRAC_PI_2;
+
+            // Normalize the angle to be between -π and π
+            let normalized_angle = (angle_with_offset + std::f32::consts::PI)
+                % (2.0 * std::f32::consts::PI)
+                - std::f32::consts::PI;
+            ang_vel.0 = normalized_angle * 100. * time.delta_secs();
+        } else {
+            ang_vel.0 = 0.;
         }
     }
 }

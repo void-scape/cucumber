@@ -13,9 +13,10 @@ use crate::{
     particles::ParticleEmitter,
     player::Player,
     points::PointEvent,
+    sprites::{self, CellSize},
     tween::{DespawnTweenFinish, OnEnd},
 };
-use avian2d::prelude::*;
+use avian2d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
     color::palettes::css::{MAGENTA, RED, SKY_BLUE},
     platform::collections::HashSet,
@@ -148,7 +149,7 @@ fn init_bullet_sprite(
         let brightness = sprite.brightness;
         let alpha = sprite.alpha;
 
-        let mut sprite = assets::sprite_rect8(&server, sprite.path, sprite.cell);
+        let mut sprite = sprites::sprite_rect(&server, sprite.path, CellSize::Eight, sprite.cell);
         if rotation.is_none() {
             if let Some(velocity) = velocity {
                 sprite.flip_y = velocity.0.y < 0.;
@@ -316,6 +317,7 @@ pub struct Mine;
     Bullet,
     Collider::circle(1.5),
     AnimationSprite::repeating("orb.png", 0.2, 0..3),
+    AngularVelocity(FRAC_PI_2),
 )]
 pub struct RedOrb;
 
@@ -324,6 +326,7 @@ pub struct RedOrb;
     Bullet,
     Collider::circle(1.5),
     AnimationSprite::repeating("orb1.png", 0.2, 0..3),
+    AngularVelocity(FRAC_PI_2),
 )]
 pub struct BlueOrb;
 

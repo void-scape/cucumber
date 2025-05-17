@@ -1,8 +1,10 @@
 use crate::GameState;
 use crate::bullet::{Bullet, PlayerBullet};
 use crate::effects::{Explosion, SpawnExplosion};
+use crate::pickups::Bomb;
 use crate::player::{AliveContext, Player};
 use crate::points::PointEvent;
+use avian2d::prelude::CollidingEntities;
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
 use bevy_seedling::prelude::*;
@@ -15,6 +17,7 @@ impl Plugin for BombPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Bombs::new(STARTING_BOMBS))
             .add_systems(OnEnter(GameState::StartGame), insert_bombs)
+            .add_systems(Update, collect_bombs)
             .add_observer(bind)
             .add_observer(detonate);
     }
@@ -112,5 +115,30 @@ fn detonate(
             //    *transform,
             //));
         }
+    }
+}
+
+fn collect_bombs(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    player: Single<&CollidingEntities, With<Player>>,
+    pickups: Query<&Bomb>,
+    mut bombs: ResMut<Bombs>,
+) {
+    for entity in player
+        .iter()
+        .copied()
+        .filter(|entity| pickups.get(*entity).is_ok())
+    {
+        commands.entity(entity).despawn();
+        bombs.0 += 1;
+
+        commands.spawn((
+            SamplePlayer::new(server.load("audio/sfx/bfxr/bomb.wav")),
+            PlaybackSettings {
+                volume: Volume::Linear(0.5),
+                ..PlaybackSettings::ONCE
+            },
+        ));
     }
 }

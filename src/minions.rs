@@ -7,9 +7,9 @@ use crate::bullet::emitter::{
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
 use crate::bullet::{BulletTimer, Polarity};
 use crate::effects::Blasters;
-use crate::enemy::EnemySprite8;
 use crate::pickups::{Collectable, Material, PickupEvent, PowerUp, Weapon};
 use crate::player::{AliveContext, PLAYER_SPEED, Player, PowerUpEvent, ShootAction, WeaponRack};
+use crate::sprites::{CellSize, TiltSprite};
 use crate::{GameState, Layer};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::LIGHT_BLUE;
@@ -272,8 +272,7 @@ pub struct Gunners(Vec<Entity>);
     Visibility,
     RigidBody::Kinematic,
     LinearVelocity,
-    EnemySprite8::cell(UVec2::new(0, 6)),
-    Blasters(const { &[Vec3::new(0., -6., -1.)] }),
+    Blasters(const { &[Vec3::new(0., -4., -1.)] }),
     Transform::from_xyz(0., -crate::HEIGHT / 2. - 10., 0.),
 )]
 pub struct Gunner;
@@ -368,6 +367,14 @@ fn spawn_gunner(
         GunnerLeader(player),
         anchor,
         GunnerWeapon { weapon, enabled },
+        TiltSprite {
+            path: "ships.png",
+            size: CellSize::Eight,
+            //
+            left: UVec2::new(0, 1),
+            center: UVec2::new(1, 1),
+            right: UVec2::new(2, 1),
+        },
         children![
             (
                 GunnerEmitter,
@@ -422,6 +429,10 @@ fn update_gunners(
         const LAG: f32 = 5.;
         let to_player = (pp + anchor - p).clamp_length(0., LAG) / LAG;
         velocity.0 = to_player * PLAYER_SPEED;
+
+        if velocity.0.x != 0.0 && velocity.0.x.abs() < 1. {
+            velocity.0.x = 0.;
+        }
     }
 
     for (weapon, children) in weapons.iter() {

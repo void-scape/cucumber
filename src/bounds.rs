@@ -7,7 +7,7 @@ pub struct ScreenBoundsPlugin;
 impl Plugin for ScreenBoundsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_bounds)
-            .add_systems(First, kill_on_wall);
+            .add_systems(Last, kill_on_wall);
     }
 }
 

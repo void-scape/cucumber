@@ -11,6 +11,7 @@ use crate::{
     health::{Damage, DamageEvent, Health, HealthSet},
     particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState},
     player::Player,
+    sprites::{self, CellSize},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -800,7 +801,7 @@ impl LaserEmitter {
     fn on_insert_hook(mut world: DeferredWorld, ctx: HookContext) {
         let server = world.resource();
         let sprite = BulletSprite::from_cell(1, 8);
-        let sprite = super::assets::sprite_rect8(server, sprite.path, sprite.cell);
+        let sprite = sprites::sprite_rect(server, sprite.path, CellSize::Eight, sprite.cell);
         world.commands().entity(ctx.entity).with_child(sprite);
     }
 
@@ -995,8 +996,22 @@ impl MineEmitter {
     }
 }
 
+pub trait PulseTime {
+    fn wait_time(&self) -> f32;
+    fn shot_time(&self) -> f32;
+    fn pulses(&self) -> usize;
+
+    fn total_time(&self) -> f32 {
+        self.total_shoot_time() + self.wait_time()
+    }
+
+    fn total_shoot_time(&self) -> f32 {
+        (self.pulses() - 1) as f32 * self.shot_time()
+    }
+}
+
 #[derive(Component)]
-struct PulseTimer {
+pub struct PulseTimer {
     wait: Timer,
     bullet: Timer,
     pulses: usize,
@@ -1066,22 +1081,22 @@ impl PulseTimer {
     }
 }
 
-pub trait PulseTime {
-    fn wait_time(&self) -> f32;
-    fn shot_time(&self) -> f32;
-    fn pulses(&self) -> usize;
-
-    fn total_time(&self) -> f32 {
-        self.total_shoot_time() + self.wait_time()
+impl PulseTime for PulseTimer {
+    fn wait_time(&self) -> f32 {
+        self.wait.duration().as_secs_f32()
     }
 
-    fn total_shoot_time(&self) -> f32 {
-        (self.pulses() - 1) as f32 * self.shot_time()
+    fn shot_time(&self) -> f32 {
+        self.bullet.duration().as_secs_f32()
+    }
+
+    fn pulses(&self) -> usize {
+        self.pulses
     }
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+#[require(Transform, BulletModifiers)]
 pub struct SpiralOrbEmitter {
     waves: usize,
     shot_dur: f32,
@@ -1131,7 +1146,6 @@ impl SpiralOrbEmitter {
                 &mut SpiralOrbEmitter,
                 Option<&mut PulseTimer>,
                 &BulletModifiers,
-                &Polarity,
                 &ChildOf,
                 &GlobalTransform,
             ),
@@ -1141,7 +1155,7 @@ impl SpiralOrbEmitter {
         time: Res<Time>,
         mut writer: EventWriter<EmitterSample>,
     ) {
-        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, mods, parent, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
             };
@@ -1157,13 +1171,11 @@ impl SpiralOrbEmitter {
                 continue;
             };
 
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
             if !timer.just_finished(&time) {
                 continue;
             }
 
+            let new_transform = transform.compute_transform();
             let bullets = 10;
             for angle in 0..bullets {
                 let angle = (angle as f32 / bullets as f32) * 2. * std::f32::consts::PI
@@ -1182,17 +1194,11 @@ impl SpiralOrbEmitter {
 }
 
 #[derive(Default, Component)]
-#[require(
-    Transform,
-    BulletModifiers,
-    Polarity,
-    Visibility::Hidden,
-    CrisscrossState
-)]
+#[require(Transform, BulletModifiers, Polarity, CrisscrossState)]
 pub struct CrisscrossEmitter;
 
 #[derive(Component, Default)]
-enum CrisscrossState {
+pub enum CrisscrossState {
     #[default]
     Plus,
     Cross,
@@ -1236,9 +1242,6 @@ impl CrisscrossEmitter {
                 continue;
             };
 
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
             if !timer.just_finished(&time) {
                 continue;
             }
@@ -1251,6 +1254,7 @@ impl CrisscrossEmitter {
                 continue;
             }
 
+            let new_transform = transform.compute_transform();
             let angle_offset = match *state {
                 CrisscrossState::Cross => std::f32::consts::PI / 4.,
                 CrisscrossState::Plus => 0.,
@@ -1352,22 +1356,23 @@ impl BuckShotEmitter {
                 continue;
             };
 
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
             if !timer.just_finished(&time) {
                 continue;
             }
 
-            let to_player =
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
+            let new_transform = transform.compute_transform().with_rotation(Quat::default());
+            //new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+
+            let to_player = new_transform.translation.xy() - player.translation.xy();
 
             let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
             for angle in angles.into_iter() {
                 commands.spawn((
                     BlueOrb,
+                    HomingRotate,
                     LinearVelocity(
-                        (Vec2::from_angle(angle - std::f32::consts::PI / 2.) + to_player)
+                        (Vec2::from_angle(angle - std::f32::consts::PI / 2.) * to_player)
+                            .normalize_or(Vec2::NEG_Y)
                             * ORB_SPEED
                             * mods.speed,
                     ),
@@ -1478,7 +1483,10 @@ impl WallEmitter {
             };
 
             let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
+            new_transform.translation += new_transform
+                .rotation
+                .mul_vec3(polarity.to_vec2().extend(0.0))
+                * 10.0;
 
             if !timer.timer.tick(delta).just_finished() {
                 continue;

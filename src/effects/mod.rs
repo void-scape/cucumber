@@ -1,7 +1,7 @@
 use crate::animation::{AnimationAppExt, AnimationSprite, FlipX, FlipY};
 use crate::assets::MISC_PATH;
 use crate::health::Dead;
-use avian2d::prelude::LinearVelocity;
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;

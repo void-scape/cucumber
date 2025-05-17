@@ -39,6 +39,7 @@ mod player;
 mod points;
 mod sampler;
 mod selection;
+mod sprites;
 mod stats;
 mod textbox;
 mod tween;
@@ -123,6 +124,7 @@ fn main() {
         points::PointPlugin,
         effects::EffectsPlugin,
         particles::ParticlePlugin,
+        sprites::SpritePlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
@@ -219,9 +221,6 @@ fn despawn_on_restart(
     entities: Query<Entity, (With<DespawnRestart>, Without<ChildOf>)>,
 ) {
     for entity in entities.iter() {
-        commands
-            .entity(entity)
-            .despawn_related::<Children>()
-            .try_despawn();
+        commands.entity(entity).try_despawn();
     }
 }

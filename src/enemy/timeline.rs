@@ -11,7 +11,7 @@ pub const ENEMY_Z: f32 = 0.;
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
 #[cfg(debug_assertions)]
-const START_DELAY: f32 = 0.;
+const START_DELAY: f32 = 5.;
 
 pub fn start_waves(mut commands: Commands) {
     if crate::SKIP_WAVES {

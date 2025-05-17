@@ -1,7 +1,8 @@
 use crate::auto_collider::ImageCollider;
 use crate::bounds::WallDespawn;
 use crate::player::Player;
-use crate::{DespawnRestart, Layer, assets};
+use crate::sprites::CellSprite;
+use crate::{DespawnRestart, Layer, assets, sprites};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::{LIGHT_BLUE, YELLOW};
 use bevy::ecs::component::HookContext;
@@ -83,26 +84,26 @@ fn pickup_triggered(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-#[component(on_add = Self::sprite_hook)]
+//#[component(on_add = Self::sprite_hook)]
 pub enum Upgrade {
     Speed(f32),
     Juice(f32),
 }
 
-impl Upgrade {
-    pub fn sprite(&self, server: &AssetServer) -> Sprite {
-        match self {
-            Self::Speed(_) => assets::sprite_rect8(server, assets::MISC_PATH, UVec2::new(2, 1)),
-            Self::Juice(_) => assets::sprite_rect8(server, assets::MISC_PATH, UVec2::new(3, 1)),
-        }
-    }
-}
-
-impl SpriteHook for Upgrade {
-    fn sprite(&self, server: &AssetServer) -> Sprite {
-        self.sprite(server)
-    }
-}
+//impl Upgrade {
+//    pub fn sprite(&self, server: &AssetServer) -> Sprite {
+//        match self {
+//            Self::Speed(_) => assets::sprite_rect8(server, assets::MISC_PATH, UVec2::new(2, 1)),
+//            Self::Juice(_) => assets::sprite_rect8(server, assets::MISC_PATH, UVec2::new(3, 1)),
+//        }
+//    }
+//}
+//
+//impl SpriteHook for Upgrade {
+//    fn sprite(&self, _server: &AssetServer) -> Sprite {
+//        panic!();
+//    }
+//}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Component)]
 #[component(on_add = Self::sprite_hook)]
@@ -116,15 +117,18 @@ pub enum Weapon {
 impl Weapon {
     pub fn sprite(&self, server: &AssetServer) -> Sprite {
         match self {
-            Self::Bullet => {
-                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(0, 1))
-            }
-            //Self::Laser => {
-            //    assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(1, 8))
-            //}
-            Self::Missile => {
-                assets::sprite_rect8(server, assets::PROJECTILES_COLORED_PATH, UVec2::new(5, 2))
-            }
+            Self::Bullet => sprites::sprite_rect(
+                server,
+                assets::PROJECTILES_COLORED_PATH,
+                sprites::CellSize::Eight,
+                UVec2::new(0, 1),
+            ),
+            Self::Missile => sprites::sprite_rect(
+                server,
+                assets::PROJECTILES_COLORED_PATH,
+                sprites::CellSize::Eight,
+                UVec2::new(5, 2),
+            ),
         }
     }
 }
@@ -249,32 +253,43 @@ fn update_scrolling_pickup(
             //Pickup::Weapon(Weapon::Laser),
         ];
 
-        if scroll_pickup.timer.just_finished() {
-            scroll_pickup.index += 1;
-            if scroll_pickup.index >= CHOICES.len() {
-                scroll_pickup.index = 0;
-            }
-
-            let pickup = CHOICES.into_iter().nth(scroll_pickup.index).unwrap();
-            commands.entity(entity).remove::<(Weapon, Upgrade)>();
-
-            match pickup {
-                Pickup::Weapon(weapon) => {
-                    commands.entity(entity).insert(weapon);
-                }
-                Pickup::Upgrade(upgrade) => {
-                    commands.entity(entity).insert(upgrade);
-                }
-            }
-        }
+        //if scroll_pickup.timer.just_finished() {
+        //    scroll_pickup.index += 1;
+        //    if scroll_pickup.index >= CHOICES.len() {
+        //        scroll_pickup.index = 0;
+        //    }
+        //
+        //    let pickup = CHOICES.into_iter().nth(scroll_pickup.index).unwrap();
+        //    commands.entity(entity).remove::<(Weapon, Upgrade)>();
+        //
+        //    match pickup {
+        //        Pickup::Weapon(weapon) => {
+        //            commands.entity(entity).insert(weapon);
+        //        }
+        //        Pickup::Upgrade(upgrade) => {
+        //            commands.entity(entity).insert(upgrade);
+        //        }
+        //    }
+        //}
     }
 }
 
 #[derive(Debug, Clone, Copy, Component)]
 #[require(
-    ImageCollider,
     Collectable,
-    DebugRect::from_size(Vec2::splat(8.)),
-    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED)
+    Collider::circle(8.),
+    CellSprite::new16("ships.png", UVec2::new(3, 0)),
+    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED),
+    AngularVelocity(0.1),
 )]
 pub struct PowerUp;
+
+#[derive(Debug, Clone, Copy, Component)]
+#[require(
+    Collectable,
+    Collider::circle(8.),
+    CellSprite::new16("ships.png", UVec2::new(2, 0)),
+    LinearVelocity(Vec2::NEG_Y * PICKUP_SPEED),
+    AngularVelocity(0.1),
+)]
+pub struct Bomb;

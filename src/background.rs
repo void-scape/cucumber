@@ -1,6 +1,5 @@
 use crate::DespawnRestart;
 use crate::bullet::emitter::{BackgroundGattlingEmitter, BulletModifiers, Rate};
-use avian2d::math::PI;
 use bevy::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
@@ -26,6 +25,12 @@ impl Plugin for BackgroundPlugin {
             );
     }
 }
+
+pub const LAYER1: f32 = -10.;
+pub const LAYER2: f32 = -250.;
+pub const LAYER3: f32 = -500.;
+pub const LAYER4: f32 = -750.;
+pub const LAYER5: f32 = -999.;
 
 const SPEED: f32 = 0.5;
 const SCROLL_SPEED1: f32 = 1. * SPEED;
@@ -69,8 +74,8 @@ fn spawn_background_emitters(
     let mut rng = rand::rng();
     if timer.just_finished() && rng.random() {
         let z = match rng.random_range(0..=1) {
-            0 => -901.5,
-            1 => -903.5,
+            0 => LAYER1 - 5.,
+            1 => LAYER2 - 5.,
             _ => unreachable!(),
         };
 
@@ -144,7 +149,7 @@ fn background(
 ) {
     commands.spawn((
         Sprite::from_image(server.load("space.png")),
-        Transform::from_xyz(0., 0., -999.),
+        Transform::from_xyz(0., 0., LAYER5),
     ));
 
     let mesh = meshes.add(Rectangle::new(crate::WIDTH, crate::HEIGHT));
@@ -156,7 +161,7 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED1,
-        Vec3::new(-30., 0., -900.),
+        Vec3::new(-30., 0., LAYER1),
         0.8,
         1.,
         0.,
@@ -167,7 +172,7 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED1,
-        Vec3::new(30., 0., -901.),
+        Vec3::new(30., 0., LAYER1 - 0.1),
         0.8,
         1.,
         0.2,
@@ -179,8 +184,8 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED2,
-        Vec3::new(-45., 0., -902.),
-        0.9,
+        Vec3::new(-45., 0., LAYER2),
+        0.95,
         0.25,
         0.3,
     );
@@ -190,8 +195,8 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED2,
-        Vec3::new(45., 0., -903.),
-        0.9,
+        Vec3::new(45., 0., LAYER2 - 0.5),
+        0.95,
         0.25,
         0.7,
     );
@@ -202,7 +207,7 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED3,
-        Vec3::new(crate::WIDTH / 2., 0., -904.),
+        Vec3::new(crate::WIDTH / 2., 0., LAYER3),
         1.,
         0.,
         0.8,
@@ -213,7 +218,7 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED3,
-        Vec3::new(-crate::WIDTH / 2., 0., -905.),
+        Vec3::new(-crate::WIDTH / 2., 0., LAYER3 - 0.1),
         1.,
         0.,
         0.15,
@@ -224,7 +229,7 @@ fn background(
         &mut mats,
         &mesh,
         SCROLL_SPEED3,
-        Vec3::new(0., 0., -906.),
+        Vec3::new(0., 0., LAYER3 - 0.2),
         1.,
         0.,
         0.55,

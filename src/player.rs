@@ -1,6 +1,5 @@
 use crate::{
     Avian, DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
-    assets::{self},
     bullet::{
         BulletTimer,
         emitter::{BulletModifiers, EmitterState, GattlingEmitter},
@@ -11,6 +10,7 @@ use crate::{
     health::{DamageEvent, Dead, Health, HealthSet, Invincible, Shield},
     minions::{Gunner, GunnerWeapon},
     pickups::{Material, PickupEvent, Upgrade, Weapon},
+    sprites::{CellSize, TiltSprite},
     tween::{OnEnd, TimeMult, time_mult},
 };
 use avian2d::prelude::*;
@@ -56,7 +56,6 @@ impl Plugin for PlayerPlugin {
                 Update,
                 (
                     zero_rotation,
-                    update_player_sprites,
                     (handle_pickups, handle_powerups, enemy_collision)
                         .run_if(in_state(GameState::Game)),
                 ),
@@ -235,9 +234,23 @@ impl Player {
                         .bind::<SwitchGunAction>()
                         .to((KeyCode::ShiftLeft, GamepadButton::South));
 
+                    //    Ordering::Less => (Vec2::new(0., 5.), Vec2::new(1., 6.)),
+                    //    Ordering::Greater => (Vec2::new(2., 5.), Vec2::new(3., 6.)),
+                    //    Ordering::Equal => (Vec2::new(1., 5.), Vec2::new(2., 6.)),
+                    //};
+                    //
+                    //sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
+
                     commands.entity(ctx.entity).insert((
                         actions,
-                        assets::sprite_rect8(&server, assets::SHIPS_PATH, UVec2::new(1, 4)),
+                        TiltSprite {
+                            path: "ships.png",
+                            size: CellSize::Eight,
+                            //
+                            left: UVec2::new(0, 0),
+                            center: UVec2::new(1, 0),
+                            right: UVec2::new(2, 0),
+                        },
                         BulletTimer {
                             timer: Timer::new(Duration::from_millis(250), TimerMode::Repeating),
                         },
@@ -485,20 +498,6 @@ fn switch_emitters(
     }
 }
 
-fn update_player_sprites(
-    player: Single<(&LinearVelocity, &mut Sprite), (With<Player>, Changed<LinearVelocity>)>,
-) {
-    let (velocity, mut sprite) = player.into_inner();
-
-    let (tl, br) = match velocity.0.x.total_cmp(&0.) {
-        Ordering::Less => (Vec2::new(0., 5.), Vec2::new(1., 6.)),
-        Ordering::Greater => (Vec2::new(2., 5.), Vec2::new(3., 6.)),
-        Ordering::Equal => (Vec2::new(1., 5.), Vec2::new(2., 6.)),
-    };
-
-    sprite.rect = Some(Rect::from_corners(tl * 8., br * 8.));
-}
-
 // TODO: this does not work? we don't brush on anything anyways
 
 /// Brushing along edges rotates the player.
@@ -521,7 +520,8 @@ fn handle_death(mut commands: Commands, player: Single<Entity, (With<Player>, Wi
         .insert(DespawnRestart);
 }
 
-fn restart(mut time: ResMut<TimeMult>) {
+fn restart(mut commands: Commands, mut time: ResMut<TimeMult>) {
+    commands.insert_resource(WeaponRack::default());
     time.0 = 1.;
 }
 

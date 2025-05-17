@@ -3,7 +3,7 @@ use super::timeline::LARGEST_SPRITE_SIZE;
 use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, Swarm, timeline::WaveTimeline};
 use super::{InvincibleLaserNode, WallShooter};
 use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
-use crate::pickups::{Pickup, Weapon};
+use crate::pickups::{Bomb, Pickup, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::Physics;
 use bevy::color::palettes::css::WHITE;
@@ -421,11 +421,11 @@ fn on_remove_platoon(mut world: DeferredWorld, ctx: HookContext) {
         .translation
         .xy();
 
-    world
-        .commands()
-        .entity(platoon)
-        .entry::<UnitDeaths>()
-        .and_modify(move |mut deaths| deaths.death_position(position));
+    if let Ok(mut entity) = world.commands().get_entity(platoon) {
+        entity
+            .entry::<UnitDeaths>()
+            .and_modify(move |mut deaths| deaths.death_position(position));
+    }
 }
 
 #[derive(Component)]
@@ -535,8 +535,11 @@ fn despawn_formations(
                 Transform::from_translation(deaths.last_death_position().unwrap().extend(1.)),
             ));
         }
-        if let Some(bomb) = bomb {
-            error!("drop bomb");
+        if bomb.is_some() {
+            commands.spawn((
+                Bomb,
+                Transform::from_translation(deaths.last_death_position().unwrap().extend(1.)),
+            ));
         }
 
         //if rng.random_bool(0.75) {
