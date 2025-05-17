@@ -23,13 +23,13 @@ mod boss;
 mod bounds;
 mod bullet;
 mod characters;
+mod color;
 mod effects;
 mod end;
 mod enemy;
 mod fire;
 mod health;
 mod input;
-mod miniboss;
 mod minions;
 mod music;
 mod opening;
@@ -41,6 +41,7 @@ mod sampler;
 mod selection;
 mod sprites;
 mod stats;
+mod text;
 mod textbox;
 mod tween;
 mod ui;
@@ -111,7 +112,6 @@ fn main() {
         opening::OpeningPlugin,
     ))
     .add_plugins((
-        //miniboss::MinibossPlugin,
         asteroids::AsteroidPlugin,
         minions::MinionPlugin,
         tween::TweenPlugin,
@@ -125,6 +125,7 @@ fn main() {
         effects::EffectsPlugin,
         particles::ParticlePlugin,
         sprites::SpritePlugin,
+        text::TextPlugin,
     ))
     .init_schedule(Avian)
     .insert_resource(Gravity(Vec2::ZERO))
@@ -196,10 +197,9 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 }
 
 fn configure_camera(mut commands: Commands, main_camera: Single<Entity, With<MainCamera>>) {
-    commands.entity(*main_camera).insert((
-        Shake::from_trauma_limit(0.7),
-        // Bloom::ANAMORPHIC,
-    ));
+    commands
+        .entity(*main_camera)
+        .insert((Shake::from_trauma_limit(0.7), Bloom::NATURAL));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

@@ -303,12 +303,15 @@ pub fn swarm_right() -> Formation {
             formation.with_children(|root| {
                 for i in 0..NUM_SWARM {
                     let x = (i as f32 - NUM_SWARM as f32 / 2.) * SWARM_GAP;
+                    let y = noise::simplex_noise_2d(Vec2::new(x + SWARM_OFFSET, 0.)) * 20.;
+                    let x_offset = noise::simplex_noise_2d(Vec2::new(x + SWARM_OFFSET, y)) * 5.;
+
                     root.spawn((
                         Swarm,
                         SwarmMovement::Left,
                         Platoon(root.target_entity()),
                         EmitterDelay::new(0.2 * i as f32),
-                        Transform::from_xyz(x + SWARM_OFFSET, 0., 0.),
+                        Transform::from_xyz(x + x_offset + SWARM_OFFSET, y, 0.),
                     ));
                 }
             });
@@ -323,12 +326,15 @@ pub fn swarm_left() -> Formation {
             formation.with_children(|root| {
                 for i in 0..NUM_SWARM {
                     let x = (i as f32 - NUM_SWARM as f32 / 2.) * SWARM_GAP;
+                    let y = noise::simplex_noise_2d(Vec2::new(x - SWARM_OFFSET, 0.)) * 20.;
+                    let x_offset = noise::simplex_noise_2d(Vec2::new(x - SWARM_OFFSET, y)) * 5.;
+
                     root.spawn((
                         Swarm,
                         SwarmMovement::Right,
                         Platoon(root.target_entity()),
                         EmitterDelay::new(0.2 * i as f32),
-                        Transform::from_xyz(x - SWARM_OFFSET, 0., 0.),
+                        Transform::from_xyz(x - x_offset - SWARM_OFFSET, y, 0.),
                     ));
                 }
             });

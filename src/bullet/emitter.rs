@@ -666,7 +666,7 @@ impl MissileEmitter {
             commands.spawn((
                 Missile,
                 HomingRotate,
-                ColorMod::Blue,
+                PlayerBullet,
                 LinearVelocity(target * PLAYER_MISSILE_SPEED * mods.speed),
                 new_transform.with_rotation(Quat::from_rotation_z(
                     target.to_angle() - PI / 2.0 + PI / 4.,

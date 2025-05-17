@@ -34,7 +34,6 @@ use bevy_tween::{
     tween::{IntoTarget, TargetResource},
 };
 use std::{
-    cmp::Ordering,
     f32::{self},
     time::Duration,
 };

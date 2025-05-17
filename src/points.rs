@@ -1,13 +1,13 @@
+use crate::color::HexColor;
+use crate::enemy::EnemyDeathEvent;
+use crate::text::flash_text;
+use crate::{GameState, RESOLUTION_SCALE};
+use bevy::prelude::*;
+use bevy_seedling::prelude::*;
 use std::usize;
 
-use crate::enemy::EnemyDeathEvent;
-use crate::{GameState, RESOLUTION_SCALE};
-use bevy::color::palettes::css::{WHITE, YELLOW};
-use bevy::prelude::*;
-use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
-use bevy_seedling::prelude::*;
-use bevy_tween::prelude::*;
-use bevy_tween::tween::apply_component_tween_system;
+pub const COLOR: HexColor = HexColor(0xfff540);
+pub const POINT_TEXT_Z: f32 = 500.;
 
 pub struct PointPlugin;
 
@@ -16,11 +16,7 @@ impl Plugin for PointPlugin {
         app.add_event::<PointEvent>()
             .insert_resource(Points(0))
             .add_systems(OnEnter(GameState::Restart), restart)
-            .add_systems(
-                PostUpdate,
-                (score_enemy_death, point_effects, update_point_text).chain(),
-            )
-            .add_tween_systems(apply_component_tween_system::<TextColorTween>);
+            .add_systems(PostUpdate, (score_enemy_death, point_effects).chain());
     }
 }
 
@@ -55,59 +51,6 @@ fn score_enemy_death(
     }
 }
 
-#[derive(Component)]
-pub struct PointText {
-    timer: Timer,
-    max: usize,
-    count: usize,
-    despawn: bool,
-    slide: bool,
-}
-
-impl Default for PointText {
-    fn default() -> Self {
-        Self {
-            timer: Timer::from_seconds(0.1, TimerMode::Repeating),
-            max: 8,
-            count: 0,
-            despawn: true,
-            slide: true,
-        }
-    }
-}
-
-impl PointText {
-    pub fn ui() -> Self {
-        Self {
-            max: usize::MAX,
-            despawn: false,
-            slide: false,
-            ..Default::default()
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Reflect)]
-struct TextColorTween {
-    start: Color,
-    end: Color,
-}
-
-impl Interpolator for TextColorTween {
-    type Item = TextColor;
-
-    fn interpolate(&self, item: &mut Self::Item, value: f32) {
-        item.0 = self.start.mix(&self.end, value)
-    }
-}
-
-fn text_color(start: impl Into<Color>, end: impl Into<Color>) -> TextColorTween {
-    TextColorTween {
-        start: start.into(),
-        end: end.into(),
-    }
-}
-
 fn point_effects(
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -126,48 +69,13 @@ fn point_effects(
 
     for event in reader.read() {
         points.0 += event.points;
-        commands.spawn((
-            HIGH_RES_LAYER,
-            Text2d::new(format!("+{}", event.points)),
-            TextFont {
-                font: server.load("fonts/gravity.ttf"),
-                font_size: 20.,
-                ..Default::default()
-            },
-            Transform::from_translation((event.position * RESOLUTION_SCALE).extend(500.)),
-            PointText::default(),
-        ));
-    }
-}
-
-fn update_point_text(
-    mut commands: Commands,
-    mut text: Query<(Entity, &mut PointText, &mut Transform, &mut TextColor)>,
-    time: Res<Time>,
-) {
-    for (entity, mut text, mut transform, mut color) in text.iter_mut() {
-        if text.slide {
-            transform.translation.y += 20. * time.delta_secs();
-        }
-
-        text.timer.tick(time.delta());
-        if text.timer.finished() {
-            text.count += 1;
-            if text.count >= text.max {
-                if text.despawn {
-                    commands.entity(entity).despawn();
-                } else {
-                    commands.entity(entity).remove::<PointText>();
-                }
-
-                color.0 = WHITE.into();
-            } else {
-                if color.to_srgba() == WHITE {
-                    color.0 = YELLOW.into();
-                } else {
-                    color.0 = WHITE.into();
-                }
-            }
-        }
+        flash_text(
+            &mut commands,
+            &server,
+            format!("+{}", event.points),
+            20.,
+            (event.position * RESOLUTION_SCALE).extend(POINT_TEXT_Z),
+            COLOR,
+        );
     }
 }

@@ -28,7 +28,7 @@ use crate::{
 };
 use avian2d::prelude::*;
 use bevy::{
-    color::palettes::css::{RED, WHITE, YELLOW},
+    color::palettes::css::{RED, YELLOW},
     ecs::{component::HookContext, world::DeferredWorld},
     prelude::*,
     time::TimeSystem,
@@ -36,12 +36,12 @@ use bevy::{
 use bevy_enoki::prelude::*;
 use bevy_optix::{debug::DebugRect, shake::TraumaCommands};
 use bevy_tween::{
-    interpolate::{rotation, sprite_color, translation},
+    interpolate::translation,
     prelude::{AnimationBuilderExt, EaseKind},
     tween::IntoTarget,
 };
 use rand::{Rng, seq::IteratorRandom};
-use std::{f32::consts::PI, ops::Range, time::Duration};
+use std::{ops::Range, time::Duration};
 use strum::IntoEnumIterator;
 
 pub mod formation;

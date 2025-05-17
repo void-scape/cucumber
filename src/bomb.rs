@@ -1,9 +1,11 @@
-use crate::GameState;
 use crate::bullet::{Bullet, PlayerBullet};
+use crate::color::HexColor;
 use crate::effects::{Explosion, SpawnExplosion};
 use crate::pickups::Bomb;
 use crate::player::{AliveContext, Player};
-use crate::points::PointEvent;
+use crate::points::{self, PointEvent};
+use crate::text::flash_text;
+use crate::{GameState, RESOLUTION_SCALE};
 use avian2d::prelude::CollidingEntities;
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
@@ -121,11 +123,13 @@ fn detonate(
 fn collect_bombs(
     mut commands: Commands,
     server: Res<AssetServer>,
-    player: Single<&CollidingEntities, With<Player>>,
+    player: Single<(&CollidingEntities, &Transform), With<Player>>,
     pickups: Query<&Bomb>,
     mut bombs: ResMut<Bombs>,
 ) {
-    for entity in player
+    let (entities, transform) = player.into_inner();
+
+    for entity in entities
         .iter()
         .copied()
         .filter(|entity| pickups.get(*entity).is_ok())
@@ -140,5 +144,15 @@ fn collect_bombs(
                 ..PlaybackSettings::ONCE
             },
         ));
+
+        flash_text(
+            &mut commands,
+            &server,
+            "BOMB",
+            24.,
+            ((transform.translation.xy() + Vec2::Y * 20.) * RESOLUTION_SCALE)
+                .extend(points::POINT_TEXT_Z + 1.),
+            HexColor(0xd41e3c),
+        );
     }
 }

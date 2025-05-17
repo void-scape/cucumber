@@ -11,7 +11,7 @@ pub const ENEMY_Z: f32 = 0.;
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
 #[cfg(debug_assertions)]
-const START_DELAY: f32 = 5.;
+const START_DELAY: f32 = 0.;
 
 pub fn start_waves(mut commands: Commands) {
     if crate::SKIP_WAVES {
@@ -42,7 +42,7 @@ pub fn start_waves(mut commands: Commands) {
                 (swarm_left(), 4.),
                 (swarm_right(), 0.),
                 (swarm_left(), 3.8),
-                (triple_wall(), 8.),
+                (triple_wall(), 5.),
                 (double_buck_shot(), 3.),
                 (quad_mine_thrower(), 4.),
                 (quad_mine_thrower().with(bomb), 18.),

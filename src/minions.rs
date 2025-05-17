@@ -6,11 +6,13 @@ use crate::bullet::emitter::{
 };
 use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
 use crate::bullet::{BulletTimer, Polarity};
+use crate::color::HexColor;
 use crate::effects::Blasters;
 use crate::pickups::{Collectable, Material, PickupEvent, PowerUp, Weapon};
 use crate::player::{AliveContext, PLAYER_SPEED, Player, PowerUpEvent, ShootAction, WeaponRack};
 use crate::sprites::{CellSize, TiltSprite};
-use crate::{GameState, Layer};
+use crate::text::flash_text;
+use crate::{GameState, Layer, RESOLUTION_SCALE, points};
 use avian2d::prelude::*;
 use bevy::color::palettes::css::LIGHT_BLUE;
 use bevy::platform::collections::HashSet;
@@ -149,7 +151,7 @@ fn miner_collect(
     mut commands: Commands,
     server: Res<AssetServer>,
     //miners: Query<&CollidingEntities, With<Miner>>,
-    player: Single<&CollidingEntities, With<Player>>,
+    player: Single<(&CollidingEntities, &Transform), With<Player>>,
     materials: Query<&Material>,
     pickups: Query<&PowerUp>,
     mut power_ups: EventWriter<PowerUpEvent>,
@@ -157,20 +159,31 @@ fn miner_collect(
     time: Res<Time>,
     mut timer: Local<(Stopwatch, usize)>,
 ) {
+    let (entities, transform) = player.into_inner();
     timer.0.tick(time.delta());
 
-    for entity in player
+    for entity in entities
         .iter()
         .copied()
         .filter(|entity| pickups.get(*entity).is_ok())
     {
         power_ups.write(PowerUpEvent);
         commands.entity(entity).despawn();
+
+        flash_text(
+            &mut commands,
+            &server,
+            "POWER-UP",
+            24.,
+            ((transform.translation.xy() + Vec2::Y * 20.) * RESOLUTION_SCALE)
+                .extend(points::POINT_TEXT_Z + 2.),
+            HexColor(0x3dff6e),
+        );
     }
 
     let mut despawned = HashSet::new();
     //for miner in miners.iter() {
-    for (entity, mat) in player
+    for (entity, mat) in entities
         .iter()
         .copied()
         .flat_map(|entity| materials.get(entity).map(|mat| (entity, mat)))

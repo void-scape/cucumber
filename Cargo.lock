@@ -2089,6 +2089,7 @@ dependencies = [
  "bevy_sequence",
  "bevy_textbox",
  "bevy_tween",
+ "noise 0.1.0",
  "physics",
  "rand 0.9.1",
  "strum 0.27.1",

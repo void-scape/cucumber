@@ -3,6 +3,8 @@ use crate::assets::MISC_PATH;
 use crate::health::Dead;
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
+use bevy::sprite::{AlphaMode2d, Material2d, Material2dPlugin};
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
 
@@ -10,7 +12,9 @@ pub struct EffectsPlugin;
 
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<SpawnExplosion>()
+        app.add_plugins(Material2dPlugin::<Lightning>::default())
+            .add_event::<SpawnExplosion>()
+            //.add_systems(Startup, lightning)
             .add_systems(
                 Update,
                 (
@@ -92,7 +96,7 @@ fn spawn_explosions(
                     ParticleSpawner::default(),
                     ParticleEffectHandle(server.load("particles/embers.ron")),
                     OneShot::Despawn,
-                    Transform::from_translation(event.position.extend(-100.)),
+                    Transform::from_translation(event.position.extend(-96.)),
                 ));
             }
             Explosion::Small => {
@@ -173,5 +177,65 @@ fn update_blasters(
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Asset, TypePath, AsBindGroup)]
+struct Lightning {
+    #[uniform(0)]
+    uniform: LightningUniform,
+    //#[texture(0)]
+    //#[sampler(1)]
+    //texture: Handle<Image>,
+    //#[uniform(2)]
+    //uv_offset: f32,
+    //#[uniform(3)]
+    //alpha: f32,
+    //#[uniform(4)]
+    //alpha_effect: f32,
+}
+
+fn lightning(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut mats: ResMut<Assets<Lightning>>,
+) {
+    let width = 200.;
+    let height = 200.;
+    commands.spawn((
+        //HIGH_RES_LAYER,
+        Mesh2d(meshes.add(Rectangle::new(width, height))),
+        MeshMaterial2d(mats.add(Lightning {
+            uniform: LightningUniform {
+                resolution: Vec2::new(width, height),
+                intensity: 2.,
+                branches: 0.3,
+                color: Color::srgb_u8(120, 215, 255).to_srgba().to_vec3(),
+                origin: Vec2::new(0.5, 1.),
+                target: Vec2::new(0.5, 0.),
+                width: 0.05,
+            },
+        })),
+    ));
+}
+
+#[derive(Clone, ShaderType)]
+struct LightningUniform {
+    resolution: Vec2,
+    intensity: f32,
+    branches: f32,
+    color: Vec3,
+    origin: Vec2,
+    target: Vec2,
+    width: f32,
+}
+
+impl Material2d for Lightning {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/lightning.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
     }
 }

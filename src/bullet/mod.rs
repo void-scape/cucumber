@@ -1,5 +1,5 @@
 use self::{
-    emitter::{BULLET_DAMAGE, BULLET_SPEED, MINE_HEALTH, MISSILE_HEALTH, PLAYER_BULLET_SPEED},
+    emitter::{BULLET_DAMAGE, MINE_HEALTH, MISSILE_HEALTH, PLAYER_BULLET_SPEED},
     homing::HomingRotate,
 };
 use crate::{
@@ -10,11 +10,10 @@ use crate::{
     bounds::WallDespawn,
     effects::{AlwaysBlast, Blasters, Explosion, SpawnExplosion},
     health::{Damage, DamageEvent, Dead, Health},
-    particles::ParticleEmitter,
     player::Player,
     points::PointEvent,
     sprites::{self, CellSize},
-    tween::{DespawnTweenFinish, OnEnd},
+    tween::OnEnd,
 };
 use avian2d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
@@ -24,10 +23,6 @@ use bevy::{
     sprite::Anchor,
 };
 use bevy_enoki::{ParticleEffectHandle, ParticleSpawner};
-use bevy_seedling::{
-    prelude::Volume,
-    sample::{PlaybackSettings, SamplePlayer},
-};
 use bevy_tween::{
     interpolate::sprite_color,
     prelude::{AnimationBuilderExt, EaseKind, Repeat, RepeatStyle},
@@ -39,6 +34,9 @@ use strum_macros::EnumIter;
 
 pub mod emitter;
 pub mod homing;
+
+const GRAZE_DIST: f32 = 15.;
+const GRAZE_POINTS: usize = 5;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum BulletSystems {
@@ -55,7 +53,7 @@ impl Plugin for BulletPlugin {
             .add_event::<BulletCollisionEvent>()
             .add_systems(
                 PostUpdate,
-                (handle_bullet_collision, despawn_dead_bullets)
+                (grazing, handle_bullet_collision, despawn_dead_bullets)
                     .chain()
                     .in_set(BulletSystems::Collision),
             )
@@ -334,6 +332,28 @@ pub struct BlueOrb;
 #[derive(Default, Component)]
 #[require(CollidingEntities, RigidBody::Kinematic, Sensor)]
 pub struct Destructable;
+
+#[derive(Component)]
+struct Grazed;
+
+fn grazing(
+    mut commands: Commands,
+    mut writer: EventWriter<PointEvent>,
+    player: Single<&Transform, With<Player>>,
+    bullets: Query<(Entity, &Transform), (With<Bullet>, Without<PlayerBullet>, Without<Grazed>)>,
+) {
+    let pp = player.translation.xy();
+    for (entity, transform) in bullets.iter() {
+        let position = transform.translation.xy();
+        if position.distance(pp) < GRAZE_DIST {
+            commands.entity(entity).insert(Grazed);
+            writer.write(PointEvent {
+                points: GRAZE_POINTS,
+                position,
+            });
+        }
+    }
+}
 
 fn handle_bullet_collision(
     bullets: Query<(Entity, &Damage, &GlobalTransform, &CollisionLayers), With<Bullet>>,
