@@ -9,7 +9,7 @@ use crate::bullet::{BulletTimer, Polarity};
 use crate::color::HexColor;
 use crate::effects::Blasters;
 use crate::pickups::{Collectable, Material, PickupEvent, PowerUp, Weapon};
-use crate::player::{AliveContext, PLAYER_SPEED, Player, PowerUpEvent, ShootAction, WeaponRack};
+use crate::player::{AliveContext, NormalShot, PLAYER_SPEED, Player, PowerUpEvent, WeaponRack};
 use crate::sprites::{CellSize, TiltSprite};
 use crate::text::flash_text;
 use crate::{GameState, Layer, RESOLUTION_SCALE, points};
@@ -228,7 +228,7 @@ fn suck_materials(
 ) {
     let (transform, actions) = player.into_inner();
     let pp = transform.translation.xy();
-    let threshold = if actions.action::<ShootAction>().state() == ActionState::Fired {
+    let threshold = if actions.action::<NormalShot>().state() == ActionState::Fired {
         SUCK_DIST
     } else {
         NO_SHOT_SUCK_DIST
@@ -317,7 +317,7 @@ fn spawn_gunners(
 ) {
     if rack.is_changed() && gunners.is_empty() {
         if let Some(weapon) = rack.selection() {
-            let enabled = actions.action::<ShootAction>().state() == ActionState::Fired;
+            let enabled = actions.action::<NormalShot>().state() == ActionState::Fired;
             spawn_gunner(&mut commands, *player, weapon, GunnerAnchor::Left, enabled);
             spawn_gunner(
                 &mut commands,
@@ -332,7 +332,7 @@ fn spawn_gunners(
         match rack.selection() {
             Some(w) => {
                 for (_, mut weapon, _) in gunners.iter_mut() {
-                    weapon.enabled = actions.action::<ShootAction>().state() == ActionState::Fired;
+                    weapon.enabled = actions.action::<NormalShot>().state() == ActionState::Fired;
                     weapon.weapon = w;
                 }
             }

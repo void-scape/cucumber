@@ -212,7 +212,7 @@ impl Player {
     fn on_add(mut world: DeferredWorld, ctx: HookContext) {
         world.commands().queue(move |world: &mut World| {
             world
-                .run_system_once(move |mut commands: Commands, server: Res<AssetServer>| {
+                .run_system_once(move |mut commands: Commands| {
                     let mut actions = Actions::<AliveContext>::default();
                     actions.bind::<MoveAction>().to((
                         Cardinal::wasd_keys(),
@@ -223,7 +223,7 @@ impl Player {
                         ),
                     ));
 
-                    actions.bind::<ShootAction>().to((
+                    actions.bind::<NormalShot>().to((
                         KeyCode::Space,
                         GamepadButton::RightTrigger,
                         GamepadButton::RightTrigger2,
@@ -294,7 +294,11 @@ fn stop_movement(
 
 #[derive(Debug, InputAction)]
 #[input_action(output = bool, consume_input = false)]
-pub struct ShootAction;
+pub struct NormalShot;
+
+#[derive(Debug, InputAction)]
+#[input_action(output = bool, consume_input = false)]
+pub struct FocusShot;
 
 #[derive(Component)]
 struct MGEffects;
@@ -306,7 +310,7 @@ struct MGSound;
 pub struct PlayerEmitter;
 
 fn enable_emitters(
-    _: Trigger<Started<ShootAction>>,
+    _: Trigger<Started<NormalShot>>,
     mut commands: Commands,
     server: Res<AssetServer>,
     player_emitter: Single<(&mut EmitterState, &mut BulletTimer), With<PlayerEmitter>>,
@@ -335,7 +339,7 @@ fn enable_emitters(
 }
 
 fn disable_emitters(
-    _: Trigger<Completed<ShootAction>>,
+    _: Trigger<Completed<NormalShot>>,
     mut commands: Commands,
     mut player_emitter: Single<&mut EmitterState, With<PlayerEmitter>>,
     mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
@@ -467,7 +471,7 @@ fn switch_emitters(
                 changed = true;
             }
             weapon.weapon = next;
-            weapon.enabled = player.action::<ShootAction>().state() == ActionState::Fired;
+            weapon.enabled = player.action::<NormalShot>().state() == ActionState::Fired;
         }
     }
 
