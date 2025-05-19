@@ -1,5 +1,5 @@
 use super::swarm::{SWARM_SPEED, SwarmAnchor, SwarmFormation, SwarmHeading, swarm};
-use super::{formation::*, swarm};
+use super::{buckshot, formation::*, swarm};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -25,6 +25,7 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
+<<<<<<< HEAD
                 // // (
                 // //     swarm(SwarmFormation {
                 // //         start: TOP,
@@ -49,6 +50,26 @@ pub fn start_waves(mut commands: Commands) {
                 //     //}),
                 //     3.,
                 // ),
+=======
+                //(
+                //    swarm(SwarmFormation {
+                //        start: TOP,
+                //        anchor: SwarmAnchor::Center,
+                //        heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
+                //        //count: 5,
+                //        //gap: 15.,
+                //        ..Default::default()
+                //    }),
+                //    2.,
+                //),
+                (swarm::three(), 3.),
+                (swarm::right_swing(), 1.),
+                (swarm::left_swing(), 1.),
+                (buckshot::double_buck_shot(), 1.),
+                (swarm::right_swing(), 1.),
+                (swarm::left_swing(), 1.),
+                //(double_wall(), 1.),
+>>>>>>> fbb4f9f (Pulled out buckshot and waller)
                 //
                 (scout(Vec2::new(0., -45.)), 0.),
                 //(swarm_right(), 0.),

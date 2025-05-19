@@ -4,15 +4,15 @@ use self::{
     timeline::{ENEMY_Z, LARGEST_SPRITE_SIZE},
 };
 use crate::{
-    Avian, DespawnRestart, GameState, Layer, assets,
+    DespawnRestart, GameState, Layer, assets,
     asteroids::SpawnCluster,
     auto_collider::ImageCollider,
     background::LAYER2,
     bullet::{
         Destructable, Direction,
         emitter::{
-            BuckShotEmitter, BulletModifiers, CrisscrossEmitter, MineEmitter, Rate,
-            SpiralOrbEmitter, SwarmEmitter, TargetPlayer, WallEmitter,
+            BulletModifiers, CrisscrossEmitter, MineEmitter, SpiralOrbEmitter, TargetPlayer,
+            WallEmitter,
         },
     },
     effects::Explosion,
@@ -40,13 +40,15 @@ use bevy_tween::{
     tween::IntoTarget,
 };
 use rand::{Rng, seq::IteratorRandom};
-use std::{ops::Range, time::Duration};
+use std::{f32::consts::PI, ops::Range, time::Duration};
 use strum::IntoEnumIterator;
 
+pub mod buckshot;
 pub mod formation;
 pub mod movement;
 pub mod swarm;
 pub mod timeline;
+pub mod waller;
 
 pub struct EnemyPlugin;
 
@@ -55,13 +57,12 @@ impl Plugin for EnemyPlugin {
         app.add_event::<EnemyDeathEvent>()
             .add_plugins((FormationPlugin, MovementPlugin))
             .add_systems(OnEnter(GameState::Game), timeline::start_waves)
-            .add_systems(Avian, swarm::swarm_movement)
             .add_systems(
                 Update,
                 (
                     timeline::update_waves.before(FormationSet),
                     (add_low_health_effects, death_effects),
-                    face_player,
+                    (face_player, face_velocity),
                 )
                     .chain()
                     .run_if(in_state(GameState::Game)),
@@ -81,92 +82,14 @@ impl Plugin for EnemyPlugin {
 // #############
 
 #[derive(Default, Component)]
-#[require(Transform, Visibility, Destructable, Trauma)]
+#[require(
+    Transform,
+    Visibility,
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
+    Destructable,
+    Trauma,
+)]
 pub struct Enemy;
-
-#[derive(Default, Clone, Copy, Component)]
-#[require(
-    Enemy,
-    Collider::rectangle(12., 12.),
-    SpriteBundle = Self::sprites(),
-    Health::full(20.),
-    LowHealthEffects,
-    EnemySprite16::cell(UVec2::new(4, 4)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    BuckShotEmitter,
-    BulletModifiers {
-        speed: 1.,
-        ..Default::default()
-    },
-    Drops::splat(8),
-    Explosion::Big,
-    FacePlayer,
-)]
-pub struct BuckShot;
-
-impl BuckShot {
-    fn sprites() -> SpriteBundle {
-        SpriteBundle::new([
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(3, 1),
-                z: 0.,
-            }),
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(3, 2),
-                z: 1.,
-            }),
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(3, 3),
-                z: -1.,
-            }),
-        ])
-    }
-}
-
-#[derive(Default, Component)]
-#[require(
-    Enemy,
-    Collider::rectangle(12., 12.),
-    SpriteBundle = Self::sprites(),
-    Health::full(20.),
-    LowHealthEffects,
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    WallEmitter,
-    TargetPlayer,
-    BulletModifiers {
-        speed: 0.8,
-        ..Default::default()
-    },
-    Drops::splat(8),
-    Explosion::Big,
-    FacePlayer,
-)]
-pub struct WallShooter;
-
-impl WallShooter {
-    fn sprites() -> SpriteBundle {
-        SpriteBundle::new([
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(1, 1),
-                z: 0.,
-            }),
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(1, 2),
-                z: -1.,
-            }),
-        ])
-    }
-}
 
 #[derive(Default, Clone, Copy, Component)]
 #[require(
@@ -550,6 +473,25 @@ fn face_player(
             ang_vel.0 = normalized_angle * 100. * time.delta_secs();
         } else {
             ang_vel.0 = 0.;
+        }
+    }
+}
+
+#[derive(Default, Component)]
+#[require(AngularVelocity)]
+struct FaceVelocity;
+
+fn face_velocity(
+    mut entities: Query<
+        (&mut Rotation, &LinearVelocity),
+        (With<FaceVelocity>, Changed<LinearVelocity>),
+    >,
+) {
+    for (mut rotation, velocity) in entities.iter_mut() {
+        if velocity.0 == Vec2::ZERO {
+            *rotation = Rotation::radians(Vec2::NEG_Y.to_angle() + PI / 2.);
+        } else {
+            *rotation = Rotation::radians(velocity.to_angle() + PI / 2.);
         }
     }
 }

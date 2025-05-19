@@ -191,7 +191,7 @@ fn handle_powerups(
     Transform,
     Visibility,
     LinearVelocity,
-    Shield::full(PLAYER_SHIELD),
+    Shield::full(0.),
     Health::full(PLAYER_HEALTH),
     RigidBody::Dynamic,
     Collider::rectangle(2., 2.),

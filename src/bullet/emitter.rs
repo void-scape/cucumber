@@ -1573,9 +1573,11 @@ impl SwarmEmitter {
 
             let duration = mods.rate.duration(BULLET_RATE);
             let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
+                let mut timer = BulletTimer {
                     timer: Timer::new(duration, TimerMode::Repeating),
-                });
+                };
+                timer.timer.set_elapsed(timer.timer.duration());
+                commands.entity(entity).insert(timer);
                 continue;
             };
 

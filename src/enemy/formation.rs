@@ -1,6 +1,7 @@
-use super::timeline::LARGEST_SPRITE_SIZE;
-use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, timeline::WaveTimeline};
-use super::{InvincibleLaserNode, WallShooter};
+use super::InvincibleLaserNode;
+use super::timeline::WaveTimeline;
+use super::waller::Waller;
+use super::{CrissCross, MineThrower, OrbSlinger};
 use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
 use crate::pickups::{Bomb, Pickup, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
@@ -165,58 +166,16 @@ pub fn quad_mine_thrower() -> Formation {
     })
 }
 
-pub fn double_buck_shot() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, server: &AssetServer| {
-        formation.with_children(|root| {
-            let platoon = root.target_entity();
-
-            animate_entrance(
-                &server,
-                &mut root.commands(),
-                (
-                    ChildOf(platoon),
-                    BuckShot,
-                    Platoon(platoon),
-                    Transform::from_xyz(-30., 0., 0.),
-                ),
-                None,
-                1.5,
-                Vec3::new(-crate::WIDTH / 2. - LARGEST_SPRITE_SIZE / 2., 0., 0.),
-                Vec3::new(-30., -10., 0.),
-                Quat::from_rotation_z(PI / 4.) + Quat::from_rotation_x(PI / 4.),
-                Quat::default(),
-            );
-
-            animate_entrance(
-                &server,
-                &mut root.commands(),
-                (
-                    ChildOf(platoon),
-                    BuckShot,
-                    Platoon(platoon),
-                    Transform::from_xyz(-30., 0., 0.),
-                ),
-                Some(1.),
-                1.5,
-                Vec3::new(-crate::WIDTH / 2. - LARGEST_SPRITE_SIZE / 2., 0., 0.),
-                Vec3::new(30., -10., 0.),
-                Quat::from_rotation_z(PI / 3.) + Quat::from_rotation_x(PI / 4.),
-                Quat::default(),
-            );
-        });
-    })
-}
-
 pub fn double_wall() -> Formation {
     Formation::new(|formation: &mut EntityCommands, _| {
         formation.insert(children![
             (
-                WallShooter,
+                Waller,
                 Platoon(formation.id()),
                 Transform::from_xyz(-45., 0., 0.)
             ),
             (
-                WallShooter,
+                Waller,
                 Platoon(formation.id()),
                 Transform::from_xyz(45., 0., 0.)
             ),
@@ -228,19 +187,19 @@ pub fn triple_wall() -> Formation {
     Formation::new(|formation: &mut EntityCommands, _| {
         formation.insert(children![
             (
-                WallShooter,
+                Waller,
                 WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
                 Transform::from_xyz(-40., 0., 0.)
             ),
             (
-                WallShooter,
+                Waller,
                 WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
                 Transform::from_xyz(0., 20., 0.)
             ),
             (
-                WallShooter,
+                Waller,
                 WallEmitter::from_bullets(3),
                 Platoon(formation.id()),
                 Transform::from_xyz(40., 0., 0.)
@@ -593,7 +552,7 @@ fn despawn_formations(
     //}
 }
 
-fn animate_entrance(
+pub fn animate_entrance(
     server: &AssetServer,
     commands: &mut Commands,
     bundle: impl Bundle + Clone,
