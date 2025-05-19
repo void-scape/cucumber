@@ -25,55 +25,16 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
-<<<<<<< HEAD
-                // // (
-                // //     swarm(SwarmFormation {
-                // //         start: TOP,
-                // //         anchor: SwarmAnchor::Center,
-                // //         heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
-                // //         //count: 5,
-                // //         //gap: 15.,
-                // //         ..Default::default()
-                // //     }),
-                // //     2.,
-                // // ),
-                // (
-                //     swarm::left_swing(),
-                //     //swarm(SwarmFormation {
-                //     //    start: TOP_LEFT,
-                //     //    anchor: SwarmAnchor::Left,
-                //     //    heading: SwarmHeading::Linear(Vec2::from_angle(-PI / 6.) * SWARM_SPEED),
-                //     //    count: 15,
-                //     //    noise: Vec2::new(3., 8.),
-                //     //    //gap: 15.,
-                //     //    ..Default::default()
-                //     //}),
-                //     3.,
-                // ),
-=======
-                //(
-                //    swarm(SwarmFormation {
-                //        start: TOP,
-                //        anchor: SwarmAnchor::Center,
-                //        heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
-                //        //count: 5,
-                //        //gap: 15.,
-                //        ..Default::default()
-                //    }),
-                //    2.,
-                //),
+                //
                 (swarm::three(), 3.),
                 (swarm::right_swing(), 1.),
                 (swarm::left_swing(), 1.),
                 (buckshot::double_buck_shot(), 1.),
+                (scout(Vec2::new(0., -45.)), 2.),
                 (swarm::right_swing(), 1.),
                 (swarm::left_swing(), 1.),
                 //(double_wall(), 1.),
->>>>>>> fbb4f9f (Pulled out buckshot and waller)
                 //
-                (scout(Vec2::new(0., -45.)), 0.),
-                //(swarm_right(), 0.),
-                //(swarm_left(), 2.),
 
                 //(swarm_right(), 0.),
                 //(swarm_left(), 2.),

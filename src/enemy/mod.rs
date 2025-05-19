@@ -11,8 +11,8 @@ use crate::{
     bullet::{
         Destructable, Direction,
         emitter::{
-            BulletModifiers, CrisscrossEmitter, MineEmitter, SpiralOrbEmitter, TargetPlayer,
-            WallEmitter,
+            BulletModifiers, CrisscrossEmitter, MineEmitter, Rate, SpiralOrbEmitter, SwarmEmitter,
+            TargetPlayer, WallEmitter,
         },
     },
     effects::Explosion,
