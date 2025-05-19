@@ -30,9 +30,9 @@ pub fn start_waves(mut commands: Commands) {
                 (swarm::right_swing(), 1.),
                 (swarm::left_swing(), 1.),
                 (buckshot::double_buck_shot(), 1.),
-                (scout(Vec2::new(0., -45.)), 2.),
+                (scout(Vec2::new(0., -45.)), 3.),
                 (swarm::right_swing(), 1.),
-                (swarm::left_swing(), 1.),
+                (swarm::left_swing().with(powerup), 1.),
                 //(double_wall(), 1.),
                 //
 

@@ -190,7 +190,7 @@ fn play_samples(
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Component)]
 pub struct EmitterDelay(Timer);
 
 impl EmitterDelay {
@@ -1078,7 +1078,7 @@ impl PulseTimer {
 
     pub fn reset_active(&mut self) {
         self.state = PulseState::Bullet(0);
-        self.bullet.reset();
+        self.bullet.set_elapsed(self.bullet.duration());
     }
 
     pub fn current_pulse(&self) -> usize {
@@ -1287,7 +1287,7 @@ impl CrisscrossEmitter {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
+#[require(Transform, BulletModifiers)]
 pub struct BuckShotEmitter {
     waves: usize,
     shot_dur: f32,
@@ -1336,7 +1336,6 @@ impl BuckShotEmitter {
                 &mut BuckShotEmitter,
                 Option<&mut PulseTimer>,
                 &BulletModifiers,
-                &Polarity,
                 &ChildOf,
                 &GlobalTransform,
             ),
@@ -1348,19 +1347,17 @@ impl BuckShotEmitter {
         mut writer: EventWriter<EmitterSample>,
         mut commands: Commands,
     ) {
-        for (entity, emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+        for (entity, emitter, timer, mods, parent, transform) in emitters.iter_mut() {
             let Ok(parent_mods) = parents.get(parent.parent()) else {
                 continue;
             };
             let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
 
             let Some(mut timer) = timer else {
-                commands.entity(entity).insert(PulseTimer::new(
-                    mods.rate,
-                    emitter.wait_dur,
-                    emitter.shot_dur,
-                    emitter.waves,
-                ));
+                let mut timer =
+                    PulseTimer::new(mods.rate, emitter.wait_dur, emitter.shot_dur, emitter.waves);
+                timer.reset_active();
+                commands.entity(entity).insert(timer);
                 continue;
             };
 

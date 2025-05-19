@@ -6,6 +6,7 @@ use super::formation::Platoon;
 use super::formation::animate_entrance;
 use super::timeline::LARGEST_SPRITE_SIZE;
 use crate::bullet::emitter::BuckShotEmitter;
+use crate::bullet::emitter::EmitterDelay;
 use crate::sprites::CellSize;
 use crate::sprites::MultiSprite;
 use crate::sprites::SpriteBundle;
@@ -68,9 +69,11 @@ pub fn double_buck_shot() -> Formation {
                 &mut root.commands(),
                 (
                     ChildOf(platoon),
+                    EmitterDelay::new(1.5),
                     BuckShot,
                     Platoon(platoon),
                     Transform::from_xyz(-30., 0., 0.),
+                    ColliderDisabled,
                 ),
                 None,
                 1.5,
@@ -85,9 +88,11 @@ pub fn double_buck_shot() -> Formation {
                 &mut root.commands(),
                 (
                     ChildOf(platoon),
+                    EmitterDelay::new(1.5),
                     BuckShot,
                     Platoon(platoon),
                     Transform::from_xyz(-30., 0., 0.),
+                    ColliderDisabled,
                 ),
                 Some(1.),
                 1.5,

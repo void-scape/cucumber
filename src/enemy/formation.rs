@@ -3,9 +3,9 @@ use super::timeline::WaveTimeline;
 use super::waller::Waller;
 use super::{CrissCross, MineThrower, OrbSlinger};
 use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
-use crate::pickups::{Bomb, Pickup, Weapon};
+use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
-use avian2d::prelude::Physics;
+use avian2d::prelude::{ColliderDisabled, Physics};
 use bevy::color::palettes::css::WHITE;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -75,22 +75,6 @@ impl Formation {
         self.modifiers.push(Box::new(modifier));
         self
     }
-}
-
-#[derive(Component)]
-struct DropOption(Weapon);
-
-pub fn option(weapon: Weapon) -> impl FnMut(&mut EntityCommands) + 'static {
-    move |commands| {
-        commands.insert(DropOption(weapon));
-    }
-}
-
-#[derive(Component)]
-struct DropBomb;
-
-pub fn bomb(commands: &mut EntityCommands) {
-    commands.insert(DropBomb);
 }
 
 pub fn quad_mine_thrower() -> Formation {
@@ -497,30 +481,58 @@ fn update_formations(
 //    }
 //}
 
+#[derive(Component)]
+struct DropOption(Weapon);
+
+pub fn option(weapon: Weapon) -> impl FnMut(&mut EntityCommands) + 'static {
+    move |commands| {
+        commands.insert(DropOption(weapon));
+    }
+}
+
+#[derive(Component)]
+struct DropBomb;
+
+pub fn bomb(commands: &mut EntityCommands) {
+    commands.insert(DropBomb);
+}
+
+#[derive(Component)]
+struct DropPowerup;
+
+pub fn powerup(commands: &mut EntityCommands) {
+    commands.insert(DropPowerup);
+}
+
 fn despawn_formations(
     mut commands: Commands,
     formations: Query<
-        (Entity, &UnitDeaths, Option<&DropOption>, Option<&DropBomb>),
+        (
+            Entity,
+            &UnitDeaths,
+            Option<&DropOption>,
+            Option<&DropBomb>,
+            Option<&DropPowerup>,
+        ),
         (With<FormationEntity>, Without<Units>),
     >,
     //formations: Query<(Entity, &UnitDeaths), (With<Formation>, Without<Units>)>,
     //off_screen: Query<(Entity, &Transform, &Formation)>,
 ) {
     //let mut rng = rand::rng();
-    for (entity, deaths, option, bomb) in formations.iter() {
+    for (entity, deaths, option, bomb, powerup) in formations.iter() {
         commands.entity(entity).despawn();
+
+        let transform =
+            Transform::from_translation(deaths.last_death_position().unwrap().extend(1.));
         if let Some(drop) = option {
-            commands.spawn((
-                Pickup::Weapon(drop.0),
-                drop.0,
-                Transform::from_translation(deaths.last_death_position().unwrap().extend(1.)),
-            ));
+            commands.spawn((Pickup::Weapon(drop.0), drop.0, transform));
         }
         if bomb.is_some() {
-            commands.spawn((
-                Bomb,
-                Transform::from_translation(deaths.last_death_position().unwrap().extend(1.)),
-            ));
+            commands.spawn((Bomb, transform));
+        }
+        if powerup.is_some() {
+            commands.spawn((PowerUp, transform));
         }
 
         //if rng.random_bool(0.75) {
@@ -624,6 +636,10 @@ fn animate_entrance_inner(
         move |mut commands: Commands,
               mut states: Query<&mut ParticleSpawnerState>,
               server: Res<AssetServer>| {
+            if let Ok(mut entity) = commands.get_entity(id) {
+                entity.remove::<ColliderDisabled>();
+            }
+
             if let Ok(mut state) = states.get_mut(trail) {
                 state.active = false;
             }
