@@ -2,7 +2,8 @@ use crate::{
     Avian, DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
     bullet::{
         BulletTimer,
-        emitter::{BulletModifiers, EmitterState, GattlingEmitter},
+        emitter::{BulletModifiers, EmitterState, GattlingEmitter, PulseTimer},
+        player::{PlayerFocusEmitter, PlayerGattlingEmitter},
     },
     effects::{Blasters, Explosion},
     end,
@@ -41,7 +42,8 @@ use std::{
 pub const PLAYER_HEALTH: f32 = 3.0;
 pub const PLAYER_SHIELD: f32 = 1.0;
 const PLAYER_EASE_DUR: f32 = 1.;
-pub const PLAYER_SPEED: f32 = 80.;
+pub const PLAYER_SPEED: f32 = 90.;
+pub const PLAYER_FOCUS_SPEED: f32 = 60.;
 
 pub struct PlayerPlugin;
 
@@ -55,6 +57,7 @@ impl Plugin for PlayerPlugin {
                 Update,
                 (
                     zero_rotation,
+                    update_emitters,
                     (handle_pickups, handle_powerups, enemy_collision)
                         .run_if(in_state(GameState::Game)),
                 ),
@@ -69,9 +72,13 @@ impl Plugin for PlayerPlugin {
             .add_input_context::<AliveContext>()
             .add_observer(apply_movement)
             .add_observer(stop_movement)
-            .add_observer(enable_emitters)
-            .add_observer(disable_emitters)
-            .add_observer(switch_emitters);
+            .add_observer(start_normal_shot)
+            .add_observer(end_normal_shot)
+            .add_observer(start_focus_shot)
+            .add_observer(end_focus_shot);
+        //.add_observer(enable_emitters)
+        //.add_observer(disable_emitters)
+        //.add_observer(switch_emitters);
     }
 }
 
@@ -85,9 +92,13 @@ fn spawn_player(mut commands: Commands) {
             Blasters(const { &[Vec3::new(0., -6., -1.)] }),
         ))
         .with_child((
-            GattlingEmitter::default(),
+            PlayerGattlingEmitter::default(),
             PlayerEmitter,
             EmitterState { enabled: false },
+            BulletModifiers {
+                speed: 0.8,
+                ..Default::default()
+            },
         ))
         .id();
 
@@ -133,7 +144,13 @@ fn enemy_collision(
 pub struct PowerUpEvent;
 
 #[derive(Default, Resource)]
-struct PowerUps(usize);
+pub struct PowerUps(usize);
+
+impl PowerUps {
+    pub fn get(&self) -> usize {
+        self.0
+    }
+}
 
 fn handle_powerups(
     mut commands: Commands,
@@ -141,7 +158,13 @@ fn handle_powerups(
     mut power_ups: ResMut<PowerUps>,
     mut reader: EventReader<PowerUpEvent>,
     mut player: Single<&mut BulletModifiers, With<Player>>,
+    #[cfg(debug_assertions)] input: Res<ButtonInput<KeyCode>>,
 ) {
+    #[cfg(debug_assertions)]
+    if input.just_pressed(KeyCode::Digit9) {
+        power_ups.0 += 1;
+    }
+
     for _ in reader.read() {
         commands.spawn((
             SamplePlayer::new(server.load("audio/sfx/ring.wav")),
@@ -153,19 +176,20 @@ fn handle_powerups(
 
         power_ups.0 += 1;
 
-        match power_ups.0 {
-            0 => unreachable!(),
-            1..=4 => {
-                player.damage += 0.1;
-            }
-            _ => error!("power up [{}] not handled", power_ups.0),
-        }
+        //match power_ups.0 {
+        //    0 => unreachable!(),
+        //    1..=4 => {
+        //        player.damage += 0.1;
+        //    }
+        //    _ => error!("power up [{}] not handled", power_ups.0),
+        //}
     }
 }
 
 #[derive(Component)]
 #[require(
     Transform,
+    Visibility,
     LinearVelocity,
     Shield::full(PLAYER_SHIELD),
     Health::full(PLAYER_HEALTH),
@@ -177,6 +201,7 @@ fn handle_powerups(
     DespawnRestart,
     CollisionLayers = Self::layers(),
     Explosion::Big,
+    ActiveShot::default(),
 )]
 #[component(on_add = Self::on_add)]
 pub struct Player;
@@ -223,15 +248,17 @@ impl Player {
                         ),
                     ));
 
-                    actions.bind::<NormalShot>().to((
-                        KeyCode::Space,
-                        GamepadButton::RightTrigger,
-                        GamepadButton::RightTrigger2,
-                    ));
+                    actions
+                        .bind::<NormalShot>()
+                        .to((KeyCode::KeyJ, GamepadButton::South));
 
                     actions
-                        .bind::<SwitchGunAction>()
-                        .to((KeyCode::ShiftLeft, GamepadButton::South));
+                        .bind::<FocusShot>()
+                        .to((KeyCode::KeyK, GamepadButton::West));
+
+                    //actions
+                    //    .bind::<SwitchGunAction>()
+                    //    .to((KeyCode::ShiftLeft, GamepadButton::South));
 
                     //    Ordering::Less => (Vec2::new(0., 5.), Vec2::new(1., 6.)),
                     //    Ordering::Greater => (Vec2::new(2., 5.), Vec2::new(3., 6.)),
@@ -272,12 +299,19 @@ pub struct BlockControls;
 
 fn apply_movement(
     trigger: Trigger<Fired<MoveAction>>,
-    player: Single<(&mut LinearVelocity, Option<&BlockControls>), With<Player>>,
+    player: Single<(&mut LinearVelocity, &ActiveShot, Option<&BlockControls>), With<Player>>,
 ) {
-    let (mut velocity, blocked) = player.into_inner();
+    let (mut velocity, active_shot, blocked) = player.into_inner();
 
     if blocked.is_none() {
-        velocity.0 = trigger.value.clamp_length(0., 1.) * PLAYER_SPEED;
+        let speed = match active_shot.0.last() {
+            Some(kind) => match kind {
+                ShotKind::Normal => PLAYER_SPEED,
+                ShotKind::Focus => PLAYER_FOCUS_SPEED,
+            },
+            None => PLAYER_SPEED,
+        };
+        velocity.0 = trigger.value.clamp_length(0., 1.) * speed;
     }
 
     if velocity.0.x != 0.0 && velocity.0.x.abs() < f32::EPSILON {
@@ -292,11 +326,11 @@ fn stop_movement(
     velocity.0 = Vec2::default();
 }
 
-#[derive(Debug, InputAction)]
+#[derive(Debug, InputAction, Component)]
 #[input_action(output = bool, consume_input = false)]
 pub struct NormalShot;
 
-#[derive(Debug, InputAction)]
+#[derive(Debug, InputAction, Component)]
 #[input_action(output = bool, consume_input = false)]
 pub struct FocusShot;
 
@@ -309,48 +343,138 @@ struct MGSound;
 #[derive(Default, Component)]
 pub struct PlayerEmitter;
 
-fn enable_emitters(
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ShotKind {
+    Normal,
+    Focus,
+}
+
+#[derive(Default, Component)]
+struct ActiveShot(Vec<ShotKind>);
+
+fn start_normal_shot(
     _: Trigger<Started<NormalShot>>,
+    mut active: Single<&mut ActiveShot, With<Player>>,
+) {
+    active.0.push(ShotKind::Normal);
+}
+
+fn end_normal_shot(
+    _: Trigger<Completed<NormalShot>>,
+    mut active: Single<&mut ActiveShot, With<Player>>,
+) {
+    active.0.retain(|shot| *shot != ShotKind::Normal);
+}
+
+fn start_focus_shot(
+    _: Trigger<Started<FocusShot>>,
+    mut active: Single<&mut ActiveShot, With<Player>>,
+) {
+    active.0.push(ShotKind::Focus);
+}
+
+fn end_focus_shot(
+    _: Trigger<Completed<FocusShot>>,
+    mut active: Single<&mut ActiveShot, With<Player>>,
+) {
+    active.0.retain(|shot| *shot != ShotKind::Focus);
+}
+
+fn update_emitters(
     mut commands: Commands,
     server: Res<AssetServer>,
-    player_emitter: Single<(&mut EmitterState, &mut BulletTimer), With<PlayerEmitter>>,
-    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
-    player: Single<Entity, With<Player>>,
+    player: Single<(Entity, &ActiveShot, Option<&Children>), (With<Player>, Changed<ActiveShot>)>,
+    emitter: Query<Entity, With<PlayerEmitter>>,
+    sound: Option<Single<Entity, With<MGSound>>>,
 ) {
-    let (mut state, mut timer) = player_emitter.into_inner();
-    state.enabled = true;
-    let duration = timer.timer.duration();
-    timer.timer.set_elapsed(duration);
+    let (player, active, children) = player.into_inner();
 
-    for mut weapon in weapons.iter_mut() {
-        weapon.enabled = true;
+    if let Some(children) = children {
+        for entity in emitter.iter_many(children) {
+            commands.entity(entity).despawn();
+        }
     }
 
-    commands.spawn((
-        MGSound,
-        ChildOf(*player),
-        //
-        SamplePlayer::new(server.load("audio/sfx/mg.wav")),
-        PlaybackSettings {
-            volume: Volume::Linear(0.25),
-            ..PlaybackSettings::LOOP
-        },
-    ));
-}
+    if let Some(kind) = active.0.last() {
+        if sound.is_none() {
+            commands.entity(player).with_child((
+                MGSound,
+                SamplePlayer::new(server.load("audio/sfx/mg.wav")),
+                PlaybackSettings {
+                    volume: Volume::Linear(0.25),
+                    ..PlaybackSettings::LOOP
+                },
+            ));
+        }
 
-fn disable_emitters(
-    _: Trigger<Completed<NormalShot>>,
-    mut commands: Commands,
-    mut player_emitter: Single<&mut EmitterState, With<PlayerEmitter>>,
-    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
-    sound: Single<Entity, With<MGSound>>,
-) {
-    commands.entity(*sound).despawn();
-    player_emitter.enabled = false;
-    for mut weapon in weapons.iter_mut() {
-        weapon.enabled = false;
+        match kind {
+            ShotKind::Normal => {
+                commands.entity(player).with_child((
+                    PlayerGattlingEmitter,
+                    PlayerEmitter,
+                    BulletModifiers {
+                        speed: 0.8,
+                        ..Default::default()
+                    },
+                ));
+            }
+            ShotKind::Focus => {
+                commands.entity(player).with_child((
+                    PlayerFocusEmitter,
+                    PlayerEmitter,
+                    BulletModifiers {
+                        speed: 0.8,
+                        ..Default::default()
+                    },
+                ));
+            }
+        }
+    } else if let Some(sound) = sound {
+        commands.entity(*sound).despawn();
     }
 }
+
+//fn enable_emitters(
+//    _: Trigger<Started<NormalShot>>,
+//    mut commands: Commands,
+//    server: Res<AssetServer>,
+//    player_emitter: Single<(&mut EmitterState, &mut PulseTimer), With<PlayerEmitter>>,
+//    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
+//    player: Single<Entity, With<Player>>,
+//) {
+//    let (mut state, mut timer) = player_emitter.into_inner();
+//    state.enabled = true;
+//    timer.reset_active();
+//
+//    for mut weapon in weapons.iter_mut() {
+//        weapon.enabled = true;
+//    }
+//
+//    commands.spawn((
+//        MGSound,
+//        ChildOf(*player),
+//        //
+//        SamplePlayer::new(server.load("audio/sfx/mg.wav")),
+//        PlaybackSettings {
+//            volume: Volume::Linear(0.25),
+//            ..PlaybackSettings::LOOP
+//        },
+//    ));
+//}
+//
+//fn disable_emitters(
+//    _: Trigger<Completed<NormalShot>>,
+//    mut commands: Commands,
+//    mut player_emitter: Single<&mut EmitterState, With<PlayerEmitter>>,
+//    mut weapons: Query<&mut GunnerWeapon, With<Gunner>>,
+//    sound: Single<Entity, With<MGSound>>,
+//) {
+//    commands.entity(*sound).despawn();
+//    player_emitter.enabled = false;
+//    for mut weapon in weapons.iter_mut() {
+//        weapon.enabled = false;
+//    }
+//}
 
 #[derive(Debug, InputAction)]
 #[input_action(output = bool, consume_input = false)]

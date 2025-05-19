@@ -1,8 +1,7 @@
-use super::swarm::SwarmMovement;
 use super::timeline::LARGEST_SPRITE_SIZE;
-use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, Swarm, timeline::WaveTimeline};
+use super::{BuckShot, CrissCross, MineThrower, OrbSlinger, timeline::WaveTimeline};
 use super::{InvincibleLaserNode, WallShooter};
-use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
+use crate::bullet::emitter::{LaserEmitter, WallEmitter};
 use crate::pickups::{Bomb, Pickup, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::Physics;
@@ -46,19 +45,22 @@ pub struct FormationEntity(pub Vec2);
 
 // We leak formations when they die until the game restarts, but this is fine
 pub struct Formation {
-    pub spawn: fn(&mut EntityCommands, &AssetServer),
+    pub spawn: Box<dyn Fn(&mut EntityCommands, &AssetServer) + Send + Sync>,
     pub modifiers: Vec<Box<dyn FnMut(&mut EntityCommands) + Send + Sync>>,
     pub velocity: Vec2,
 }
 
 impl Formation {
-    pub fn new(spawn: fn(&mut EntityCommands, &AssetServer)) -> Self {
+    pub fn new(spawn: impl Fn(&mut EntityCommands, &AssetServer) + Send + Sync + 'static) -> Self {
         Self::with_velocity(DEFAULT_FORMATION_VEL, spawn)
     }
 
-    pub fn with_velocity(velocity: Vec2, spawn: fn(&mut EntityCommands, &AssetServer)) -> Self {
+    pub fn with_velocity(
+        velocity: Vec2,
+        spawn: impl Fn(&mut EntityCommands, &AssetServer) + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            spawn,
+            spawn: Box::new(spawn),
             velocity,
             modifiers: Vec::new(),
         }
@@ -290,56 +292,6 @@ pub fn double_crisscross() -> Formation {
             ),
         ]);
     })
-}
-
-const SWARM_OFFSET: f32 = crate::WIDTH / 1.2;
-const NUM_SWARM: usize = 8;
-const SWARM_GAP: f32 = 15.;
-
-pub fn swarm_right() -> Formation {
-    Formation::with_velocity(
-        DEFAULT_FORMATION_VEL * 1.5,
-        |formation: &mut EntityCommands, _| {
-            formation.with_children(|root| {
-                for i in 0..NUM_SWARM {
-                    let x = (i as f32 - NUM_SWARM as f32 / 2.) * SWARM_GAP;
-                    let y = noise::simplex_noise_2d(Vec2::new(x + SWARM_OFFSET, 0.)) * 20.;
-                    let x_offset = noise::simplex_noise_2d(Vec2::new(x + SWARM_OFFSET, y)) * 5.;
-
-                    root.spawn((
-                        Swarm,
-                        SwarmMovement::Left,
-                        Platoon(root.target_entity()),
-                        EmitterDelay::new(0.2 * i as f32),
-                        Transform::from_xyz(x + x_offset + SWARM_OFFSET, y, 0.),
-                    ));
-                }
-            });
-        },
-    )
-}
-
-pub fn swarm_left() -> Formation {
-    Formation::with_velocity(
-        DEFAULT_FORMATION_VEL * 1.5,
-        |formation: &mut EntityCommands, _| {
-            formation.with_children(|root| {
-                for i in 0..NUM_SWARM {
-                    let x = (i as f32 - NUM_SWARM as f32 / 2.) * SWARM_GAP;
-                    let y = noise::simplex_noise_2d(Vec2::new(x - SWARM_OFFSET, 0.)) * 20.;
-                    let x_offset = noise::simplex_noise_2d(Vec2::new(x - SWARM_OFFSET, y)) * 5.;
-
-                    root.spawn((
-                        Swarm,
-                        SwarmMovement::Right,
-                        Platoon(root.target_entity()),
-                        EmitterDelay::new(0.2 * i as f32),
-                        Transform::from_xyz(x - x_offset - SWARM_OFFSET, y, 0.),
-                    ));
-                }
-            });
-        },
-    )
 }
 
 #[derive(Component)]

@@ -7,8 +7,7 @@ use crate::{
     Avian, DespawnRestart, GameState, Layer, assets,
     asteroids::SpawnCluster,
     auto_collider::ImageCollider,
-    background::{LAYER2, LAYER4},
-    bounds::WallDespawn,
+    background::LAYER2,
     bullet::{
         Destructable, Direction,
         emitter::{
@@ -85,24 +84,6 @@ impl Plugin for EnemyPlugin {
 #[require(Transform, Visibility, Destructable, Trauma)]
 pub struct Enemy;
 
-#[derive(Default, Component)]
-#[require(
-    Enemy,
-    ImageCollider,
-    Health::full(1.),
-    CellSprite::new8("ships.png", UVec2::new(3, 0)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    SwarmEmitter,
-    BulletModifiers {
-        rate: Rate::Factor(0.2),
-        ..Default::default()
-    },
-    Trauma(0.04),
-    Drops::new(0.2, 0.5),
-    Explosion::Small,
-)]
-pub struct Swarm;
-
 #[derive(Default, Clone, Copy, Component)]
 #[require(
     Enemy,
@@ -118,7 +99,6 @@ pub struct Swarm;
         ..Default::default()
     },
     Drops::splat(8),
-    DropPowerUp,
     Explosion::Big,
     FacePlayer,
 )]
@@ -212,7 +192,6 @@ pub struct MineThrower;
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SpiralOrbEmitter,
     Drops::splat(8),
-    DropPowerUp,
     Explosion::Big,
 )]
 #[component(on_add = Self::sprites)]
@@ -318,6 +297,10 @@ impl Default for Trauma {
     fn default() -> Self {
         Self(0.18)
     }
+}
+
+impl Trauma {
+    pub const NONE: Self = Trauma(0.);
 }
 
 #[derive(Component)]

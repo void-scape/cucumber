@@ -34,6 +34,7 @@ use strum_macros::EnumIter;
 
 pub mod emitter;
 pub mod homing;
+pub mod player;
 
 const GRAZE_DIST: f32 = 15.;
 const GRAZE_POINTS: usize = 5;

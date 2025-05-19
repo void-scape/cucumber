@@ -2,6 +2,7 @@ use super::{
     Arrow, BasicBullet, BlueOrb, Bullet, BulletCollisionEvent, BulletSource, BulletSprite,
     BulletTimer, ColorMod, Lifetime, MaxLifetime, Mine, Missile, Polarity, RedOrb,
     homing::{Heading, Homing, HomingRotate, TurnSpeed},
+    player,
 };
 use crate::{
     Avian, DespawnRestart, HEIGHT, Layer,
@@ -10,7 +11,7 @@ use crate::{
     float_tween,
     health::{Damage, DamageEvent, Health, HealthSet},
     particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState},
-    player::Player,
+    player::{Player, PowerUps},
     sprites::{self, CellSize},
 };
 use avian2d::prelude::*;
@@ -45,12 +46,12 @@ pub const MINE_DAMAGE: f32 = 1.;
 pub const ORB_DAMAGE: f32 = 1.;
 pub const ARROW_DAMAGE: f32 = 1.;
 
-const PLAYER_BULLET_RATE: f32 = 0.2;
-const BULLET_RATE: f32 = 0.5;
-const MISSILE_RATE: f32 = 0.5;
-const MINE_RATE: f32 = 2.;
-const WALL_RATE: f32 = 1.5;
-const GRADIUS_ORB_RATE: f32 = 0.1;
+pub const PLAYER_BULLET_RATE: f32 = 0.2;
+pub const BULLET_RATE: f32 = 0.5;
+pub const MISSILE_RATE: f32 = 0.5;
+pub const MINE_RATE: f32 = 2.;
+pub const WALL_RATE: f32 = 1.5;
+pub const GRADIUS_ORB_RATE: f32 = 0.1;
 
 const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
@@ -85,6 +86,8 @@ impl Plugin for EmitterPlugin {
                     play_samples,
                     (
                         GattlingEmitter::shoot_bullets,
+                        player::PlayerGattlingEmitter::shoot_bullets,
+                        player::PlayerFocusEmitter::shoot_bullets,
                         BackgroundGattlingEmitter::shoot_bullets,
                         MissileEmitter::shoot_bullets,
                         HomingEmitter::<Enemy>::shoot_bullets,
@@ -349,7 +352,7 @@ impl ProximityEmitter {
     Transform,
     BulletModifiers,
     EmitterState,
-    ParticleBundle<EmitterState> = Self::particles()
+    //ParticleBundle<EmitterState> = Self::particles()
 )]
 #[component(on_add = Self::insert_timer)]
 pub struct GattlingEmitter(pub f32);
@@ -1012,9 +1015,9 @@ pub trait PulseTime {
 
 #[derive(Component)]
 pub struct PulseTimer {
-    wait: Timer,
-    bullet: Timer,
-    pulses: usize,
+    pub wait: Timer,
+    pub bullet: Timer,
+    pub pulses: usize,
     state: PulseState,
 }
 
@@ -1071,6 +1074,11 @@ impl PulseTimer {
                 finished
             }
         }
+    }
+
+    pub fn reset_active(&mut self) {
+        self.state = PulseState::Bullet(0);
+        self.bullet.reset();
     }
 
     pub fn current_pulse(&self) -> usize {

@@ -1,12 +1,17 @@
-use super::formation::*;
-use crate::pickups::Weapon;
+use super::swarm::{SWARM_SPEED, SwarmAnchor, SwarmFormation, SwarmHeading, swarm};
+use super::{formation::*, swarm};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use std::f32::consts::PI;
 use std::time::Duration;
 
 pub const LARGEST_SPRITE_SIZE: f32 = 16.;
 pub const ENEMY_Z: f32 = 0.;
+
+const TOP: Vec2 = Vec2::ZERO;
+const TOP_RIGHT: Vec2 = Vec2::new(crate::WIDTH / 2., 0.);
+const TOP_LEFT: Vec2 = Vec2::new(-crate::WIDTH / 2., 0.);
 
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
@@ -20,33 +25,62 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
-                (swarm_right(), 0.),
-                (swarm_left(), 2.),
-                (crisscross().with(option(Weapon::Bullet)), 4.),
-                (double_buck_shot(), 8.),
-                (double_wall(), 2.),
-                (double_crisscross(), 2.),
-                (swarm_right(), 0.),
-                (swarm_left(), 2.),
-                (quad_mine_thrower(), 4.),
-                (quad_mine_thrower().with(bomb), 6.),
-                (double_crisscross(), 2.),
-                (orb_slinger(), 6.),
-                (laser_maze(), 2.),
-                (double_wall(), 6.),
-                (crisscross(), 2.),
-                (double_orb_slinger().with(option(Weapon::Missile)), 2.),
-                (double_wall(), 2.),
-                (laser_ladder(), 4.),
-                (swarm_right(), 0.),
-                (swarm_left(), 4.),
-                (swarm_right(), 0.),
-                (swarm_left(), 3.8),
-                (triple_wall(), 5.),
-                (double_buck_shot(), 3.),
-                (quad_mine_thrower(), 4.),
-                (quad_mine_thrower().with(bomb), 18.),
-                (boss(), 0.),
+                (
+                    swarm(SwarmFormation {
+                        start: TOP,
+                        anchor: SwarmAnchor::Center,
+                        heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
+                        //count: 5,
+                        //gap: 15.,
+                        ..Default::default()
+                    }),
+                    2.,
+                ),
+                (
+                    swarm::left_swing(),
+                    //swarm(SwarmFormation {
+                    //    start: TOP_LEFT,
+                    //    anchor: SwarmAnchor::Left,
+                    //    heading: SwarmHeading::Linear(Vec2::from_angle(-PI / 6.) * SWARM_SPEED),
+                    //    count: 15,
+                    //    noise: Vec2::new(3., 8.),
+                    //    //gap: 15.,
+                    //    ..Default::default()
+                    //}),
+                    3.,
+                ),
+                //
+
+                //(swarm_right(), 0.),
+                //(swarm_left(), 2.),
+
+                //(swarm_right(), 0.),
+                //(swarm_left(), 2.),
+                //(crisscross().with(option(Weapon::Bullet)), 4.),
+                //(double_buck_shot(), 8.),
+                //(double_wall(), 2.),
+                //(double_crisscross(), 2.),
+                //(swarm_right(), 0.),
+                //(swarm_left(), 2.),
+                //(quad_mine_thrower(), 4.),
+                //(quad_mine_thrower().with(bomb), 6.),
+                //(double_crisscross(), 2.),
+                //(orb_slinger(), 6.),
+                //(laser_maze(), 2.),
+                //(double_wall(), 6.),
+                //(crisscross(), 2.),
+                //(double_orb_slinger().with(option(Weapon::Missile)), 2.),
+                //(double_wall(), 2.),
+                //(laser_ladder(), 4.),
+                //(swarm_right(), 0.),
+                //(swarm_left(), 4.),
+                //(swarm_right(), 0.),
+                //(swarm_left(), 3.8),
+                //(triple_wall(), 5.),
+                //(double_buck_shot(), 3.),
+                //(quad_mine_thrower(), 4.),
+                //(quad_mine_thrower().with(bomb), 18.),
+                //(boss(), 0.),
             ],
         ));
     }
@@ -158,9 +192,6 @@ pub fn update_waves(
 
     controller.tick(&time);
     if let Some(formation) = controller.next() {
-        let start_y = crate::HEIGHT / 2. + LARGEST_SPRITE_SIZE / 2.;
-        let start = Vec3::new(0., start_y, ENEMY_Z);
-
         //commands.entity(root).animation().insert(tween(
         //    Duration::from_secs_f32(FORMATION_EASE_DUR),
         //    EaseKind::SineOut,
@@ -169,7 +200,7 @@ pub fn update_waves(
 
         let mut commands = commands.spawn((
             FormationEntity(formation.velocity),
-            Transform::from_translation(start),
+            Transform::from_translation(Vec3::new(0., crate::HEIGHT / 2., ENEMY_Z)),
         ));
         (formation.spawn)(&mut commands, &server);
         for modifier in formation.modifiers.iter_mut() {
