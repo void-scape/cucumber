@@ -100,6 +100,7 @@ impl Plugin for EmitterPlugin {
                         WallEmitter::shoot_bullets,
                         SwarmEmitter::shoot_bullets,
                         GradiusSpiralEmitter::shoot_bullets,
+                        ConvergentEmitter::shoot_bullets,
                     ),
                 )
                     .chain()
@@ -1700,6 +1701,76 @@ impl GradiusSpiralEmitter {
             }
 
             //writer.write(EmitterSample(EmitterBullet::Orb));
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy, Component)]
+#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden, SpiralOffset)]
+pub struct ConvergentEmitter;
+
+impl ConvergentEmitter {
+    fn shoot_bullets(
+        mut emitters: Query<
+            (
+                Entity,
+                &mut Self,
+                Option<&mut PulseTimer>,
+                &BulletModifiers,
+                &Polarity,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            Without<EmitterDelay>,
+        >,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        mut writer: EventWriter<EmitterSample>,
+        mut commands: Commands,
+    ) {
+        for (entity, _emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(parent.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            let waves = 10;
+
+            let Some(mut timer) = timer else {
+                commands
+                    .entity(entity)
+                    .insert(PulseTimer::new(mods.rate, 3.0, 0.1, waves));
+                continue;
+            };
+
+            if !timer.just_finished(&time) {
+                continue;
+            }
+
+            let bullets = 6;
+            let new_transform = transform.compute_transform();
+            let mut angle_offset =
+                timer.current_pulse() as f32 * std::f32::consts::TAU / (bullets * waves) as f32;
+            if timer.current_pulse() % 2 == 0 {
+                angle_offset *= -1.;
+            }
+
+            // let speed = ORB_SPEED * mods.speed * (1. - timer.current_pulse() as f32 * 0.05);
+            let speed = ORB_SPEED * mods.speed;
+            for angle in 0..bullets {
+                let angle = (angle as f32 / bullets as f32) * std::f32::consts::TAU
+                    // + timer.current_pulse() as f32 * std::f32::consts::PI * 0.01
+                    + angle_offset;
+
+                commands.spawn((
+                    RedOrb,
+                    LinearVelocity(Vec2::from_angle(angle) * speed),
+                    new_transform,
+                    Damage::new(ORB_DAMAGE * mods.damage),
+                ));
+            }
+
+            writer.write(EmitterSample(EmitterBullet::Orb));
         }
     }
 }

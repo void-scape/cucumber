@@ -1,6 +1,6 @@
-use super::InvincibleLaserNode;
 use super::timeline::WaveTimeline;
 use super::waller::Waller;
+use super::{Convergence, InvincibleLaserNode};
 use super::{CrissCross, MineThrower, OrbSlinger};
 use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
 use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
@@ -212,6 +212,12 @@ pub fn double_orb_slinger() -> Formation {
                 Transform::from_xyz(40., 0., 0.)
             ),
         ]);
+    })
+}
+
+pub fn convergent() -> Formation {
+    Formation::with_velocity(Vec2::new(0., -1.), |formation: &mut EntityCommands, _| {
+        formation.insert(children![(Convergence, Platoon(formation.id()))]);
     })
 }
 

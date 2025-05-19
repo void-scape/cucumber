@@ -11,8 +11,8 @@ use crate::{
     bullet::{
         Destructable, Direction,
         emitter::{
-            BulletModifiers, CrisscrossEmitter, MineEmitter, Rate, SpiralOrbEmitter, SwarmEmitter,
-            TargetPlayer, WallEmitter,
+            BulletModifiers, ConvergentEmitter, CrisscrossEmitter, MineEmitter, Rate,
+            SpiralOrbEmitter, SwarmEmitter, TargetPlayer, WallEmitter,
         },
     },
     effects::Explosion,
@@ -210,6 +210,21 @@ pub struct LaserNode;
     DebugRect::from_size_color(Vec2::splat(8.), YELLOW)
 )]
 pub struct InvincibleLaserNode;
+
+#[derive(Default, Clone, Copy, Component)]
+#[require(
+    Enemy,
+    Collider::rectangle(12., 12.),
+    CellSprite::new24("ships.png", UVec2::new(0, 1)),
+    Health::full(10.),
+    LowHealthEffects,
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
+    ConvergentEmitter,
+    Drops::splat(3),
+    Explosion::Big,
+)]
+#[component(on_add = OrbSlinger::sprites)]
+pub struct Convergence;
 
 // #############
 //    Systems
