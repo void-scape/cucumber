@@ -5,14 +5,7 @@ use super::{
     player,
 };
 use crate::{
-    Avian, DespawnRestart, HEIGHT, Layer,
-    bullet::PlayerBullet,
-    enemy::Enemy,
-    float_tween,
-    health::{Damage, DamageEvent, Health, HealthSet},
-    particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState},
-    player::{Player, PowerUps},
-    sprites::{self, CellSize},
+    bullet::PlayerBullet, enemy::{buckshot::BuckShotEmitter, swarm::SwarmEmitter, Enemy}, float_tween, health::{Damage, DamageEvent, Health, HealthSet}, particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState}, player::Player, sprites::{self, CellSize}, Avian, DespawnRestart, Layer, HEIGHT
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -56,10 +49,6 @@ pub const GRADIUS_ORB_RATE: f32 = 0.1;
 const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
 const ORB_WAVES: usize = 8;
-
-const BUCKSHOT_WAIT_RATE: f32 = 2.;
-const BUCKSHOT_SHOT_RATE: f32 = 0.2;
-const BUCKSHOT_WAVES: usize = 4;
 
 const CRISSCROSS_WAIT_RATE: f32 = 1.25;
 const CRISSCROSS_SHOT_RATE: f32 = 0.15;
@@ -130,9 +119,9 @@ impl Default for EmitterState {
 }
 
 #[derive(Event)]
-struct EmitterSample(EmitterBullet);
+pub struct EmitterSample(pub EmitterBullet);
 
-enum EmitterBullet {
+pub enum EmitterBullet {
     Bullet,
     Missile,
     Mine,
@@ -1047,6 +1036,10 @@ impl PulseTimer {
         }
     }
 
+    pub fn is_waiting(&self) -> bool {
+        matches!(self.state, PulseState::Wait)
+    }
+
     pub fn just_finished(&mut self, time: &Time) -> bool {
         let delta = time.delta();
 
@@ -1287,111 +1280,6 @@ impl CrisscrossEmitter {
     }
 }
 
-#[derive(Clone, Copy, Component)]
-#[require(Transform, BulletModifiers)]
-pub struct BuckShotEmitter {
-    waves: usize,
-    shot_dur: f32,
-    wait_dur: f32,
-}
-
-impl Default for BuckShotEmitter {
-    fn default() -> Self {
-        Self {
-            waves: BUCKSHOT_WAVES,
-            shot_dur: BUCKSHOT_SHOT_RATE,
-            wait_dur: BUCKSHOT_WAIT_RATE,
-        }
-    }
-}
-
-impl PulseTime for BuckShotEmitter {
-    fn wait_time(&self) -> f32 {
-        self.wait_dur
-    }
-
-    fn shot_time(&self) -> f32 {
-        self.shot_dur
-    }
-
-    fn pulses(&self) -> usize {
-        self.waves
-    }
-}
-
-impl BuckShotEmitter {
-    pub fn new(waves: usize, wait_dur: f32, shot_dur: f32) -> Self {
-        Self {
-            waves,
-            wait_dur,
-            shot_dur,
-        }
-    }
-}
-
-impl BuckShotEmitter {
-    fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &mut BuckShotEmitter,
-                Option<&mut PulseTimer>,
-                &BulletModifiers,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        player: Single<&Transform, With<Player>>,
-        time: Res<Time>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-    ) {
-        for (entity, emitter, timer, mods, parent, transform) in emitters.iter_mut() {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let Some(mut timer) = timer else {
-                let mut timer =
-                    PulseTimer::new(mods.rate, emitter.wait_dur, emitter.shot_dur, emitter.waves);
-                timer.reset_active();
-                commands.entity(entity).insert(timer);
-                continue;
-            };
-
-            if !timer.just_finished(&time) {
-                continue;
-            }
-
-            let new_transform = transform.compute_transform().with_rotation(Quat::default());
-            //new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
-            let to_player = new_transform.translation.xy() - player.translation.xy();
-
-            let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
-            for angle in angles.into_iter() {
-                commands.spawn((
-                    BlueOrb,
-                    HomingRotate,
-                    LinearVelocity(
-                        (Vec2::from_angle(angle - std::f32::consts::PI / 2.) * to_player)
-                            .normalize_or(Vec2::NEG_Y)
-                            * ORB_SPEED
-                            * mods.speed,
-                    ),
-                    new_transform,
-                    Damage::new(ORB_DAMAGE * mods.damage),
-                ));
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Orb));
-        }
-    }
-}
-
 #[derive(Component)]
 #[require(Transform, BulletModifiers, Polarity)]
 pub struct WallEmitter {
@@ -1533,70 +1421,6 @@ impl WallEmitter {
             }
 
             writer.write(EmitterSample(EmitterBullet::Orb));
-        }
-    }
-}
-
-#[derive(Default, Component)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
-pub struct SwarmEmitter;
-
-impl SwarmEmitter {
-    fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &SwarmEmitter,
-                Option<&mut BulletTimer>,
-                &BulletModifiers,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time>,
-        player: Single<&Transform, With<Player>>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-    ) {
-        let delta = time.delta();
-
-        for (entity, _emitter, timer, mods, polarity, child_of, transform) in emitters.iter_mut() {
-            let Ok(parent_mods) = parents.get(child_of.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let duration = mods.rate.duration(BULLET_RATE);
-            let Some(mut timer) = timer else {
-                let mut timer = BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                };
-                timer.timer.set_elapsed(timer.timer.duration());
-                commands.entity(entity).insert(timer);
-                continue;
-            };
-
-            if !timer.timer.tick(delta).just_finished() {
-                continue;
-            }
-            timer.timer.set_duration(duration);
-
-            let new_transform = transform.compute_transform();
-            let to_player =
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
-            commands.spawn((
-                Arrow,
-                LinearVelocity(to_player * ARROW_SPEED * mods.speed),
-                new_transform.with_rotation(Quat::from_rotation_z(
-                    to_player.to_angle() - PI / 2.0 + PI / 4.,
-                )),
-                Damage::new(ARROW_DAMAGE * mods.damage),
-            ));
-
-            writer.write(EmitterSample(EmitterBullet::Arrow));
         }
     }
 }

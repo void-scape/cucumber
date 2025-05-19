@@ -2,10 +2,11 @@ use crate::asteroids::SpawnCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bullet::Destructable;
 use crate::bullet::emitter::{
-    BuckShotEmitter, BulletModifiers, EmitterDelay, GradiusSpiralEmitter, PulseTime, Rate,
-    SpiralOrbEmitter, WallEmitter,
+    BulletModifiers, EmitterDelay, GradiusSpiralEmitter, PulseTime, Rate, SpiralOrbEmitter,
+    WallEmitter,
 };
 use crate::enemy::Enemy;
+use crate::enemy::buckshot::BuckShotEmitter;
 use crate::health::{Dead, Health};
 use crate::{DespawnRestart, GameState, Layer, RESOLUTION_SCALE};
 use avian2d::prelude::CollisionLayers;

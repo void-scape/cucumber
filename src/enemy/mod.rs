@@ -11,8 +11,7 @@ use crate::{
     bullet::{
         Destructable, Direction,
         emitter::{
-            BulletModifiers, ConvergentEmitter, CrisscrossEmitter, MineEmitter, Rate,
-            SpiralOrbEmitter, SwarmEmitter, TargetPlayer, WallEmitter,
+            BulletModifiers, ConvergentEmitter, CrisscrossEmitter, MineEmitter, SpiralOrbEmitter,
         },
     },
     effects::Explosion,
@@ -46,6 +45,7 @@ use strum::IntoEnumIterator;
 pub mod buckshot;
 pub mod formation;
 pub mod movement;
+pub mod scout;
 pub mod swarm;
 pub mod timeline;
 pub mod waller;
@@ -168,25 +168,6 @@ impl CrissCross {
         ])
     }
 }
-
-#[derive(Default, Component)]
-#[require(
-    Enemy,
-    ImageCollider,
-    Health::full(1.),
-    CellSprite::new8("ships.png", UVec2::new(3, 0)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    SwarmEmitter,
-    BulletModifiers {
-        rate: Rate::Factor(0.2),
-        ..Default::default()
-    },
-    Trauma(0.04),
-    Drops::new(0.2, 0.5),
-    Explosion::Small,
-    DespawnTweenFinish,
-)]
-pub struct Scout;
 
 #[derive(Default, Component)]
 #[require(

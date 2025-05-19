@@ -1,9 +1,7 @@
-use super::swarm::{SWARM_SPEED, SwarmAnchor, SwarmFormation, SwarmHeading, swarm};
-use super::{buckshot, formation::*, swarm};
+use super::{buckshot, formation::*, scout, swarm};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use std::f32::consts::PI;
 use std::time::Duration;
 
 pub const LARGEST_SPRITE_SIZE: f32 = 16.;
@@ -27,13 +25,13 @@ pub fn start_waves(mut commands: Commands) {
             [
                 //
                 (convergent(), 0.),
-                // (swarm::three(), 3.),
-                // (swarm::right_swing(), 1.),
-                // (swarm::left_swing(), 1.),
-                // (buckshot::double_buck_shot(), 1.),
-                // (scout(Vec2::new(0., -45.)), 3.),
-                // (swarm::right_swing(), 1.),
-                // (swarm::left_swing().with(powerup), 1.),
+                //(swarm::three(), 3.),
+                //(swarm::right_swing(), 1.),
+                //(swarm::left_swing(), 1.),
+                //(buckshot::double_buck_shot(), 1.),
+                //(scout::triple(Vec2::new(0., -45.)), 3.),
+                //(swarm::right_swing(), 1.),
+                //(swarm::left_swing().with(powerup), 1.),
                 //(double_wall(), 1.),
                 //
 

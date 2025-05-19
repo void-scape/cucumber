@@ -176,6 +176,20 @@ pub struct BulletTimer {
     pub timer: Timer,
 }
 
+impl BulletTimer {
+    pub fn new(duration: f32) -> Self {
+        Self {
+            timer: Timer::from_seconds(duration, TimerMode::Repeating),
+        }
+    }
+
+    pub fn ready(duration: f32) -> Self {
+        let mut timer = Timer::from_seconds(duration, TimerMode::Repeating);
+        timer.set_elapsed(timer.duration());
+        Self { timer }
+    }
+}
+
 #[derive(Debug, Component)]
 pub struct MaxLifetime(pub Duration);
 
@@ -277,7 +291,8 @@ pub struct BasicBullet;
     Bullet,
     HomingRotate,
     Collider::rectangle(2., 2.),
-    BulletSprite::from_cell(2, 7)
+    BulletSprite::from_cell(2, 7),
+    Damage::new(1.)
 )]
 pub struct Arrow;
 
@@ -317,6 +332,7 @@ pub struct Mine;
     Collider::circle(1.5),
     AnimationSprite::repeating("orb.png", 0.2, 0..3),
     AngularVelocity(FRAC_PI_2),
+    Damage::new(1.),
 )]
 pub struct RedOrb;
 
@@ -326,6 +342,7 @@ pub struct RedOrb;
     Collider::circle(1.5),
     AnimationSprite::repeating("orb1.png", 0.2, 0..3),
     AngularVelocity(FRAC_PI_2),
+    Damage::new(1.),
 )]
 pub struct BlueOrb;
 

@@ -4,11 +4,16 @@ use super::Trauma;
 use super::formation::Formation;
 use super::formation::Platoon;
 use super::timeline::ENEMY_Z;
+use crate::bullet::Arrow;
+use crate::bullet::BulletTimer;
+use crate::bullet::emitter::EmitterBullet;
 use crate::bullet::emitter::EmitterDelay;
+use crate::bullet::emitter::EmitterSample;
+use crate::player::Player;
 use crate::{
     Layer,
     auto_collider::ImageCollider,
-    bullet::emitter::{BulletModifiers, Rate, SwarmEmitter},
+    bullet::emitter::{BulletModifiers, Rate},
     effects::Explosion,
     health::Health,
     sprites::CellSprite,
@@ -26,6 +31,8 @@ use std::f32::consts::PI;
 use std::time::Duration;
 
 pub const SWARM_SPEED: f32 = 60.;
+const BULLET_RATE: f32 = 0.8;
+const BULLET_SPEED: f32 = 90.;
 
 #[derive(Default, Component)]
 #[require(
@@ -44,73 +51,6 @@ pub const SWARM_SPEED: f32 = 60.;
     FaceVelocity,
 )]
 pub struct Swarm;
-
-#[derive(Clone, Copy)]
-pub struct SwarmFormation {
-    pub start: Vec2,
-    pub anchor: SwarmAnchor,
-    pub heading: SwarmHeading,
-    pub count: usize,
-    pub gap: f32,
-    // strength of the random position noise [0.0..]
-    pub noise: Vec2,
-}
-
-impl Default for SwarmFormation {
-    fn default() -> Self {
-        Self {
-            start: Vec2::ZERO,
-            anchor: SwarmAnchor::Center,
-            heading: SwarmHeading::Linear(Vec2::ZERO),
-            count: 5,
-            gap: 15.,
-            noise: Vec2::new(5., 20.),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum SwarmAnchor {
-    Left,
-    Right,
-    Center,
-}
-
-#[derive(Clone, Copy)]
-pub enum SwarmHeading {
-    Linear(Vec2),
-}
-
-pub fn swarm(swarm: SwarmFormation) -> Formation {
-    Formation::with_velocity(Vec2::ZERO, move |formation: &mut EntityCommands, _| {
-        let center = swarm.start;
-        formation.with_children(|root| {
-            for i in 0..swarm.count {
-                let anchor_offset = match swarm.anchor {
-                    SwarmAnchor::Center => -(swarm.count as f32 / 2.) * swarm.gap,
-                    SwarmAnchor::Left => -(swarm.count as f32 * swarm.gap) - 8.,
-                    SwarmAnchor::Right => 8.,
-                };
-
-                let x = i as f32 * swarm.gap + anchor_offset;
-                let y = noise::simplex_noise_2d(Vec2::new(x + center.x, 0.)) * swarm.noise.y;
-                let x_noise = noise::simplex_noise_2d(Vec2::new(x + center.y, y)) * swarm.noise.x;
-
-                match swarm.heading {
-                    SwarmHeading::Linear(velocity) => {
-                        root.spawn((
-                            Swarm,
-                            Platoon(root.target_entity()),
-                            EmitterDelay::new(0.2 * i as f32),
-                            Transform::from_xyz(x + x_noise + center.x, y + center.y, 0.),
-                            LinearVelocity(velocity),
-                        ));
-                    }
-                }
-            }
-        });
-    })
-}
 
 pub fn three() -> Formation {
     Formation::with_velocity(Vec2::ZERO, move |formation: &mut EntityCommands, _| {
@@ -208,54 +148,51 @@ fn swing(swing: Swing) -> Formation {
     })
 }
 
-//const SWARM_THRESHOLD: f32 = WIDTH * 1.25;
-//
-//#[derive(Debug, Component)]
-//pub enum SwarmMovement {
-//    Left,
-//    Right,
-//}
-//
-//pub(super) fn swarm_movement(
-//    mut q: Query<(&mut LinearVelocity, &GlobalTransform, &SwarmMovement)>,
-//) {
-//    for (mut velocity, transform, movement) in &mut q {
-//        let translation = transform.compute_transform().translation;
-//
-//        match movement {
-//            SwarmMovement::Left => {
-//                if translation.x > SWARM_THRESHOLD && velocity.x > 0. {
-//                    velocity.x = -SWARM_SPEED;
-//                } else if translation.x < -SWARM_THRESHOLD && velocity.x < 0. {
-//                    velocity.x = SWARM_SPEED;
-//                } else if velocity.x == 0. {
-//                    velocity.x = SWARM_SPEED;
-//                }
-//            }
-//            SwarmMovement::Right => {
-//                if translation.x < SWARM_THRESHOLD && velocity.x < 0. {
-//                    velocity.x = -SWARM_SPEED;
-//                } else if translation.x > -SWARM_THRESHOLD && velocity.x > 0. {
-//                    velocity.x = SWARM_SPEED;
-//                } else if velocity.x == 0. {
-//                    velocity.x = SWARM_SPEED;
-//                }
-//            }
-//        }
-//
-//        if (-WIDTH * 0.5..WIDTH * 0.5).contains(&translation.x) {
-//            let proportion = (translation.x + WIDTH * 0.5) / WIDTH;
-//
-//            let proportion = if velocity.x > 0. {
-//                proportion
-//            } else {
-//                1. - proportion
-//            };
-//
-//            let sin = ((proportion * core::f32::consts::PI).cos() - 0.5) * -10.;
-//            velocity.y = sin;
-//        } else {
-//            velocity.y = 0.;
-//        }
-//    }
-//}
+#[derive(Default, Component)]
+#[require(Transform, BulletModifiers, BulletTimer::ready(BULLET_RATE))]
+pub struct SwarmEmitter;
+
+impl SwarmEmitter {
+    pub fn shoot_bullets(
+        mut emitters: Query<
+            (
+                &mut BulletTimer,
+                &BulletModifiers,
+                &ChildOf,
+                &GlobalTransform,
+            ),
+            (Without<EmitterDelay>, With<SwarmEmitter>),
+        >,
+        parents: Query<Option<&BulletModifiers>>,
+        time: Res<Time>,
+        player: Single<&Transform, With<Player>>,
+        mut writer: EventWriter<EmitterSample>,
+        mut commands: Commands,
+    ) {
+        let delta = time.delta();
+
+        for (mut timer, mods, child_of, transform) in emitters.iter_mut() {
+            let Ok(parent_mods) = parents.get(child_of.parent()) else {
+                continue;
+            };
+            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+
+            if !timer.timer.tick(delta).just_finished() {
+                continue;
+            }
+
+            let new_transform = transform.compute_transform();
+            let to_player =
+                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
+            commands.spawn((
+                Arrow,
+                LinearVelocity(to_player * BULLET_SPEED * mods.speed),
+                new_transform.with_rotation(Quat::from_rotation_z(
+                    to_player.to_angle() - PI / 2.0 + PI / 4.,
+                )),
+            ));
+
+            writer.write(EmitterSample(EmitterBullet::Arrow));
+        }
+    }
+}
