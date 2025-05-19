@@ -25,32 +25,32 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
-                (
-                    swarm(SwarmFormation {
-                        start: TOP,
-                        anchor: SwarmAnchor::Center,
-                        heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
-                        //count: 5,
-                        //gap: 15.,
-                        ..Default::default()
-                    }),
-                    2.,
-                ),
-                (
-                    swarm::left_swing(),
-                    //swarm(SwarmFormation {
-                    //    start: TOP_LEFT,
-                    //    anchor: SwarmAnchor::Left,
-                    //    heading: SwarmHeading::Linear(Vec2::from_angle(-PI / 6.) * SWARM_SPEED),
-                    //    count: 15,
-                    //    noise: Vec2::new(3., 8.),
-                    //    //gap: 15.,
-                    //    ..Default::default()
-                    //}),
-                    3.,
-                ),
+                // // (
+                // //     swarm(SwarmFormation {
+                // //         start: TOP,
+                // //         anchor: SwarmAnchor::Center,
+                // //         heading: SwarmHeading::Linear(Vec2::NEG_Y * SWARM_SPEED),
+                // //         //count: 5,
+                // //         //gap: 15.,
+                // //         ..Default::default()
+                // //     }),
+                // //     2.,
+                // // ),
+                // (
+                //     swarm::left_swing(),
+                //     //swarm(SwarmFormation {
+                //     //    start: TOP_LEFT,
+                //     //    anchor: SwarmAnchor::Left,
+                //     //    heading: SwarmHeading::Linear(Vec2::from_angle(-PI / 6.) * SWARM_SPEED),
+                //     //    count: 15,
+                //     //    noise: Vec2::new(3., 8.),
+                //     //    //gap: 15.,
+                //     //    ..Default::default()
+                //     //}),
+                //     3.,
+                // ),
                 //
-
+                (scout(Vec2::new(0., -45.)), 0.),
                 //(swarm_right(), 0.),
                 //(swarm_left(), 2.),
 

@@ -141,7 +141,7 @@ fn emit_tween_timeouts(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct DespawnTweenFinish;
 
 fn despawn_finished_tweens(

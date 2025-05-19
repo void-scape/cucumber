@@ -250,6 +250,25 @@ impl CrissCross {
 #[require(
     Enemy,
     ImageCollider,
+    Health::full(1.),
+    CellSprite::new8("ships.png", UVec2::new(3, 0)),
+    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
+    SwarmEmitter,
+    BulletModifiers {
+        rate: Rate::Factor(0.2),
+        ..Default::default()
+    },
+    Trauma(0.04),
+    Drops::new(0.2, 0.5),
+    Explosion::Small,
+    DespawnTweenFinish,
+)]
+pub struct Scout;
+
+#[derive(Default, Component)]
+#[require(
+    Enemy,
+    ImageCollider,
     Health::full(8.),
     LowHealthEffects,
     DebugRect::from_size_color(Vec2::splat(8.), RED),
