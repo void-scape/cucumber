@@ -1,18 +1,18 @@
 use super::InvincibleLaserNode;
 use super::timeline::WaveTimeline;
-use super::waller::Waller;
 use super::{MineThrower, OrbSlinger};
-use crate::bullet::emitter::{LaserEmitter, WallEmitter};
+use crate::bullet::emitter::LaserEmitter;
 use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::{ColliderDisabled, Physics};
-use bevy::color::palettes::css::WHITE;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
+use bevy_tween::bevy_time_runner::TimeRunner;
+use bevy_tween::combinator::{parallel, tween};
 use bevy_tween::interpolate::{rotation, sprite_color, translation};
 use bevy_tween::prelude::*;
 use bevy_tween::tween::apply_component_tween_system;
@@ -555,87 +555,92 @@ fn animate_entrance_inner(
         .id();
     commands.entity(entity).add_child(trail);
 
-    let id = entity;
     run_after(
         Duration::from_secs_f32((secs - 0.3).clamp(0., f32::MAX)),
         move |mut commands: Commands,
               mut states: Query<&mut ParticleSpawnerState>,
               server: Res<AssetServer>| {
-            if let Ok(mut entity) = commands.get_entity(id) {
-                entity.remove::<ColliderDisabled>().insert(finished.clone());
+            if commands.get_entity(entity).is_ok() {
+                commands
+                    .entity(entity)
+                    .remove::<(ColliderDisabled, TimeRunner)>()
+                    .insert(finished.clone());
+
+                if commands.get_entity(trail).is_ok() {
+                    if let Ok(mut state) = states.get_mut(trail) {
+                        state.active = false;
+                    }
+                }
+
+                commands.spawn((
+                    SamplePlayer::new(server.load("audio/sfx/doot.wav")),
+                    PlaybackParams {
+                        speed: 0.9,
+                        ..Default::default()
+                    },
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.2),
+                        ..PlaybackSettings::ONCE
+                    },
+                ));
+                commands.spawn((
+                    SamplePlayer::new(server.load("audio/sfx/blurp.wav")),
+                    PlaybackSettings {
+                        volume: Volume::Linear(0.25),
+                        ..PlaybackSettings::ONCE
+                    },
+                ));
+
+                let sprite = commands
+                    .spawn((
+                        Sprite::from_image(server.load("crosshair.png")),
+                        Transform::from_xyz(0., 0., 1.),
+                    ))
+                    .id();
+                commands
+                    .entity(sprite)
+                    .animation()
+                    .insert_tween_here(
+                        Duration::from_secs_f32(0.5),
+                        EaseKind::Linear,
+                        sprite
+                            .into_target()
+                            .with(rotation(Quat::default(), Quat::from_rotation_z(PI))),
+                    )
+                    .animation()
+                    .insert_tween_here(
+                        Duration::from_secs_f32(0.5),
+                        EaseKind::QuadraticOut,
+                        sprite
+                            .into_target()
+                            .with(sprite_color(Color::WHITE, Color::WHITE.with_alpha(0.))),
+                    );
+                commands.entity(entity).add_child(sprite);
             }
-
-            if let Ok(mut state) = states.get_mut(trail) {
-                state.active = false;
-            }
-
-            commands.spawn((
-                SamplePlayer::new(server.load("audio/sfx/doot.wav")),
-                PlaybackParams {
-                    speed: 0.9,
-                    ..Default::default()
-                },
-                PlaybackSettings {
-                    volume: Volume::Linear(0.2),
-                    ..PlaybackSettings::ONCE
-                },
-            ));
-            commands.spawn((
-                SamplePlayer::new(server.load("audio/sfx/blurp.wav")),
-                PlaybackSettings {
-                    volume: Volume::Linear(0.25),
-                    ..PlaybackSettings::ONCE
-                },
-            ));
-
-            let sprite = commands
-                .spawn((
-                    Sprite::from_image(server.load("crosshair.png")),
-                    Transform::from_xyz(0., 0., 1.),
-                ))
-                .id();
-            commands
-                .entity(sprite)
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(0.5),
-                    EaseKind::Linear,
-                    sprite
-                        .into_target()
-                        .with(rotation(Quat::default(), Quat::from_rotation_z(PI))),
-                )
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(0.5),
-                    EaseKind::QuadraticOut,
-                    sprite
-                        .into_target()
-                        .with(sprite_color(Color::WHITE, Color::WHITE.with_alpha(0.))),
-                );
-            commands.entity(id).add_child(sprite);
         },
         commands,
     );
 
     commands
+        //.animation()
+        //.insert_tween_here(
+        //    Duration::from_secs_f32(secs),
+        //    EaseKind::QuadraticIn,
+        //    id.into_target()
+        //        .with(sprite_color(Color::srgb(0.2, 0.2, 0.2), WHITE.into())),
+        //)
         .animation()
-        .insert_tween_here(
-            Duration::from_secs_f32(secs),
-            EaseKind::QuadraticIn,
-            id.into_target()
-                .with(sprite_color(Color::srgb(0.2, 0.2, 0.2), WHITE.into())),
-        )
-        .animation()
-        .insert_tween_here(
-            Duration::from_secs_f32(secs),
-            EaseKind::QuadraticOut,
-            id.into_target().with(translation(tstart, tend)),
-        )
-        .animation()
-        .insert_tween_here(
-            Duration::from_secs_f32(secs),
-            EaseKind::QuadraticOut,
-            id.into_target().with(rotation(rstart, rend)),
-        )
-        .insert(ChildOf(id));
+        .insert(parallel((
+            tween(
+                Duration::from_secs_f32(secs),
+                EaseKind::QuadraticOut,
+                entity.into_target().with(translation(tstart, tend)),
+            ),
+            tween(
+                Duration::from_secs_f32(secs),
+                EaseKind::QuadraticOut,
+                entity.into_target().with(rotation(rstart, rend)),
+            ),
+        )))
+        .insert(ChildOf(entity));
 }

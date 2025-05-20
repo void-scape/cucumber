@@ -4,6 +4,7 @@ use super::formation::Formation;
 use super::formation::Platoon;
 use crate::bullet::emitter::EmitterDelay;
 use crate::enemy::FaceVelocity;
+use crate::enemy::swarm::ShotLimit;
 use crate::enemy::swarm::SwarmEmitter;
 use crate::tween::DespawnTweenFinish;
 use crate::{
@@ -31,10 +32,7 @@ use std::time::Duration;
     CellSprite::new8("shooters/SpaceShooterAssetPack_Ships.png", UVec2::new(4, 1)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SwarmEmitter,
-    BulletModifiers {
-        rate: Rate::Factor(0.2),
-        ..Default::default()
-    },
+    ShotLimit(1),
     Trauma(0.04),
     Explosion::Small,
     DespawnTweenFinish,
@@ -67,13 +65,6 @@ pub fn triple(center_point: Vec2) -> Formation {
                 ))),
             ),
             tween(
-                Duration::from_secs_f32(0.1),
-                EaseKind::QuadraticOut,
-                position.with(bevy_tween::interpolate::translation_by(Vec3::new(
-                    0.0, 0.0, 0.0,
-                ))),
-            ),
-            tween(
                 Duration::from_secs(3),
                 EaseKind::QuadraticIn,
                 position.with(bevy_tween::interpolate::translation_to(Vec3::new(
@@ -92,14 +83,15 @@ pub fn triple(center_point: Vec2) -> Formation {
                 let y = noise::simplex_noise_2d(Vec2::new(x - SWARM_OFFSET, 0.)) * 20.;
                 let x_offset = 12. * i as f32 - (NUM_SWARM as f32 - 1.) * 6.;
 
+                let time_offset = i as f32 * 0.1;
                 let mut commands = root.spawn((
                     Scout,
                     Platoon(root.target_entity()),
-                    EmitterDelay::new(0.2 * i as f32),
+                    EmitterDelay::new(2.8 + time_offset),
                     Transform::from_xyz(x - x_offset - SWARM_OFFSET, y, 0.),
                 ));
 
-                apply_animation(&mut commands, center_point, x_offset, i as f32 * 0.1);
+                apply_animation(&mut commands, center_point, x_offset, time_offset);
             }
         });
     })
