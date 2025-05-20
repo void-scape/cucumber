@@ -34,6 +34,8 @@ use rand::seq::IteratorRandom;
 use std::{f32::consts::PI, marker::PhantomData, time::Duration};
 use strum::IntoEnumIterator;
 
+pub mod arcs;
+
 pub const PLAYER_BULLET_SPEED: f32 = 300.;
 pub const PLAYER_MISSILE_SPEED: f32 = PLAYER_BULLET_SPEED * 0.8;
 pub const BULLET_SPEED: f32 = 75.;
@@ -96,6 +98,7 @@ impl Plugin for EmitterPlugin {
                         SwarmEmitter::shoot_bullets,
                         GradiusSpiralEmitter::shoot_bullets,
                         VergerEmitter::shoot_bullets,
+                        arcs::ArcsEmitter::shoot_bullets,
                     ),
                 )
                     .chain()

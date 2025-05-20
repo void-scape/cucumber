@@ -37,6 +37,7 @@ use rand::{Rng, seq::IteratorRandom};
 use std::{f32::consts::PI, ops::Range, time::Duration};
 use strum::IntoEnumIterator;
 
+pub mod arcs;
 pub mod buckshot;
 pub mod crisscross;
 pub mod formation;

@@ -1,4 +1,4 @@
-use super::{buckshot, crisscross, formation::*, scout, swarm, verger};
+use super::{arcs, buckshot, crisscross, formation::*, scout, swarm, verger};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -23,7 +23,6 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
-                //
                 (swarm::three(), 3.),
                 (swarm::right_swing(), 1.),
                 (swarm::left_swing(), 1.),
@@ -41,37 +40,6 @@ pub fn start_waves(mut commands: Commands) {
                 (swarm::left_swing(), 0.2),
                 (swarm::left_swing(), 1.),
                 (crisscross::single(Vec2::new(-30., -40.)).with(powerup), 4.),
-                //(swarm::right_swing(), 0.2),
-                //(swarm::right_swing(), 1.),
-                //(double_wall(), 1.),
-
-                //(swarm_right(), 0.),
-                //(swarm_left(), 2.),
-                //(crisscross().with(option(Weapon::Bullet)), 4.),
-                //(double_buck_shot(), 8.),
-                //(double_wall(), 2.),
-                //(double_crisscross(), 2.),
-                //(swarm_right(), 0.),
-                //(swarm_left(), 2.),
-                //(quad_mine_thrower(), 4.),
-                //(quad_mine_thrower().with(bomb), 6.),
-                //(double_crisscross(), 2.),
-                //(orb_slinger(), 6.),
-                //(laser_maze(), 2.),
-                //(double_wall(), 6.),
-                //(crisscross(), 2.),
-                //(double_orb_slinger().with(option(Weapon::Missile)), 2.),
-                //(double_wall(), 2.),
-                //(laser_ladder(), 4.),
-                //(swarm_right(), 0.),
-                //(swarm_left(), 4.),
-                //(swarm_right(), 0.),
-                //(swarm_left(), 3.8),
-                //(triple_wall(), 5.),
-                //(double_buck_shot(), 3.),
-                //(quad_mine_thrower(), 4.),
-                //(quad_mine_thrower().with(bomb), 18.),
-                //(boss(), 0.),
             ],
         ));
     }
