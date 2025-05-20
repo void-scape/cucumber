@@ -59,7 +59,7 @@ pub fn start_waves(mut commands: Commands) {
                 (swarm::left_swing(), 0.2),
                 (swarm::left_swing(), 1.),
                 (swarm::right_swing(), 0.2),
-                (swarm::right_swing(), 7.),
+                (swarm::right_swing(), 10.),
                 //
                 (boss(), 0.),
             ],
