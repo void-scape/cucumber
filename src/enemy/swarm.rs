@@ -51,12 +51,9 @@ const MAX_SHOTS: usize = 3;
     Trauma::NONE,
     Explosion::Small,
     FaceVelocity,
-    Shots,
+    ShotLimit(3)
 )]
 pub struct Swarm;
-
-#[derive(Default, Component)]
-pub struct Shots(usize);
 
 pub fn three() -> Formation {
     Formation::with_velocity(Vec2::ZERO, move |formation: &mut EntityCommands, _| {
@@ -154,12 +151,19 @@ fn swing(swing: Swing) -> Formation {
     })
 }
 
+#[derive(Component)]
+pub struct ShotLimit(pub usize);
+
+#[derive(Default, Component)]
+pub struct Shots(usize);
+
 #[derive(Default, Component)]
 #[require(
     Transform,
     EmitterState,
     BulletModifiers,
-    BulletTimer::ready(BULLET_RATE)
+    BulletTimer::ready(BULLET_RATE),
+    Shots
 )]
 pub struct SwarmEmitter;
 
@@ -170,6 +174,7 @@ impl SwarmEmitter {
                 &mut EmitterState,
                 &mut BulletTimer,
                 &mut Shots,
+                Option<&ShotLimit>,
                 &BulletModifiers,
                 &ChildOf,
                 &GlobalTransform,
@@ -184,7 +189,9 @@ impl SwarmEmitter {
     ) {
         let delta = time.delta();
 
-        for (mut state, mut timer, mut shots, mods, child_of, transform) in emitters.iter_mut() {
+        for (mut state, mut timer, mut shots, limit, mods, child_of, transform) in
+            emitters.iter_mut()
+        {
             if !state.enabled {
                 continue;
             }
@@ -208,9 +215,12 @@ impl SwarmEmitter {
                     to_player.to_angle() - PI / 2.0 + PI / 4.,
                 )),
             ));
+
             shots.0 += 1;
-            if shots.0 >= MAX_SHOTS {
-                state.enabled = false;
+            if let Some(limit) = limit {
+                if shots.0 >= limit.0 {
+                    state.enabled = false;
+                }
             }
 
             writer.write(EmitterSample(EmitterBullet::Arrow));

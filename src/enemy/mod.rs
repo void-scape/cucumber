@@ -273,37 +273,36 @@ fn handle_death(
     let mut rng = rand::rng();
     for (entity, gt, trauma, drops, power_up, explosion) in q.iter() {
         if explosion.is_some_and(|e| *e == Explosion::Big) {
-            commands
-                .entity(entity)
-                .despawn_related::<Children>()
-                .despawn_related::<BehaviorNodes>()
-                .remove::<(
-                    Enemy,
-                    BulletModifiers,
-                    Platoon,
-                    ChildOf,
-                    Dead,
-                    Explosion,
-                    FacePlayer,
-                )>()
-                .insert((
-                    DespawnTweenFinish,
-                    //WallDespawn,
-                    //LinearVelocity(DEFAULT_FORMATION_VEL),
-                    //DespawnRestart,
-                    //CollisionLayers::new(Layer::Bullet, Layer::Bounds),
-                ))
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(0.5),
-                    EaseKind::Linear,
-                    entity.into_target().with(translation(
-                        gt.translation(),
-                        gt.translation()
-                            .with_z(LAYER2 - 10.)
-                            .with_y(gt.translation().y + DEFAULT_FORMATION_VEL.y * 1.5),
-                    )),
-                );
+            commands.entity(entity).despawn();
+            //.despawn_related::<Children>()
+            //.despawn_related::<BehaviorNodes>()
+            //.remove::<(
+            //    Enemy,
+            //    BulletModifiers,
+            //    Platoon,
+            //    ChildOf,
+            //    Dead,
+            //    Explosion,
+            //    FacePlayer,
+            //)>()
+            //.insert((
+            //    DespawnTweenFinish,
+            //    //WallDespawn,
+            //    //LinearVelocity(DEFAULT_FORMATION_VEL),
+            //    //DespawnRestart,
+            //    //CollisionLayers::new(Layer::Bullet, Layer::Bounds),
+            //))
+            //.animation()
+            //.insert_tween_here(
+            //    Duration::from_secs_f32(0.5),
+            //    EaseKind::Linear,
+            //    entity.into_target().with(translation(
+            //        gt.translation(),
+            //        gt.translation()
+            //            .with_z(LAYER2 - 10.)
+            //            .with_y(gt.translation().y + DEFAULT_FORMATION_VEL.y * 1.5),
+            //    )),
+            //);
         } else {
             commands.entity(entity).despawn();
         }

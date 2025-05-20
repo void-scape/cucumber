@@ -53,7 +53,7 @@ impl Plugin for BulletPlugin {
         app.add_plugins((emitter::EmitterPlugin, homing::HomingPlugin))
             .add_event::<BulletCollisionEvent>()
             .add_systems(
-                PostUpdate,
+                PreUpdate,
                 (grazing, handle_bullet_collision, despawn_dead_bullets)
                     .chain()
                     .in_set(BulletSystems::Collision),
