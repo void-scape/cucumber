@@ -1,4 +1,5 @@
-use crate::bullet::emitter::{CrisscrossState, PulseTime, PulseTimer};
+use crate::bullet::emitter::{PulseTime, PulseTimer};
+use crate::enemy::crisscross::CrisscrossState;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_tween::interpolate::rotation;

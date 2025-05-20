@@ -24,7 +24,7 @@ impl Plugin for TweenPlugin {
                 apply_resource_tween_system::<TimeTween>,
             ))
             .add_systems(
-                Update,
+                PostUpdate,
                 (
                     insert_timeouts,
                     emit_tween_timeouts,

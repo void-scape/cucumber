@@ -1,7 +1,7 @@
 use super::InvincibleLaserNode;
 use super::timeline::WaveTimeline;
 use super::waller::Waller;
-use super::{CrissCross, MineThrower, OrbSlinger};
+use super::{MineThrower, OrbSlinger};
 use crate::bullet::emitter::{LaserEmitter, WallEmitter};
 use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
@@ -149,48 +149,6 @@ pub fn quad_mine_thrower() -> Formation {
     })
 }
 
-pub fn double_wall() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![
-            (
-                Waller,
-                Platoon(formation.id()),
-                Transform::from_xyz(-45., 0., 0.)
-            ),
-            (
-                Waller,
-                Platoon(formation.id()),
-                Transform::from_xyz(45., 0., 0.)
-            ),
-        ]);
-    })
-}
-
-pub fn triple_wall() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![
-            (
-                Waller,
-                WallEmitter::from_bullets(3),
-                Platoon(formation.id()),
-                Transform::from_xyz(-40., 0., 0.)
-            ),
-            (
-                Waller,
-                WallEmitter::from_bullets(3),
-                Platoon(formation.id()),
-                Transform::from_xyz(0., 20., 0.)
-            ),
-            (
-                Waller,
-                WallEmitter::from_bullets(3),
-                Platoon(formation.id()),
-                Transform::from_xyz(40., 0., 0.)
-            ),
-        ]);
-    })
-}
-
 pub fn orb_slinger() -> Formation {
     Formation::new(|formation: &mut EntityCommands, _| {
         formation.insert(children![(OrbSlinger, Platoon(formation.id()))]);
@@ -207,29 +165,6 @@ pub fn double_orb_slinger() -> Formation {
             ),
             (
                 OrbSlinger,
-                Platoon(formation.id()),
-                Transform::from_xyz(40., 0., 0.)
-            ),
-        ]);
-    })
-}
-
-pub fn crisscross() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![(CrissCross, Platoon(formation.id()))]);
-    })
-}
-
-pub fn double_crisscross() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, _| {
-        formation.insert(children![
-            (
-                CrissCross,
-                Platoon(formation.id()),
-                Transform::from_xyz(-40., 0., 0.)
-            ),
-            (
-                CrissCross,
                 Platoon(formation.id()),
                 Transform::from_xyz(40., 0., 0.)
             ),
@@ -521,6 +456,7 @@ pub fn animate_entrance(
                         &server,
                         &mut commands,
                         entity,
+                        (),
                         secs,
                         tstart,
                         tend,
@@ -533,7 +469,59 @@ pub fn animate_entrance(
         }
         None => {
             let entity = commands.spawn(bundle).id();
-            animate_entrance_inner(server, commands, entity, secs, tstart, tend, rstart, rend);
+            animate_entrance_inner(
+                server,
+                commands,
+                entity,
+                (),
+                secs,
+                tstart,
+                tend,
+                rstart,
+                rend,
+            );
+        }
+    }
+}
+
+pub fn animate_entrance_with(
+    server: &AssetServer,
+    commands: &mut Commands,
+    bundle: impl Bundle + Clone,
+    finished: impl Bundle + Clone,
+    delay: Option<f32>,
+    secs: f32,
+    tstart: Vec3,
+    tend: Vec3,
+    rstart: Quat,
+    rend: Quat,
+) {
+    match delay {
+        Some(delay) => {
+            run_after(
+                Duration::from_secs_f32(delay),
+                move |mut commands: Commands, server: Res<AssetServer>| {
+                    let entity = commands.spawn(bundle.clone()).id();
+                    animate_entrance_inner(
+                        &server,
+                        &mut commands,
+                        entity,
+                        finished.clone(),
+                        secs,
+                        tstart,
+                        tend,
+                        rstart,
+                        rend,
+                    );
+                },
+                commands,
+            );
+        }
+        None => {
+            let entity = commands.spawn(bundle).id();
+            animate_entrance_inner(
+                server, commands, entity, finished, secs, tstart, tend, rstart, rend,
+            );
         }
     }
 }
@@ -542,6 +530,7 @@ fn animate_entrance_inner(
     server: &AssetServer,
     commands: &mut Commands,
     entity: Entity,
+    finished: impl Bundle + Clone,
     secs: f32,
     tstart: Vec3,
     tend: Vec3,
@@ -573,7 +562,7 @@ fn animate_entrance_inner(
               mut states: Query<&mut ParticleSpawnerState>,
               server: Res<AssetServer>| {
             if let Ok(mut entity) = commands.get_entity(id) {
-                entity.remove::<ColliderDisabled>();
+                entity.remove::<ColliderDisabled>().insert(finished.clone());
             }
 
             if let Ok(mut state) = states.get_mut(trail) {

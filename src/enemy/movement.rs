@@ -76,7 +76,7 @@ fn update_circle(
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 #[require(Angle)]
 pub struct Figure8 {
     pub radius: f32,

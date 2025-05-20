@@ -126,7 +126,7 @@ fn swing(swing: Swing) -> Formation {
                     .spawn((
                         Swarm,
                         Platoon(root.target_entity()),
-                        EmitterDelay::new(0.5 + 0.15 * i as f32),
+                        EmitterDelay::new(0.5 + 0.25 * i as f32),
                         Transform::from_xyz(x, 0., ENEMY_Z),
                         LinearVelocity::default(),
                     ))

@@ -7,7 +7,10 @@ use super::{
 use crate::{
     Avian, DespawnRestart, HEIGHT, Layer,
     bullet::PlayerBullet,
-    enemy::{Enemy, buckshot::BuckShotEmitter, swarm::SwarmEmitter, verger::VergerEmitter},
+    enemy::{
+        Enemy, buckshot::BuckShotEmitter, crisscross::CrisscrossEmitter, swarm::SwarmEmitter,
+        verger::VergerEmitter,
+    },
     float_tween,
     health::{Damage, DamageEvent, Health, HealthSet},
     particles::{self, ParticleAppExt, ParticleBundle, ParticleEmitter, ParticleState},
@@ -56,10 +59,6 @@ pub const GRADIUS_ORB_RATE: f32 = 0.1;
 const ORB_WAIT_RATE: f32 = 2.;
 const ORB_SHOT_RATE: f32 = 0.2;
 const ORB_WAVES: usize = 8;
-
-const CRISSCROSS_WAIT_RATE: f32 = 1.25;
-const CRISSCROSS_SHOT_RATE: f32 = 0.15;
-const CRISSCROSS_WAVES: usize = 5;
 
 pub const MISSILE_HEALTH: f32 = 2.;
 pub const MINE_HEALTH: f32 = 1.5;
@@ -1015,10 +1014,10 @@ pub struct PulseTimer {
     pub wait: Timer,
     pub bullet: Timer,
     pub pulses: usize,
-    state: PulseState,
+    pub state: PulseState,
 }
 
-enum PulseState {
+pub enum PulseState {
     Wait,
     Bullet(usize),
 }
@@ -1191,91 +1190,6 @@ impl SpiralOrbEmitter {
                     + timer.current_pulse() as f32 * std::f32::consts::PI / 4.;
                 commands.spawn((
                     BlueOrb,
-                    LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
-                    new_transform,
-                    Damage::new(ORB_DAMAGE * mods.damage),
-                ));
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Orb));
-        }
-    }
-}
-
-#[derive(Default, Component)]
-#[require(Transform, BulletModifiers, Polarity, CrisscrossState)]
-pub struct CrisscrossEmitter;
-
-#[derive(Component, Default)]
-pub enum CrisscrossState {
-    #[default]
-    Plus,
-    Cross,
-}
-
-impl CrisscrossEmitter {
-    fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &mut CrisscrossEmitter,
-                Option<&mut PulseTimer>,
-                &BulletModifiers,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-                &mut CrisscrossState,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-    ) {
-        for (entity, _emitter, timer, mods, polarity, parent, transform, mut state) in
-            emitters.iter_mut()
-        {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(PulseTimer::new(
-                    mods.rate,
-                    CRISSCROSS_WAIT_RATE,
-                    CRISSCROSS_SHOT_RATE,
-                    CRISSCROSS_WAVES,
-                ));
-                continue;
-            };
-
-            if !timer.just_finished(&time) {
-                continue;
-            }
-
-            if matches!(timer.state, PulseState::Wait) {
-                match *state {
-                    CrisscrossState::Cross => *state = CrisscrossState::Plus,
-                    CrisscrossState::Plus => *state = CrisscrossState::Cross,
-                }
-                continue;
-            }
-
-            let new_transform = transform.compute_transform();
-            let angle_offset = match *state {
-                CrisscrossState::Cross => std::f32::consts::PI / 4.,
-                CrisscrossState::Plus => 0.,
-            };
-            let bullets = 4;
-            for angle in 0..bullets {
-                let angle = (angle as f32 / bullets as f32) * std::f32::consts::TAU
-                    // + timer.current_pulse() as f32 * std::f32::consts::PI * 0.01
-                    + angle_offset;
-
-                commands.spawn((
-                    RedOrb,
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
                     Damage::new(ORB_DAMAGE * mods.damage),

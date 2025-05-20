@@ -1,7 +1,7 @@
 use self::{
     formation::{DEFAULT_FORMATION_VEL, FormationPlugin, FormationSet, Platoon},
     movement::*,
-    timeline::{ENEMY_Z, LARGEST_SPRITE_SIZE},
+    timeline::LARGEST_SPRITE_SIZE,
 };
 use crate::{
     DespawnRestart, GameState, Layer, assets,
@@ -10,16 +10,13 @@ use crate::{
     background::LAYER2,
     bullet::{
         Destructable, Direction,
-        emitter::{BulletModifiers, CrisscrossEmitter, MineEmitter, SpiralOrbEmitter},
+        emitter::{BulletModifiers, MineEmitter, SpiralOrbEmitter},
     },
     effects::Explosion,
     health::{Dead, Health},
     pickups::PowerUp,
     player::Player,
-    sprites::{
-        BehaviorNodes, BehaviorRoot, CellSize, CellSprite, MultiSprite, SpriteBehavior,
-        SpriteBundle,
-    },
+    sprites::{BehaviorNodes, BehaviorRoot, CellSprite},
     tween::DespawnTweenFinish,
 };
 use avian2d::prelude::*;
@@ -41,6 +38,7 @@ use std::{f32::consts::PI, ops::Range, time::Duration};
 use strum::IntoEnumIterator;
 
 pub mod buckshot;
+pub mod crisscross;
 pub mod formation;
 pub mod movement;
 pub mod scout;
@@ -128,43 +126,6 @@ impl OrbSlinger {
             // no behavior, just need to despawn on death
             BehaviorRoot(ctx.entity),
         ));
-    }
-}
-
-#[derive(Default, Component)]
-#[require(
-    Enemy,
-    Collider::rectangle(12., 12.),
-    SpriteBundle = Self::sprites(),
-    Health::full(15.),
-    LowHealthEffects,
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    CrisscrossEmitter,
-    Drops::splat(6),
-    Explosion::Big,
-)]
-pub struct CrissCross;
-
-impl CrissCross {
-    fn sprites() -> SpriteBundle {
-        SpriteBundle::new([
-            MultiSprite::Static(CellSprite {
-                path: "ships.png",
-                size: CellSize::TwentyFour,
-                cell: UVec2::new(4, 1),
-                z: 0.,
-            }),
-            MultiSprite::Dynamic {
-                sprite: CellSprite {
-                    path: "ships.png",
-                    size: CellSize::TwentyFour,
-                    cell: UVec2::new(4, 2),
-                    z: ENEMY_Z - 1.,
-                },
-                behavior: SpriteBehavior::Crisscross,
-                position: Vec2::ZERO,
-            },
-        ])
     }
 }
 
@@ -314,18 +275,8 @@ fn handle_death(
         if explosion.is_some_and(|e| *e == Explosion::Big) {
             commands
                 .entity(entity)
+                .despawn_related::<Children>()
                 .despawn_related::<BehaviorNodes>()
-                .animation()
-                .insert_tween_here(
-                    Duration::from_secs_f32(0.5),
-                    EaseKind::Linear,
-                    entity.into_target().with(translation(
-                        gt.translation(),
-                        gt.translation()
-                            .with_z(LAYER2 - 10.)
-                            .with_y(gt.translation().y + DEFAULT_FORMATION_VEL.y * 1.5),
-                    )),
-                )
                 .remove::<(
                     Enemy,
                     BulletModifiers,
@@ -341,7 +292,18 @@ fn handle_death(
                     //LinearVelocity(DEFAULT_FORMATION_VEL),
                     //DespawnRestart,
                     //CollisionLayers::new(Layer::Bullet, Layer::Bounds),
-                ));
+                ))
+                .animation()
+                .insert_tween_here(
+                    Duration::from_secs_f32(0.5),
+                    EaseKind::Linear,
+                    entity.into_target().with(translation(
+                        gt.translation(),
+                        gt.translation()
+                            .with_z(LAYER2 - 10.)
+                            .with_y(gt.translation().y + DEFAULT_FORMATION_VEL.y * 1.5),
+                    )),
+                );
         } else {
             commands.entity(entity).despawn();
         }
