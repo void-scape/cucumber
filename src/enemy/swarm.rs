@@ -9,6 +9,7 @@ use crate::bullet::BulletTimer;
 use crate::bullet::emitter::EmitterBullet;
 use crate::bullet::emitter::EmitterDelay;
 use crate::bullet::emitter::EmitterSample;
+use crate::bullet::emitter::EmitterState;
 use crate::player::Player;
 use crate::{
     Layer,
@@ -33,6 +34,7 @@ use std::time::Duration;
 pub const SWARM_SPEED: f32 = 60.;
 const BULLET_RATE: f32 = 0.8;
 const BULLET_SPEED: f32 = 90.;
+const MAX_SHOTS: usize = 3;
 
 #[derive(Default, Component)]
 #[require(
@@ -49,8 +51,12 @@ const BULLET_SPEED: f32 = 90.;
     Trauma::NONE,
     Explosion::Small,
     FaceVelocity,
+    Shots,
 )]
 pub struct Swarm;
+
+#[derive(Default, Component)]
+pub struct Shots(usize);
 
 pub fn three() -> Formation {
     Formation::with_velocity(Vec2::ZERO, move |formation: &mut EntityCommands, _| {
@@ -149,14 +155,21 @@ fn swing(swing: Swing) -> Formation {
 }
 
 #[derive(Default, Component)]
-#[require(Transform, BulletModifiers, BulletTimer::ready(BULLET_RATE))]
+#[require(
+    Transform,
+    EmitterState,
+    BulletModifiers,
+    BulletTimer::ready(BULLET_RATE)
+)]
 pub struct SwarmEmitter;
 
 impl SwarmEmitter {
     pub fn shoot_bullets(
         mut emitters: Query<
             (
+                &mut EmitterState,
                 &mut BulletTimer,
+                &mut Shots,
                 &BulletModifiers,
                 &ChildOf,
                 &GlobalTransform,
@@ -171,7 +184,11 @@ impl SwarmEmitter {
     ) {
         let delta = time.delta();
 
-        for (mut timer, mods, child_of, transform) in emitters.iter_mut() {
+        for (mut state, mut timer, mut shots, mods, child_of, transform) in emitters.iter_mut() {
+            if !state.enabled {
+                continue;
+            }
+
             let Ok(parent_mods) = parents.get(child_of.parent()) else {
                 continue;
             };
@@ -191,6 +208,10 @@ impl SwarmEmitter {
                     to_player.to_angle() - PI / 2.0 + PI / 4.,
                 )),
             ));
+            shots.0 += 1;
+            if shots.0 >= MAX_SHOTS {
+                state.enabled = false;
+            }
 
             writer.write(EmitterSample(EmitterBullet::Arrow));
         }

@@ -52,7 +52,6 @@ impl From<&Pickup> for PickupEvent {
     Transform,
     RigidBody::Kinematic,
     Sensor,
-    WallDespawn,
     DespawnRestart,
     CollisionLayers::new(Layer::Collectable, [Layer::Bounds, Layer::Player, Layer::Miners]),
 )]

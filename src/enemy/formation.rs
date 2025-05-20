@@ -1,8 +1,8 @@
+use super::InvincibleLaserNode;
 use super::timeline::WaveTimeline;
 use super::waller::Waller;
-use super::{Convergence, InvincibleLaserNode};
 use super::{CrissCross, MineThrower, OrbSlinger};
-use crate::bullet::emitter::{EmitterDelay, LaserEmitter, WallEmitter};
+use crate::bullet::emitter::{LaserEmitter, WallEmitter};
 use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
 use avian2d::prelude::{ColliderDisabled, Physics};
@@ -13,7 +13,6 @@ use bevy::prelude::*;
 use bevy_enoki::prelude::*;
 use bevy_seedling::prelude::*;
 use bevy_sequence::combinators::delay::run_after;
-use bevy_tween::combinator::{sequence, tween};
 use bevy_tween::interpolate::{rotation, sprite_color, translation};
 use bevy_tween::prelude::*;
 use bevy_tween::tween::apply_component_tween_system;
@@ -215,18 +214,11 @@ pub fn double_orb_slinger() -> Formation {
     })
 }
 
-pub fn convergent() -> Formation {
-    Formation::with_velocity(Vec2::new(0., -1.), |formation: &mut EntityCommands, _| {
-        formation.insert(children![(Convergence, Platoon(formation.id()))]);
-    })
-}
-
 pub fn crisscross() -> Formation {
     Formation::new(|formation: &mut EntityCommands, _| {
         formation.insert(children![(CrissCross, Platoon(formation.id()))]);
     })
 }
-
 
 pub fn double_crisscross() -> Formation {
     Formation::new(|formation: &mut EntityCommands, _| {

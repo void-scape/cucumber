@@ -67,7 +67,7 @@ pub fn triple(center_point: Vec2) -> Formation {
                 ))),
             ),
             tween(
-                Duration::from_secs_f32(1.5),
+                Duration::from_secs_f32(0.1),
                 EaseKind::QuadraticOut,
                 position.with(bevy_tween::interpolate::translation_by(Vec3::new(
                     0.0, 0.0, 0.0,

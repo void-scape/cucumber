@@ -1,4 +1,4 @@
-use super::{buckshot, formation::*, scout, swarm};
+use super::{buckshot, formation::*, scout, swarm, verger};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -24,16 +24,25 @@ pub fn start_waves(mut commands: Commands) {
             START_DELAY,
             [
                 //
-                (convergent(), 0.),
-                //(swarm::three(), 3.),
-                //(swarm::right_swing(), 1.),
-                //(swarm::left_swing(), 1.),
-                //(buckshot::double_buck_shot(), 1.),
-                //(scout::triple(Vec2::new(0., -45.)), 3.),
-                //(swarm::right_swing(), 1.),
-                //(swarm::left_swing().with(powerup), 1.),
+                (swarm::three(), 3.),
+                (swarm::right_swing(), 1.),
+                (swarm::left_swing(), 1.),
+                (buckshot::double(), 1.),
+                (scout::triple(Vec2::new(0., -45.)), 3.),
+                (swarm::right_swing(), 1.),
+                (swarm::left_swing().with(powerup), 2.),
+                (verger::verger(), 4.),
+                (buckshot::right(), 1.),
+                (scout::triple(Vec2::new(0., -45.)), 1.),
+                (swarm::right_swing(), 0.2),
+                (swarm::right_swing(), 1.),
+                (buckshot::left(), 1.),
+                (swarm::left_swing(), 0.2),
+                (swarm::left_swing(), 1.),
+                (buckshot::right().with(powerup), 1.),
+                (swarm::right_swing(), 0.2),
+                (swarm::right_swing(), 1.),
                 //(double_wall(), 1.),
-                //
 
                 //(swarm_right(), 0.),
                 //(swarm_left(), 2.),

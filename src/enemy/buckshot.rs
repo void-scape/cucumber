@@ -65,7 +65,67 @@ impl BuckShot {
     }
 }
 
-pub fn double_buck_shot() -> Formation {
+pub fn left() -> Formation {
+    Formation::with_velocity(
+        Vec2::ZERO,
+        |formation: &mut EntityCommands, server: &AssetServer| {
+            formation.with_children(|root| {
+                let platoon = root.target_entity();
+
+                animate_entrance(
+                    &server,
+                    &mut root.commands(),
+                    (
+                        ChildOf(platoon),
+                        EmitterDelay::new(1.5),
+                        BuckShot,
+                        Platoon(platoon),
+                        Transform::from_xyz(0., 0., 0.),
+                        ColliderDisabled,
+                    ),
+                    None,
+                    1.5,
+                    Vec3::new(0., 12., 0.),
+                    Vec3::new(-25., -50., 0.),
+                    Quat::from_rotation_z(PI / 3.) + Quat::from_rotation_x(PI / 4.),
+                    Quat::default(),
+                );
+            });
+        },
+    )
+}
+
+pub fn right() -> Formation {
+    Formation::with_velocity(
+        Vec2::ZERO,
+        |formation: &mut EntityCommands, server: &AssetServer| {
+            formation.with_children(|root| {
+                let platoon = root.target_entity();
+
+                animate_entrance(
+                    &server,
+                    &mut root.commands(),
+                    (
+                        ChildOf(platoon),
+                        EmitterDelay::new(1.5),
+                        BuckShot,
+                        Platoon(platoon),
+                        Transform::from_xyz(0., 0., 0.),
+                        ColliderDisabled,
+                    ),
+                    None,
+                    1.5,
+                    Vec3::new(0., 12., 0.),
+                    Vec3::new(25., -50., 0.),
+                    Quat::from_rotation_z(PI / 3.) + Quat::from_rotation_x(PI / 4.),
+                    Quat::default(),
+                );
+            });
+        },
+    )
+}
+
+pub fn double() -> Formation {
     Formation::with_velocity(
         Vec2::ZERO,
         |formation: &mut EntityCommands, server: &AssetServer| {

@@ -2,7 +2,7 @@ use crate::{
     Avian, DespawnRestart, GameState, HEIGHT, Layer, RES_HEIGHT, RES_WIDTH, RESOLUTION_SCALE,
     bullet::{
         BulletTimer,
-        emitter::{BulletModifiers, EmitterState, GattlingEmitter, PulseTimer},
+        emitter::{BulletModifiers, EmitterState},
         player::{PlayerFocusEmitter, PlayerGattlingEmitter},
     },
     effects::{Blasters, Explosion},
@@ -40,10 +40,9 @@ use std::{
 };
 
 pub const PLAYER_HEALTH: f32 = 3.0;
-pub const PLAYER_SHIELD: f32 = 1.0;
 const PLAYER_EASE_DUR: f32 = 1.;
-pub const PLAYER_SPEED: f32 = 90.;
-pub const PLAYER_FOCUS_SPEED: f32 = 60.;
+pub const PLAYER_SPEED: f32 = 110.;
+pub const PLAYER_FOCUS_SPEED: f32 = 80.;
 
 pub struct PlayerPlugin;
 
