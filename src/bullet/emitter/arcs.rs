@@ -66,16 +66,16 @@ impl ArcsEmitter {
             timer.timer.set_duration(duration);
 
             let direction = (player_position - new_transform.translation).normalize();
-            // let angle = direction.xy().to_angle();
-            // new_transform.rotate_z(angle - std::f32::consts::FRAC_PI_2);
+            let angle = direction.xy().to_angle();
+            new_transform.rotate_z(angle - std::f32::consts::FRAC_PI_2);
 
             let intended_speed = BULLET_SPEED * mods.speed * 0.66;
             let distance = player_position.distance(new_transform.translation);
             let duration = Duration::from_secs_f32(distance / intended_speed);
 
             let mut bullet = commands.spawn((
-                Mine,
-                // LinearVelocity(direction.xy() * BULLET_SPEED * mods.speed),
+                BasicBullet,
+                LinearVelocity(Vec2::NEG_Y * 15.0),
                 new_transform,
                 Damage::new(BULLET_DAMAGE * mods.damage),
                 HomingRotate,
@@ -89,15 +89,6 @@ impl ArcsEmitter {
                 EaseKind::QuadraticOut,
                 position.with(translation_to(player_position)),
             ),)));
-
-            let id = bullet.id();
-            let on_end = OnEnd::new(&mut commands, move |mut commands: Commands| {
-                commands
-                    .entity(id)
-                    .entry::<Health>()
-                    .and_modify(|mut h| h.damage_all());
-            });
-            commands.entity(id).insert(on_end);
 
             writer.write(EmitterSample(EmitterBullet::Bullet));
         }
