@@ -323,6 +323,7 @@ pub struct Rocket;
     Health::full(MINE_HEALTH),
     Collider::circle(1.5),
     AnimationSprite::repeating("bomb.png", 0.1, 0..8),
+    Damage::new(1.),
 )]
 pub struct Mine;
 

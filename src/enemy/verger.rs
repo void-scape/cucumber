@@ -22,7 +22,7 @@ use bevy_optix::debug::DebugCircle;
 #[require(
     Enemy,
     Collider::circle(21.),
-    Health::full(80.),
+    Health::full(100.),
     LowHealthEffects,
     VergerEmitter,
     Explosion::Big,
@@ -30,10 +30,10 @@ use bevy_optix::debug::DebugCircle;
 )]
 pub struct Verger;
 
-pub fn verger() -> Formation {
+pub fn verger(position: Vec2) -> Formation {
     Formation::with_velocity(
         Vec2::ZERO,
-        |formation: &mut EntityCommands, server: &AssetServer| {
+        move |formation: &mut EntityCommands, server: &AssetServer| {
             let id = formation.id();
             animate_entrance(
                 server,
@@ -42,7 +42,7 @@ pub fn verger() -> Formation {
                 None,
                 1.5,
                 Vec3::new(0., 16., 0.),
-                Vec3::new(-40., -32., 0.),
+                position.extend(0.),
                 Quat::default(),
                 Quat::default(),
             );

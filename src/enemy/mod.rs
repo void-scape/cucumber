@@ -1,5 +1,5 @@
 use self::{
-    formation::{DEFAULT_FORMATION_VEL, FormationPlugin, FormationSet, Platoon},
+    formation::{FormationPlugin, FormationSet},
     movement::*,
     timeline::LARGEST_SPRITE_SIZE,
 };
@@ -7,17 +7,12 @@ use crate::{
     DespawnRestart, GameState, Layer, assets,
     asteroids::SpawnCluster,
     auto_collider::ImageCollider,
-    background::LAYER2,
-    bullet::{
-        Destructable, Direction,
-        emitter::{BulletModifiers, MineEmitter, SpiralOrbEmitter},
-    },
+    bullet::{Destructable, Direction, emitter::SpiralOrbEmitter},
     effects::Explosion,
     health::{Dead, Health},
     pickups::PowerUp,
     player::Player,
-    sprites::{BehaviorNodes, BehaviorRoot, CellSprite},
-    tween::DespawnTweenFinish,
+    sprites::{BehaviorRoot, CellSprite},
 };
 use avian2d::prelude::*;
 use bevy::{
@@ -28,19 +23,15 @@ use bevy::{
 };
 use bevy_enoki::prelude::*;
 use bevy_optix::{debug::DebugRect, shake::TraumaCommands};
-use bevy_tween::{
-    interpolate::translation,
-    prelude::{AnimationBuilderExt, EaseKind},
-    tween::IntoTarget,
-};
 use rand::{Rng, seq::IteratorRandom};
-use std::{f32::consts::PI, ops::Range, time::Duration};
+use std::{f32::consts::PI, ops::Range};
 use strum::IntoEnumIterator;
 
 pub mod arcs;
 pub mod buckshot;
 pub mod crisscross;
 pub mod formation;
+pub mod minethrower;
 pub mod movement;
 pub mod scout;
 pub mod swarm;
@@ -88,20 +79,6 @@ impl Plugin for EnemyPlugin {
     Trauma,
 )]
 pub struct Enemy;
-
-#[derive(Default, Clone, Copy, Component)]
-#[require(
-    Enemy,
-    Collider::rectangle(12., 12.),
-    CellSprite::new24("ships.png", UVec2::new(2, 1)),
-    Health::full(10.),
-    LowHealthEffects,
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
-    MineEmitter,
-    Drops::splat(3),
-    Explosion::Big,
-)]
-pub struct MineThrower;
 
 #[derive(Default, Component)]
 #[require(

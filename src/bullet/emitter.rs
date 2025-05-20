@@ -8,8 +8,8 @@ use crate::{
     Avian, DespawnRestart, HEIGHT, Layer,
     bullet::PlayerBullet,
     enemy::{
-        Enemy, buckshot::BuckShotEmitter, crisscross::CrisscrossEmitter, swarm::SwarmEmitter,
-        verger::VergerEmitter,
+        Enemy, buckshot::BuckShotEmitter, crisscross::CrisscrossEmitter, minethrower::MineEmitter,
+        swarm::SwarmEmitter, verger::VergerEmitter, waller::WallEmitter,
     },
     float_tween,
     health::{Damage, DamageEvent, Health, HealthSet},
@@ -54,8 +54,6 @@ pub const ARROW_DAMAGE: f32 = 1.;
 pub const PLAYER_BULLET_RATE: f32 = 0.2;
 pub const BULLET_RATE: f32 = 0.5;
 pub const MISSILE_RATE: f32 = 0.5;
-pub const MINE_RATE: f32 = 2.;
-pub const WALL_RATE: f32 = 1.5;
 pub const GRADIUS_ORB_RATE: f32 = 0.1;
 
 const ORB_WAIT_RATE: f32 = 2.;
@@ -920,84 +918,6 @@ impl LaserEmitter {
     }
 }
 
-#[derive(Component, Default)]
-#[require(Transform, BulletModifiers, Polarity, Visibility::Hidden)]
-pub struct MineEmitter;
-
-impl MineEmitter {
-    fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &MineEmitter,
-                Option<&mut BulletTimer>,
-                &BulletModifiers,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        player: Single<&Transform, With<Player>>,
-        time: Res<Time>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-    ) {
-        let delta = time.delta();
-
-        for (entity, _emitter, timer, mods, polarity, parent, transform) in emitters.iter_mut() {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let duration = mods.rate.duration(MINE_RATE);
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                });
-                continue;
-            };
-
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
-            if !timer.timer.tick(delta).just_finished() {
-                continue;
-            }
-            timer.timer.set_duration(duration);
-
-            let to_player =
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
-            let velocity = polarity.to_vec2().with_x(0.5)
-                * to_player.xy().with_y(-to_player.y)
-                * MINE_SPEED
-                * mods.speed;
-            let mine = commands
-                .spawn((
-                    Mine,
-                    LinearVelocity(velocity),
-                    new_transform,
-                    Damage::new(MINE_DAMAGE * mods.damage),
-                ))
-                .id();
-            commands
-                .entity(mine)
-                .animation()
-                .repeat(Repeat::Infinitely)
-                .insert_tween_here(
-                    Duration::from_secs_f32(1.),
-                    EaseKind::Linear,
-                    mine.into_target()
-                        .with(rotation(Quat::default(), Quat::from_rotation_z(PI))),
-                );
-
-            writer.write(EmitterSample(EmitterBullet::Mine));
-        }
-    }
-}
-
 pub trait PulseTime {
     fn wait_time(&self) -> f32;
     fn shot_time(&self) -> f32;
@@ -1196,151 +1116,6 @@ impl SpiralOrbEmitter {
                     LinearVelocity(Vec2::from_angle(angle) * ORB_SPEED * mods.speed),
                     new_transform,
                     Damage::new(ORB_DAMAGE * mods.damage),
-                ));
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Orb));
-        }
-    }
-}
-
-#[derive(Component)]
-#[require(Transform, BulletModifiers, Polarity)]
-pub struct WallEmitter {
-    layer: Layer,
-    bullets: usize,
-    dir: Vec2,
-    gap: f32,
-}
-
-#[derive(Default, Component)]
-pub struct TargetPlayer;
-
-impl Default for WallEmitter {
-    fn default() -> Self {
-        Self::new(Vec2::NEG_Y, 5, 10.)
-    }
-}
-
-impl WallEmitter {
-    pub fn new(dir: Vec2, bullets: usize, gap: f32) -> Self {
-        assert!(dir != Vec2::ZERO);
-        Self {
-            layer: Layer::Player,
-            bullets,
-            dir: dir.normalize(),
-            gap,
-        }
-    }
-
-    pub fn from_dir(dir: Vec2) -> Self {
-        Self {
-            dir,
-            ..Default::default()
-        }
-    }
-
-    pub fn from_bullets(bullets: usize) -> Self {
-        Self {
-            bullets,
-            ..Default::default()
-        }
-    }
-}
-
-fn rotate_around(vec: Vec2, center: Vec2, angle: f32) -> Vec2 {
-    let translated_x = vec.x - center.x;
-    let translated_y = vec.y - center.y;
-
-    let rotated_x = translated_x * angle.cos() - translated_y * angle.sin();
-    let rotated_y = translated_x * angle.sin() + translated_y * angle.cos();
-
-    Vec2 {
-        x: rotated_x + center.x,
-        y: rotated_y + center.y,
-    }
-}
-
-impl WallEmitter {
-    fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &WallEmitter,
-                Option<&mut BulletTimer>,
-                &BulletModifiers,
-                &Polarity,
-                &ChildOf,
-                &GlobalTransform,
-                Option<&TargetPlayer>,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time>,
-        player: Single<&Transform, With<Player>>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-    ) {
-        let delta = time.delta();
-
-        for (entity, emitter, timer, mods, polarity, parent, transform, target_player) in
-            emitters.iter_mut()
-        {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let duration = mods.rate.duration(WALL_RATE);
-            let Some(mut timer) = timer else {
-                commands.entity(entity).insert(BulletTimer {
-                    timer: Timer::new(duration, TimerMode::Repeating),
-                });
-                continue;
-            };
-
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += new_transform
-                .rotation
-                .mul_vec3(polarity.to_vec2().extend(0.0))
-                * 10.0;
-
-            if !timer.timer.tick(delta).just_finished() {
-                continue;
-            }
-            timer.timer.set_duration(duration);
-
-            let x_gap = emitter.gap;
-            let center_x = (emitter.bullets - 1) as f32 * x_gap / 2.0;
-
-            let dir = if target_player.is_none() {
-                emitter.dir
-            } else {
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or_zero()
-            };
-
-            let bowl_depth = 5.;
-            for i in 0..emitter.bullets {
-                let x = i as f32 * x_gap - center_x;
-                let y = bowl_depth * (x / center_x).powi(2);
-
-                let mut t = new_transform;
-                let p = rotate_around(
-                    t.translation.xy() + Vec2::new(x, y),
-                    t.translation.xy(),
-                    dir.to_angle() + std::f32::consts::PI / 2.,
-                )
-                .extend(0.);
-                t.translation = p;
-
-                commands.spawn((
-                    RedOrb,
-                    t,
-                    LinearVelocity(dir * ORB_SPEED * mods.speed),
-                    ColorMod::Purple,
-                    Bullet::target_layer(emitter.layer),
-                    Damage::new(MINE_DAMAGE * mods.damage),
                 ));
             }
 

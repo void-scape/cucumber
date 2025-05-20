@@ -1,6 +1,6 @@
 use super::InvincibleLaserNode;
+use super::OrbSlinger;
 use super::timeline::WaveTimeline;
-use super::{MineThrower, OrbSlinger};
 use crate::bullet::emitter::LaserEmitter;
 use crate::pickups::{Bomb, Pickup, PowerUp, Weapon};
 use crate::{Avian, DespawnRestart, GameState, boss::gradius};
@@ -74,79 +74,6 @@ impl Formation {
         self.modifiers.push(Box::new(modifier));
         self
     }
-}
-
-pub fn quad_mine_thrower() -> Formation {
-    Formation::new(|formation: &mut EntityCommands, server: &AssetServer| {
-        formation.with_children(|root| {
-            let platoon = root.target_entity();
-
-            animate_entrance(
-                server,
-                &mut root.commands(),
-                (
-                    MineThrower,
-                    ChildOf(platoon),
-                    Platoon(platoon),
-                    Transform::from_xyz(-20., 0., 0.),
-                ),
-                None,
-                1.5,
-                Vec3::ZERO,
-                Vec3::new(-20., 0., 0.),
-                Quat::default(),
-                Quat::default(),
-            );
-            animate_entrance(
-                server,
-                &mut root.commands(),
-                (
-                    MineThrower,
-                    ChildOf(platoon),
-                    Platoon(platoon),
-                    Transform::from_xyz(-20., 0., 0.),
-                ),
-                None,
-                1.5,
-                Vec3::ZERO,
-                Vec3::new(20., 0., 0.),
-                Quat::default(),
-                Quat::default(),
-            );
-            animate_entrance(
-                server,
-                &mut root.commands(),
-                (
-                    MineThrower,
-                    ChildOf(platoon),
-                    Platoon(platoon),
-                    Transform::from_xyz(-20., 0., 0.),
-                ),
-                Some(1.),
-                1.5,
-                Vec3::ZERO,
-                Vec3::new(40., 10., 0.),
-                Quat::default(),
-                Quat::default(),
-            );
-            animate_entrance(
-                server,
-                &mut root.commands(),
-                (
-                    MineThrower,
-                    ChildOf(platoon),
-                    Platoon(platoon),
-                    Transform::from_xyz(-20., 0., 0.),
-                ),
-                Some(1.),
-                1.5,
-                Vec3::ZERO,
-                Vec3::new(-40., 10., 0.),
-                Quat::default(),
-                Quat::default(),
-            );
-        });
-    })
 }
 
 pub fn orb_slinger() -> Formation {
