@@ -75,20 +75,28 @@ impl Plugin for PlayerPlugin {
             .add_observer(end_normal_shot)
             .add_observer(start_focus_shot)
             .add_observer(end_focus_shot);
-        //.add_observer(enable_emitters)
-        //.add_observer(disable_emitters)
-        //.add_observer(switch_emitters);
     }
 }
 
 fn spawn_player(mut commands: Commands) {
-    commands.insert_resource(PowerUps::default());
+    if crate::SKIP_WAVES {
+        commands.insert_resource(PowerUps(2));
+    } else {
+        commands.insert_resource(PowerUps::default());
+    }
+
+    let layers = if crate::PLAYER_INVINCIBLE {
+        Player::invincible_layers()
+    } else {
+        Player::layers()
+    };
 
     let player = commands
         .spawn((
             Player,
             Transform::from_xyz(0., -HEIGHT / 6., 0.),
             Blasters(const { &[Vec3::new(0., -6., -1.)] }),
+            layers,
         ))
         .with_child((
             PlayerGattlingEmitter::default(),
@@ -216,6 +224,10 @@ impl Player {
                 Layer::Enemy,
             ],
         )
+    }
+
+    fn invincible_layers() -> CollisionLayers {
+        CollisionLayers::new(Layer::Player, [Layer::Bounds, Layer::Collectable])
     }
 }
 

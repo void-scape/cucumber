@@ -1,11 +1,11 @@
+use self::emitters::{GradiusSpiralEmitter, SpiralOffsetTween};
 use crate::asteroids::SpawnCluster;
 use crate::auto_collider::ImageCollider;
 use crate::bullet::Destructable;
 use crate::bullet::emitter::{
-    BulletModifiers, EmitterDelay, GradiusSpiralEmitter, PulseTime, Rate, SpiralOrbEmitter,
+    BulletModifiers, EmitterDelay, PulseTime, Rate, SpiralOrbEmitter, Target,
 };
 use crate::enemy::Enemy;
-use crate::enemy::buckshot::BuckShotEmitter;
 use crate::enemy::waller::WallEmitter;
 use crate::health::{Dead, Health};
 use crate::{DespawnRestart, GameState, Layer, RESOLUTION_SCALE};
@@ -13,22 +13,36 @@ use avian2d::prelude::CollisionLayers;
 use bevy::prelude::*;
 use bevy_optix::debug::DebugRect;
 use bevy_optix::pixel_perfect::HIGH_RES_LAYER;
+use bevy_tween::BevyTweenRegisterSystems;
+use bevy_tween::tween::apply_component_tween_system;
 
-const HEALTH: f32 = 500.;
+pub mod emitters;
+
+const HEALTH: f32 = 300.;
 
 pub struct GradiusPlugin;
 
 impl Plugin for GradiusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (update_phase, phasea, update_health_display, kill_boss)
-                .run_if(in_state(GameState::Game)),
-        )
-        .add_observer(init_gradius)
-        .add_observer(enter_phasea)
-        .add_observer(exit_phasea)
-        .add_observer(enter_phaseb);
+        app.add_systems(PreUpdate, GradiusSpiralEmitter::shoot_bullets)
+            .add_systems(
+                Update,
+                (
+                    update_phase,
+                    phasea,
+                    phasec,
+                    update_health_display,
+                    kill_boss,
+                )
+                    .run_if(in_state(GameState::Game)),
+            )
+            .add_tween_systems(apply_component_tween_system::<SpiralOffsetTween>)
+            .add_observer(init_gradius)
+            .add_observer(enter_phasea)
+            .add_observer(exit_phasea)
+            .add_observer(enter_phaseb)
+            .add_observer(exit_phaseb)
+            .add_observer(enter_phasec);
     }
 }
 
@@ -77,6 +91,9 @@ struct PhaseA;
 #[derive(Default, Component)]
 pub struct PhaseB;
 
+#[derive(Default, Component)]
+pub struct PhaseC;
+
 #[derive(Component)]
 struct HealthDisplay;
 
@@ -91,11 +108,20 @@ impl FlipOrbEmitters {
 
 fn update_phase(
     mut commands: Commands,
-    gradius: Single<(Entity, &Health), (With<Gradius>, With<PhaseA>)>,
+    gradius: Single<(Entity, &Health), With<Gradius>>,
+    a: Option<Single<&PhaseA>>,
+    b: Option<Single<&PhaseB>>,
 ) {
     let (entity, health) = gradius.into_inner();
-    if health.current() <= health.max() / 2. {
-        commands.entity(entity).remove::<PhaseA>().insert(PhaseB);
+
+    if a.is_some() {
+        if health.current() <= 2. * health.max() / 3. {
+            commands.entity(entity).remove::<PhaseA>().insert(PhaseB);
+        }
+    } else if b.is_some() {
+        if health.current() <= health.max() / 3. {
+            commands.entity(entity).remove::<PhaseB>().insert(PhaseC);
+        }
     }
 }
 
@@ -113,17 +139,19 @@ fn enter_phasea(trigger: Trigger<OnAdd, PhaseA>, mut commands: Commands) {
             root.spawn((orb.clone(), Transform::from_xyz(-40., 0., 0.)));
             root.spawn((orb, Transform::from_xyz(40., 40., 0.)));
 
-            root.spawn((
-                BuckShotEmitter::new(buck_waves, buck_wait, buck_shot_dur),
-                BulletModifiers {
-                    speed: 0.5,
-                    ..Default::default()
-                },
-                EmitterDelay::new(total_time / 2.),
-            ));
+            //root.spawn((
+            //    BuckShotEmitter::new(buck_waves, buck_wait, buck_shot_dur),
+            //    Target::NEG_Y,
+            //    BulletModifiers {
+            //        speed: 0.5,
+            //        ..Default::default()
+            //    },
+            //    EmitterDelay::new(total_time / 2.),
+            //));
 
             root.spawn((
-                WallEmitter::from_dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.80)),
+                WallEmitter::default(),
+                Target::dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.80)),
                 BulletModifiers {
                     speed: 1.25,
                     rate: Rate::Secs(total_time),
@@ -133,7 +161,8 @@ fn enter_phasea(trigger: Trigger<OnAdd, PhaseA>, mut commands: Commands) {
                 Transform::from_xyz(-40., 30., 0.),
             ));
             root.spawn((
-                WallEmitter::from_dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.70)),
+                WallEmitter::default(),
+                Target::dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.70)),
                 BulletModifiers {
                     speed: 1.25,
                     rate: Rate::Secs(total_time),
@@ -176,14 +205,24 @@ fn enter_phaseb(trigger: Trigger<OnAdd, PhaseB>, mut commands: Commands) {
     commands.entity(trigger.target()).with_children(|root| {
         root.spawn(GradiusSpiralEmitter);
         root.spawn((
-            WallEmitter::new(Vec2::NEG_Y, 15, 20.),
+            WallEmitter {
+                bullets: 15,
+                gap: 20.,
+                bowl: 0.,
+            },
+            Target::NEG_Y,
             BulletModifiers {
                 rate: Rate::Secs(2.),
                 ..Default::default()
             },
         ));
         root.spawn((
-            WallEmitter::new(Vec2::NEG_Y, 15, 20.),
+            WallEmitter {
+                bullets: 15,
+                gap: 20.,
+                bowl: 0.,
+            },
+            Target::NEG_Y,
             BulletModifiers {
                 rate: Rate::Secs(2.),
                 ..Default::default()
@@ -192,6 +231,81 @@ fn enter_phaseb(trigger: Trigger<OnAdd, PhaseB>, mut commands: Commands) {
             Transform::from_xyz(10., 0., 0.),
         ));
     });
+}
+
+fn exit_phaseb(trigger: Trigger<OnRemove, PhaseB>, mut commands: Commands) {
+    commands
+        .entity(trigger.target())
+        .despawn_related::<Children>();
+}
+
+fn enter_phasec(trigger: Trigger<OnAdd, PhaseC>, mut commands: Commands) {
+    let orb = SpiralOrbEmitter::new(8, 2.0, 0.2);
+    let total_time = orb.total_time();
+    let buck_waves = 4;
+    let buck_shot_dur = 0.2;
+    let buck_wait = total_time - buck_shot_dur * buck_waves as f32;
+
+    commands
+        .entity(trigger.target())
+        .insert(FlipOrbEmitters::new(orb.total_time()))
+        .with_children(|root| {
+            root.spawn((orb.clone(), Transform::from_xyz(-40., 0., 0.)));
+            root.spawn((orb, Transform::from_xyz(40., 40., 0.)));
+
+            //root.spawn((
+            //    BuckShotEmitter::new(buck_waves, buck_wait, buck_shot_dur),
+            //    Target::NEG_Y,
+            //    BulletModifiers {
+            //        speed: 0.5,
+            //        ..Default::default()
+            //    },
+            //    EmitterDelay::new(total_time / 2.),
+            //));
+
+            root.spawn((
+                WallEmitter::default(),
+                Target::dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.80)),
+                BulletModifiers {
+                    speed: 1.25,
+                    rate: Rate::Secs(total_time),
+                    ..Default::default()
+                },
+                EmitterDelay::new(total_time / 2.),
+                Transform::from_xyz(-40., 30., 0.),
+            ));
+            root.spawn((
+                WallEmitter::default(),
+                Target::dir(Vec2::from_angle(std::f32::consts::PI * 2. * 0.70)),
+                BulletModifiers {
+                    speed: 1.25,
+                    rate: Rate::Secs(total_time),
+                    ..Default::default()
+                },
+                EmitterDelay::new(total_time / 2.),
+                Transform::from_xyz(40., 30., 0.),
+            ));
+        });
+}
+
+fn phasec(
+    time: Res<Time>,
+    gradius: Single<(&Children, &mut FlipOrbEmitters), With<PhaseC>>,
+    mut emitters: Query<&mut Transform, With<SpiralOrbEmitter>>,
+) {
+    let (children, mut flip_orbs) = gradius.into_inner();
+
+    flip_orbs.0.tick(time.delta());
+    if flip_orbs.0.just_finished() {
+        let mut iter = emitters.iter_many_mut(children.iter());
+        while let Some(mut transform) = iter.fetch_next() {
+            match transform.translation.y {
+                0. => transform.translation.y = 40.,
+                40. => transform.translation.y = 0.,
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 fn update_health_display(

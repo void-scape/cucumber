@@ -146,24 +146,12 @@ fn steer_homing(
     }
 }
 
-#[derive(Default, Component)]
-pub struct HomingRotate;
-
-fn apply_heading_velocity(
-    mut homing: Query<(
-        &mut Transform,
-        &Heading,
-        &mut LinearVelocity,
-        Option<&HomingRotate>,
-    )>,
-) {
-    for (mut transform, heading, mut velocity, rotate) in homing.iter_mut() {
+fn apply_heading_velocity(mut homing: Query<(&mut Transform, &Heading, &mut LinearVelocity)>) {
+    for (mut transform, heading, mut velocity) in homing.iter_mut() {
         velocity.0.x = heading.speed * heading.direction.cos();
         velocity.0.y = heading.speed * heading.direction.sin();
 
-        if rotate.is_some() {
-            let new_rotation = Quat::from_rotation_z(heading.direction - PI / 2.0);
-            transform.rotation = new_rotation;
-        }
+        let new_rotation = Quat::from_rotation_z(heading.direction - PI / 2.0);
+        transform.rotation = new_rotation;
     }
 }

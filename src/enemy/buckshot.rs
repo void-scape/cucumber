@@ -6,25 +6,27 @@ use super::formation::Platoon;
 use super::formation::animate_entrance;
 use super::timeline::LARGEST_SPRITE_SIZE;
 use crate::bullet::BlueOrb;
+use crate::bullet::emitter::BulletCommands;
+use crate::bullet::emitter::BulletModifiers;
+use crate::bullet::emitter::BulletSpeed;
+use crate::bullet::emitter::Emitter;
 use crate::bullet::emitter::EmitterBullet;
+use crate::bullet::emitter::EmitterCtx;
 use crate::bullet::emitter::EmitterDelay;
-use crate::bullet::emitter::EmitterSample;
 use crate::bullet::emitter::PulseTimer;
-use crate::bullet::homing::HomingRotate;
-use crate::player::Player;
+use crate::bullet::emitter::ShootEmitter;
+use crate::bullet::emitter::Target;
 use crate::sprites::CellSize;
 use crate::sprites::MultiSprite;
 use crate::sprites::SpriteBundle;
-use crate::{
-    bullet::emitter::BulletModifiers, effects::Explosion, health::Health, sprites::CellSprite,
-};
+use crate::{effects::Explosion, health::Health, sprites::CellSprite};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
-const BUCKSHOT_WAIT_RATE: f32 = 2.;
-const BUCKSHOT_SHOT_RATE: f32 = 0.2;
-const BUCKSHOT_WAVES: usize = 2;
+const SHOT: f32 = 0.2;
+const WAIT: f32 = 2.;
+const WAVES: usize = 2;
 const BULLET_SPEED: f32 = 120.;
 
 #[derive(Default, Clone, Copy, Component)]
@@ -175,7 +177,7 @@ pub fn double() -> Formation {
 }
 
 #[derive(Clone, Copy, Component)]
-#[require(Transform, BulletModifiers)]
+#[require(Transform, Emitter, BulletSpeed::new(BULLET_SPEED), Target::player())]
 pub struct BuckShotEmitter {
     waves: usize,
     shot_dur: f32,
@@ -184,11 +186,7 @@ pub struct BuckShotEmitter {
 
 impl Default for BuckShotEmitter {
     fn default() -> Self {
-        Self {
-            waves: BUCKSHOT_WAVES,
-            shot_dur: BUCKSHOT_SHOT_RATE,
-            wait_dur: BUCKSHOT_WAIT_RATE,
-        }
+        Self::new(WAVES, WAIT, SHOT)
     }
 }
 
@@ -202,68 +200,32 @@ impl BuckShotEmitter {
     }
 }
 
-impl BuckShotEmitter {
-    pub fn shoot_bullets(
-        mut emitters: Query<
-            (
-                Entity,
-                &mut BuckShotEmitter,
-                Option<&mut PulseTimer>,
-                &BulletModifiers,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        player: Single<&Transform, With<Player>>,
-        time: Res<Time>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
-        mut to_player: Local<Vec2>,
+impl ShootEmitter for BuckShotEmitter {
+    type Timer = PulseTimer;
+
+    fn timer(&self, mods: &BulletModifiers) -> Self::Timer {
+        PulseTimer::ready(mods.rate, self.wait_dur, self.shot_dur, self.waves)
+    }
+
+    fn spawn_bullets(
+        &self,
+        mut commands: BulletCommands,
+        transform: Transform,
+        _ctx: EmitterCtx<Self::Timer>,
     ) {
-        for (entity, emitter, timer, mods, parent, transform) in emitters.iter_mut() {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            let new_transform = transform.compute_transform().with_rotation(Quat::default());
-            //new_transform.translation += polarity.to_vec2().extend(0.0) * 10.0;
-
-            let Some(mut timer) = timer else {
-                let mut timer =
-                    PulseTimer::new(mods.rate, emitter.wait_dur, emitter.shot_dur, emitter.waves);
-                timer.reset_active();
-                commands.entity(entity).insert(timer);
-                *to_player = player.translation.xy() - new_transform.translation.xy();
-                continue;
-            };
-
-            if !timer.just_finished(&time) {
-                if timer.is_waiting() {
-                    *to_player = player.translation.xy() - new_transform.translation.xy();
-                }
-                continue;
-            }
-
-            let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
-            for angle in angles.into_iter() {
-                commands.spawn((
-                    BlueOrb,
-                    HomingRotate,
-                    LinearVelocity(
-                        Vec2::from_angle(angle)
-                            .rotate(*to_player)
-                            .normalize_or_zero()
-                            * BULLET_SPEED
-                            * mods.speed,
-                    ),
-                    new_transform,
-                ));
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Orb));
+        let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
+        for angle in angles.into_iter() {
+            commands.spawn_angled(angle, (BlueOrb, transform));
         }
+    }
+
+    fn sample() -> Option<EmitterBullet> {
+        Some(EmitterBullet::Orb)
+    }
+}
+
+pub fn track_player(mut emitters: Query<(&mut Target, &PulseTimer), With<BuckShotEmitter>>) {
+    for (mut target, timer) in emitters.iter_mut() {
+        target.enable(timer.is_waiting());
     }
 }

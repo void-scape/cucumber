@@ -6,18 +6,20 @@ use super::formation::Platoon;
 use super::timeline::ENEMY_Z;
 use crate::bullet::Arrow;
 use crate::bullet::BulletTimer;
+use crate::bullet::emitter::BulletCommands;
+use crate::bullet::emitter::BulletSpeed;
+use crate::bullet::emitter::Emitter;
 use crate::bullet::emitter::EmitterBullet;
+use crate::bullet::emitter::EmitterCtx;
 use crate::bullet::emitter::EmitterDelay;
-use crate::bullet::emitter::EmitterSample;
-use crate::bullet::emitter::EmitterState;
-use crate::player::Player;
+use crate::bullet::emitter::PulseLimit;
+use crate::bullet::emitter::RotateBullet;
+use crate::bullet::emitter::ShootEmitter;
+use crate::bullet::emitter::ShotLimit;
+use crate::bullet::emitter::Target;
 use crate::{
-    Layer,
-    auto_collider::ImageCollider,
-    bullet::emitter::{BulletModifiers, Rate},
-    effects::Explosion,
-    health::Health,
-    sprites::CellSprite,
+    Layer, auto_collider::ImageCollider, bullet::emitter::BulletModifiers, effects::Explosion,
+    health::Health, sprites::CellSprite,
 };
 use avian2d::prelude::LinearVelocity;
 use avian2d::prelude::*;
@@ -32,9 +34,8 @@ use std::f32::consts::PI;
 use std::time::Duration;
 
 pub const SWARM_SPEED: f32 = 60.;
-const BULLET_RATE: f32 = 0.8;
+const BULLET_RATE: f32 = 2.;
 const BULLET_SPEED: f32 = 90.;
-const MAX_SHOTS: usize = 3;
 
 #[derive(Default, Component)]
 #[require(
@@ -44,14 +45,10 @@ const MAX_SHOTS: usize = 3;
     CellSprite::new8("ships.png", UVec2::new(3, 0)),
     CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SwarmEmitter,
-    BulletModifiers {
-        rate: Rate::Factor(0.2),
-        ..Default::default()
-    },
     Trauma::NONE,
     Explosion::Small,
     FaceVelocity,
-    ShotLimit(3)
+    ShotLimit(3),
 )]
 pub struct Swarm;
 
@@ -66,6 +63,7 @@ pub fn three() -> Formation {
                         Platoon(root.target_entity()),
                         EmitterDelay::new(i as f32 * 12. * 4. / SWARM_SPEED + 0.1),
                         Transform::from_xyz(x, 4., ENEMY_Z),
+                        ShotLimit(1),
                     ))
                     .id();
                 root.commands().entity(enemy).animation().insert(sequence((
@@ -151,79 +149,29 @@ fn swing(swing: Swing) -> Formation {
     })
 }
 
-#[derive(Component)]
-pub struct ShotLimit(pub usize);
-
 #[derive(Default, Component)]
-pub struct Shots(usize);
-
-#[derive(Default, Component)]
-#[require(
-    Transform,
-    EmitterState,
-    BulletModifiers,
-    BulletTimer::ready(BULLET_RATE),
-    Shots
-)]
+#[require(Transform, Emitter, BulletSpeed::new(BULLET_SPEED), Target::player())]
 pub struct SwarmEmitter;
 
-impl SwarmEmitter {
-    pub fn shoot_bullets(
-        mut emitters: Query<
-            (
-                &mut EmitterState,
-                &mut BulletTimer,
-                &mut Shots,
-                Option<&ShotLimit>,
-                &BulletModifiers,
-                &ChildOf,
-                &GlobalTransform,
-            ),
-            (Without<EmitterDelay>, With<SwarmEmitter>),
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time>,
-        player: Single<&Transform, With<Player>>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
+impl ShootEmitter for SwarmEmitter {
+    type Timer = BulletTimer;
+
+    fn timer(&self, _: &BulletModifiers) -> Self::Timer {
+        BulletTimer::ready(BULLET_RATE)
+    }
+
+    fn spawn_bullets(
+        &self,
+        mut commands: BulletCommands,
+        transform: Transform,
+        ctx: EmitterCtx<Self::Timer>,
     ) {
-        let delta = time.delta();
+        commands
+            .spawn((Arrow, transform))
+            .look_at_offset(ctx.target, -PI / 2.0 + PI / 4.);
+    }
 
-        for (mut state, mut timer, mut shots, limit, mods, child_of, transform) in
-            emitters.iter_mut()
-        {
-            if !state.enabled {
-                continue;
-            }
-
-            let Ok(parent_mods) = parents.get(child_of.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
-
-            if !timer.timer.tick(delta).just_finished() {
-                continue;
-            }
-
-            let new_transform = transform.compute_transform();
-            let to_player =
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or(Vec2::ONE);
-            commands.spawn((
-                Arrow,
-                LinearVelocity(to_player * BULLET_SPEED * mods.speed),
-                new_transform.with_rotation(Quat::from_rotation_z(
-                    to_player.to_angle() - PI / 2.0 + PI / 4.,
-                )),
-            ));
-
-            shots.0 += 1;
-            if let Some(limit) = limit {
-                if shots.0 >= limit.0 {
-                    state.enabled = false;
-                }
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Arrow));
-        }
+    fn sample() -> Option<EmitterBullet> {
+        Some(EmitterBullet::Arrow)
     }
 }

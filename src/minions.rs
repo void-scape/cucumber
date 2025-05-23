@@ -4,7 +4,7 @@ use crate::bounds::WallDespawn;
 use crate::bullet::emitter::{
     BulletModifiers, EmitterState, GattlingEmitter, MissileEmitter, Rate,
 };
-use crate::bullet::homing::{Heading, HomingRotate, HomingTarget, TurnSpeed};
+use crate::bullet::homing::{Heading, HomingTarget, TurnSpeed};
 use crate::bullet::{BulletTimer, Polarity};
 use crate::color::HexColor;
 use crate::effects::Blasters;
@@ -267,7 +267,6 @@ const MINER_SPEED: f32 = 40.;
         speed: MINER_SPEED,
     },
     TurnSpeed,
-    HomingRotate,
     CollisionLayers::new(Layer::Miners, [Layer::Collectable]),
 )]
 pub struct Miner;

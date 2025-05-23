@@ -7,11 +7,15 @@ use super::formation::animate_entrance;
 use super::timeline::LARGEST_SPRITE_SIZE;
 use crate::bullet::BlueOrb;
 use crate::bullet::BulletTimer;
+use crate::bullet::emitter::BulletCommands;
+use crate::bullet::emitter::BulletSpeed;
+use crate::bullet::emitter::Emitter;
 use crate::bullet::emitter::EmitterBullet;
+use crate::bullet::emitter::EmitterCtx;
 use crate::bullet::emitter::EmitterDelay;
-use crate::bullet::emitter::EmitterSample;
 use crate::bullet::emitter::ORB_SPEED;
-use crate::player::Player;
+use crate::bullet::emitter::ShootEmitter;
+use crate::bullet::emitter::Target;
 use crate::sprites::CellSize;
 use crate::sprites::MultiSprite;
 use crate::sprites::SpriteBundle;
@@ -32,7 +36,6 @@ const BULLET_RATE: f32 = 1.5;
     Health::full(30.),
     LowHealthEffects,
     WallEmitter,
-    TargetPlayer,
     BulletModifiers {
         speed: 0.8,
         ..Default::default()
@@ -111,134 +114,53 @@ pub fn double() -> Formation {
 }
 
 #[derive(Component)]
-#[require(Transform, BulletModifiers, BulletTimer::ready(BULLET_RATE))]
+#[require(Transform, Emitter, BulletSpeed::new(ORB_SPEED), Target::player())]
 pub struct WallEmitter {
-    bullets: usize,
-    dir: Vec2,
-    gap: f32,
+    pub bullets: usize,
+    pub gap: f32,
+    pub bowl: f32,
 }
-
-#[derive(Default, Component)]
-pub struct TargetPlayer;
 
 impl Default for WallEmitter {
     fn default() -> Self {
-        Self::new(Vec2::NEG_Y, 5, 25.)
-    }
-}
-
-impl WallEmitter {
-    pub fn new(dir: Vec2, bullets: usize, gap: f32) -> Self {
-        assert!(dir != Vec2::ZERO);
         Self {
-            bullets,
-            dir: dir.normalize(),
-            gap,
-        }
-    }
-
-    pub fn from_dir(dir: Vec2) -> Self {
-        Self {
-            dir,
-            ..Default::default()
+            bullets: 4,
+            gap: 18.,
+            bowl: 10.,
         }
     }
 }
 
-fn rotate_around(vec: Vec2, center: Vec2, angle: f32) -> Vec2 {
-    let translated_x = vec.x - center.x;
-    let translated_y = vec.y - center.y;
+impl ShootEmitter for WallEmitter {
+    type Timer = BulletTimer;
 
-    let rotated_x = translated_x * angle.cos() - translated_y * angle.sin();
-    let rotated_y = translated_x * angle.sin() + translated_y * angle.cos();
-
-    Vec2 {
-        x: rotated_x + center.x,
-        y: rotated_y + center.y,
+    fn timer(&self, _mods: &BulletModifiers) -> Self::Timer {
+        BulletTimer::ready(BULLET_RATE)
     }
-}
 
-impl WallEmitter {
-    pub fn shoot_bullets(
-        mut emitters: Query<
-            (
-                &WallEmitter,
-                &mut BulletTimer,
-                &BulletModifiers,
-                &ChildOf,
-                &GlobalTransform,
-                Option<&TargetPlayer>,
-            ),
-            Without<EmitterDelay>,
-        >,
-        parents: Query<Option<&BulletModifiers>>,
-        time: Res<Time>,
-        player: Single<&Transform, With<Player>>,
-        mut writer: EventWriter<EmitterSample>,
-        mut commands: Commands,
+    fn spawn_bullets(
+        &self,
+        mut commands: BulletCommands,
+        transform: Transform,
+        ctx: EmitterCtx<Self::Timer>,
     ) {
-        let delta = time.delta();
+        let x_gap = self.gap;
+        let center_x = (self.bullets - 1) as f32 * x_gap / 2.;
 
-        for (emitter, mut timer, mods, parent, transform, target_player) in emitters.iter_mut() {
-            let Ok(parent_mods) = parents.get(parent.parent()) else {
-                continue;
-            };
-            let mods = parent_mods.map(|m| m.join(mods)).unwrap_or(*mods);
+        for i in 0..self.bullets {
+            let x = i as f32 * x_gap - center_x;
+            let y = self.bowl * (x / center_x).powi(2);
 
-            let mut new_transform = transform.compute_transform();
-            new_transform.translation += new_transform.rotation.mul_vec3(Vec3::NEG_Y) * 10.0;
-
-            if !timer.timer.tick(delta).just_finished() {
-                continue;
-            }
-
-            let x_gap = emitter.gap;
-            let center_x = (emitter.bullets - 1) as f32 * x_gap / 2.0;
-
-            let dir = if target_player.is_none() {
-                emitter.dir
-            } else {
-                (player.translation.xy() - new_transform.translation.xy()).normalize_or_zero()
-            };
-
-            let bowl_depth = 20.;
-            for i in 0..emitter.bullets {
-                let x = i as f32 * x_gap - center_x;
-                let y = bowl_depth * (x / center_x).powi(2);
-
-                let mut t = new_transform;
-                let p = rotate_around(
-                    t.translation.xy() + Vec2::new(x, y),
-                    t.translation.xy(),
-                    dir.to_angle() + std::f32::consts::PI / 2.,
-                )
-                .extend(0.);
-                t.translation = p;
-
-                commands.spawn((
-                    BlueOrb,
-                    t,
-                    LinearVelocity(dir * ORB_SPEED * mods.speed * 1.5),
-                ));
-
-                //let angles = [-std::f32::consts::PI / 6., 0., std::f32::consts::PI / 6.];
-                //for angle in angles.into_iter() {
-                //    commands.spawn((
-                //        BlueOrb,
-                //        HomingRotate,
-                //        LinearVelocity(
-                //            Vec2::from_angle(angle)
-                //                .rotate(*to_player)
-                //                .normalize_or_zero()
-                //                * BULLET_SPEED
-                //                * mods.speed,
-                //        ),
-                //        new_transform,
-                //    ));
-                //}
-            }
-
-            writer.write(EmitterSample(EmitterBullet::Orb));
+            let mut transform = transform;
+            transform.translation += (Vec2::from_angle(PI / 2.)
+                .rotate(ctx.target.as_vec2())
+                .rotate(Vec2::new(x, y)))
+            .extend(0.);
+            commands.spawn((BlueOrb, transform));
         }
+    }
+
+    fn sample() -> Option<EmitterBullet> {
+        Some(EmitterBullet::Orb)
     }
 }

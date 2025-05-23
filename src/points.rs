@@ -58,13 +58,13 @@ fn point_effects(
     mut points: ResMut<Points>,
 ) {
     if !reader.is_empty() {
-        commands.spawn((
-            SamplePlayer::new(server.load("audio/sfx/bfxr/Random50.wav")),
-            PlaybackSettings {
-                volume: Volume::Linear(0.35),
-                ..PlaybackSettings::ONCE
-            },
-        ));
+        //commands.spawn((
+        //    SamplePlayer::new(server.load("audio/sfx/bfxr/Random50.wav")),
+        //    PlaybackSettings {
+        //        volume: Volume::Linear(0.35),
+        //        ..PlaybackSettings::ONCE
+        //    },
+        //));
     }
 
     for event in reader.read() {

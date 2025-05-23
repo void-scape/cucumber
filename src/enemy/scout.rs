@@ -3,19 +3,13 @@ use super::Trauma;
 use super::formation::Formation;
 use super::formation::Platoon;
 use crate::bullet::emitter::EmitterDelay;
+use crate::bullet::emitter::ShotLimit;
 use crate::enemy::FaceVelocity;
-use crate::enemy::swarm::ShotLimit;
 use crate::enemy::swarm::SwarmEmitter;
 use crate::tween::DespawnTweenFinish;
 use crate::{
-    Layer,
-    auto_collider::ImageCollider,
-    bullet::emitter::{BulletModifiers, Rate},
-    effects::Explosion,
-    health::Health,
-    sprites::CellSprite,
+    auto_collider::ImageCollider, effects::Explosion, health::Health, sprites::CellSprite,
 };
-use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_tween::combinator::sequence;
 use bevy_tween::combinator::tween;
@@ -30,13 +24,12 @@ use std::time::Duration;
     ImageCollider,
     Health::full(1.),
     CellSprite::new8("shooters/SpaceShooterAssetPack_Ships.png", UVec2::new(4, 1)),
-    CollisionLayers::new([Layer::Enemy], [Layer::Bullet, Layer::Player]),
     SwarmEmitter,
-    ShotLimit(1),
     Trauma(0.04),
     Explosion::Small,
     DespawnTweenFinish,
     FaceVelocity,
+    ShotLimit(1)
 )]
 pub struct Scout;
 

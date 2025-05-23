@@ -1,5 +1,4 @@
-use super::homing::HomingRotate;
-use super::{BasicBullet, Bullet, BulletTimer, Missile, PlayerBullet, emitter::*};
+use super::{BasicBullet, Bullet, Missile, PlayerBullet, emitter::*};
 use crate::Layer;
 use crate::health::Damage;
 use crate::particles::{self, *};
@@ -8,7 +7,7 @@ use avian2d::prelude::*;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 use std::time::Duration;
 
 #[derive(Default, Component)]
@@ -67,7 +66,8 @@ impl PlayerGattlingEmitter {
                 continue;
             }
 
-            if !timer.just_finished(&time) {
+            timer.tick(&time);
+            if !timer.just_finished() {
                 continue;
             }
 
@@ -263,7 +263,8 @@ impl PlayerFocusEmitter {
                 continue;
             }
 
-            if !timer.just_finished(&time) {
+            timer.tick(&time);
+            if !timer.just_finished() {
                 continue;
             }
 
@@ -394,7 +395,7 @@ fn spawn_focus_bullets(
 fn spawn_bullet(
     commands: &mut Commands,
     kind: ShotKind,
-    mods: &BulletModifiers,
+    _mods: &BulletModifiers,
     mut transform: Transform,
     velocity: Vec2,
 ) {
@@ -407,10 +408,9 @@ fn spawn_bullet(
     };
     commands.insert((
         PlayerBullet,
-        HomingRotate,
         LinearVelocity(velocity),
         transform,
         Bullet::target_layer(Layer::Enemy),
-        Damage::new(BULLET_DAMAGE * mods.damage),
+        Damage::new(1.),
     ));
 }

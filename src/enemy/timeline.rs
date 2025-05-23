@@ -1,4 +1,4 @@
-use super::{arcs, buckshot, crisscross, formation::*, minethrower, scout, swarm, verger, waller};
+use super::{buckshot, crisscross, formation::*, minethrower, scout, swarm, verger, waller};
 use crate::player::Player;
 use avian2d::prelude::*;
 use bevy::prelude::*;
@@ -6,10 +6,6 @@ use std::time::Duration;
 
 pub const LARGEST_SPRITE_SIZE: f32 = 16.;
 pub const ENEMY_Z: f32 = 0.;
-
-const TOP: Vec2 = Vec2::ZERO;
-const TOP_RIGHT: Vec2 = Vec2::new(crate::WIDTH / 2., 0.);
-const TOP_LEFT: Vec2 = Vec2::new(-crate::WIDTH / 2., 0.);
 
 #[cfg(not(debug_assertions))]
 const START_DELAY: f32 = 1.5;
@@ -23,6 +19,8 @@ pub fn start_waves(mut commands: Commands) {
         commands.insert_resource(WaveTimeline::new_delayed(
             START_DELAY,
             [
+                //(arcs::persistent(), 999.),
+                //
                 (swarm::three(), 3.),
                 (swarm::right_swing(), 1.),
                 (swarm::left_swing(), 1.),
@@ -168,17 +166,8 @@ pub fn update_waves(
         return;
     }
 
-    //const PADDING: f32 = LARGEST_SPRITE_SIZE;
-    //const FORMATION_EASE_DUR: f32 = 2.;
-
     controller.tick(&time);
     if let Some(formation) = controller.next() {
-        //commands.entity(root).animation().insert(tween(
-        //    Duration::from_secs_f32(FORMATION_EASE_DUR),
-        //    EaseKind::SineOut,
-        //    root.into_target().with(translation(start, end)),
-        //));
-
         let mut commands = commands.spawn((
             FormationEntity(formation.velocity),
             Transform::from_translation(Vec3::new(0., crate::HEIGHT / 2., ENEMY_Z)),

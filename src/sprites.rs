@@ -1,5 +1,5 @@
 use crate::bullet::emitter::{PulseTime, PulseTimer};
-use crate::enemy::crisscross::CrisscrossState;
+use crate::enemy::crisscross::{CrisscrossEmitter, CrisscrossState};
 use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy_tween::interpolate::rotation;
@@ -114,7 +114,7 @@ pub enum MultiSprite {
     Dynamic {
         sprite: CellSprite,
         behavior: SpriteBehavior,
-        position: Vec2,
+        transform: Transform,
     },
 }
 
@@ -141,7 +141,7 @@ fn update_sprite_behavior(
         (Entity, &mut Transform, &mut LinearVelocity, &SpriteBehavior),
         With<BehaviorRoot>,
     >,
-    crisscross: Query<(&CrisscrossState, &PulseTimer), Changed<CrisscrossState>>,
+    crisscross: Query<(&CrisscrossEmitter, &PulseTimer), Changed<CrisscrossEmitter>>,
 ) {
     for (root, child_nodes, transform) in roots.iter() {
         let mut iter = nodes.iter_many_mut(child_nodes.0.iter());
@@ -164,7 +164,7 @@ fn update_sprite_behavior(
                     transform.translation.x = rp.x;
                     transform.translation.y = rp.y;
                     if let Ok((state, timer)) = crisscross.get(root) {
-                        match state {
+                        match state.0 {
                             CrisscrossState::Plus => {
                                 commands.entity(entity).animation().insert_tween_here(
                                     Duration::from_secs_f32(timer.wait_time() / 1.2),
@@ -220,10 +220,11 @@ fn spawn_sprite_bundles(
                 MultiSprite::Dynamic {
                     sprite,
                     behavior,
-                    position,
+                    transform,
                 } => {
-                    let mut new_transform = gt.compute_transform();
-                    new_transform.translation += position.extend(sprite.z);
+                    let mut new_transform = *transform;
+                    new_transform.translation += gt.translation();
+                    new_transform.translation.z = sprite.z;
                     commands.spawn((*sprite, *behavior, BehaviorRoot(entity), new_transform));
                 }
             }

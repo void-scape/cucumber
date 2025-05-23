@@ -1,7 +1,4 @@
-use self::{
-    emitter::{BULLET_DAMAGE, MINE_HEALTH, MISSILE_HEALTH, PLAYER_BULLET_SPEED},
-    homing::HomingRotate,
-};
+use self::emitter::{MINE_HEALTH, MISSILE_HEALTH, PLAYER_BULLET_SPEED};
 use crate::{
     DespawnRestart, Layer,
     animation::{AnimationAppExt, AnimationSprite},
@@ -132,30 +129,14 @@ impl Direction {
 
 fn init_bullet_sprite(
     mut commands: Commands,
-    bullets: Query<
-        (
-            Entity,
-            &BulletSprite,
-            Option<&ColorMod>,
-            Option<&LinearVelocity>,
-            Option<&HomingRotate>,
-        ),
-        Without<Sprite>,
-    >,
+    bullets: Query<(Entity, &BulletSprite, Option<&ColorMod>), Without<Sprite>>,
     server: Res<AssetServer>,
 ) {
-    for (entity, sprite, color, velocity, rotation) in bullets.iter() {
+    for (entity, sprite, color) in bullets.iter() {
         let brightness = sprite.brightness;
         let alpha = sprite.alpha;
 
         let mut sprite = sprites::sprite_rect(&server, sprite.path, CellSize::Eight, sprite.cell);
-        if rotation.is_none() {
-            if let Some(velocity) = velocity {
-                sprite.flip_y = velocity.0.y < 0.;
-                sprite.flip_x = velocity.0.x < 0.;
-            }
-        }
-
         if let Some(color) = color {
             sprite.color = match color {
                 ColorMod::Red => RED,
@@ -227,7 +208,7 @@ fn manage_lifetime(mut q: Query<(Entity, &mut Lifetime)>, time: Res<Time>, mut c
     RigidBody::Kinematic,
     WallDespawn,
     DespawnRestart,
-    CollisionLayers = Self::target_layer(Layer::Player)
+    CollisionLayers = Self::target_layer(Layer::Player),
 )]
 pub struct Bullet;
 
@@ -287,13 +268,7 @@ pub struct PlayerBullet;
 pub struct BasicBullet;
 
 #[derive(Clone, Copy, Component)]
-#[require(
-    Bullet,
-    HomingRotate,
-    Collider::rectangle(2., 2.),
-    BulletSprite::from_cell(2, 7),
-    Damage::new(1.)
-)]
+#[require(Bullet, Collider::rectangle(2., 2.), BulletSprite::from_cell(2, 7))]
 pub struct Arrow;
 
 #[derive(Clone, Copy, Component)]
@@ -323,7 +298,6 @@ pub struct Rocket;
     Health::full(MINE_HEALTH),
     Collider::circle(1.5),
     AnimationSprite::repeating("bomb.png", 0.1, 0..8),
-    Damage::new(1.),
 )]
 pub struct Mine;
 
@@ -333,7 +307,6 @@ pub struct Mine;
     Collider::circle(1.5),
     AnimationSprite::repeating("orb.png", 0.2, 0..3),
     AngularVelocity(FRAC_PI_2),
-    Damage::new(1.),
 )]
 pub struct RedOrb;
 
@@ -343,7 +316,6 @@ pub struct RedOrb;
     Collider::circle(1.5),
     AnimationSprite::repeating("orb1.png", 0.2, 0..3),
     AngularVelocity(FRAC_PI_2),
-    Damage::new(1.),
 )]
 pub struct BlueOrb;
 
@@ -480,14 +452,12 @@ fn despawn_dead_bullets(
                         Rocket,
                         ParticleSpawner::default(),
                         ParticleEffectHandle(server.load("particles/rocket.ron")),
-                        HomingRotate,
                         LinearVelocity(
                             PLAYER_BULLET_SPEED
                                 * (dir.to_vec2().rotate(Vec2::from_angle(offset)))
                                 * 0.8,
                         ),
                         t.with_rotation(Quat::from_rotation_z(rot)),
-                        Damage::new(BULLET_DAMAGE),
                     ));
                 },
             );

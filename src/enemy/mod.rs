@@ -7,7 +7,10 @@ use crate::{
     DespawnRestart, GameState, Layer, assets,
     asteroids::SpawnCluster,
     auto_collider::ImageCollider,
-    bullet::{Destructable, Direction, emitter::SpiralOrbEmitter},
+    bullet::{
+        Destructable, Direction,
+        emitter::{EmitterAppExt, EmitterSystems, SpiralOrbEmitter},
+    },
     effects::Explosion,
     health::{Dead, Health},
     pickups::PowerUp,
@@ -47,6 +50,13 @@ impl Plugin for EnemyPlugin {
             .add_plugins((FormationPlugin, MovementPlugin))
             .add_systems(OnEnter(GameState::Game), timeline::start_waves)
             .add_systems(
+                PreUpdate,
+                (
+                    buckshot::track_player.before(EmitterSystems::Update),
+                    crisscross::swivel.after(EmitterSystems::Update),
+                ),
+            )
+            .add_systems(
                 Update,
                 (
                     timeline::update_waves.before(FormationSet),
@@ -59,7 +69,13 @@ impl Plugin for EnemyPlugin {
             .add_systems(
                 PostUpdate,
                 (handle_death, despawn_enemy).run_if(in_state(GameState::Game)),
-            );
+            )
+            .add_emitter_system::<swarm::SwarmEmitter>()
+            .add_emitter_system::<verger::VergerEmitter>()
+            .add_emitter_system::<buckshot::BuckShotEmitter>()
+            .add_emitter_system::<waller::WallEmitter>()
+            .add_emitter_system::<arcs::ArcsEmitter>()
+            .add_emitter_system::<crisscross::CrisscrossEmitter>();
 
         #[cfg(debug_assertions)]
         app.add_systems(First, timeline::timeline_skip.after(TimeSystem));
